@@ -66,7 +66,7 @@ services:
       echo '⏳ Waiting for MinIO at http://minio:9000 ...';
       i=0;
       until mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minioadmin} ${MINIO_SECRET_KEY:-minioadmin}; do
-        i=$((i+1));
+        i=$$((i+1));
         if [ $$i -ge 60 ]; then
           echo '❌ MinIO not reachable after 120s';
           exit 1;
@@ -75,7 +75,6 @@ services:
       done;
       echo '✅ MinIO reachable. Ensuring bucket...';
       mc mb -p local/${MINIO_BUCKET:-ecom} || true;
-      # Dev için public read (prod'da kaldıracağız)
       mc anonymous set download local/${MINIO_BUCKET:-ecom} || true;
       echo '✅ MinIO bucket ready: ${MINIO_BUCKET:-ecom}';
       "

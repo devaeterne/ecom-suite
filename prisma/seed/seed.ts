@@ -1,8 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import bcrypt from "bcryptjs";
 import { config as loadEnv } from "dotenv";
+import bcrypt from "bcryptjs";
 
 // pnpm --filter @ecom/api prisma:seed çalışınca CWD = apps/api olur.
 // root .env => ../../.env
@@ -16,12 +16,12 @@ if (!DATABASE_URL) {
 const pool = new Pool({ connectionString: DATABASE_URL });
 const adapter = new PrismaPg(pool);
 
+// Prisma v7: bağlantı runtime'da adapter ile verilir
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL || "admin@demo.local";
   const password = process.env.SEED_ADMIN_PASSWORD || "Admin123!";
-
   const passwordHash = await bcrypt.hash(password, 10);
 
   await prisma.adminUser.upsert({
@@ -36,7 +36,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("❌ Seed failed:", e);
     process.exit(1);
   })
   .finally(async () => {

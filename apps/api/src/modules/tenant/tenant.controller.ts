@@ -1,13 +1,12 @@
 import { Controller, Get } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { TenantService } from "./tenant.service";
 
-@Controller("/v1/db")
+@Controller("tenant")
 export class TenantController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly tenantService: TenantService) {}
 
-  @Get("ping")
-  async ping() {
-    const count = await this.prisma.adminUser.count();
-    return { ok: true, adminUserCount: count };
+  @Get()
+  getTenant() {
+    return this.tenantService.getPublicTenant();
   }
 }

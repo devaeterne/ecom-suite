@@ -17,9 +17,7 @@ export class PrismaService
     const pool = new Pool({ connectionString: url });
     const adapter = new PrismaPg(pool);
 
-    // ✅ driverAdapters açıksa bu options ZORUNLU
     super({ adapter });
-
     this.pool = pool;
   }
 
