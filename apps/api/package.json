@@ -3,15 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "pnpm run prisma:generate && tsx watch src/main.ts",
-    "dev:docker": "pnpm run dev",
-    "build": "nest build",
-    "lint": "echo \"(api) lint TBD\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prisma:generate": "pnpm -w exec prisma generate --config prisma/prisma.config.ts",
-    "prisma:migrate:deploy": "pnpm -w exec prisma migrate deploy --config prisma/prisma.config.ts",
-    "prisma:migrate:dev": "pnpm -w exec prisma migrate dev --config prisma/prisma.config.ts"
+  "dev": "pnpm -w exec prisma generate --config prisma/prisma.config.ts && tsx watch src/main.ts",
+  "dev:docker": "pnpm run dev",
+  "build": "nest build",
+  "lint": "echo \"(api) lint TBD\"",
+  "typecheck": "tsc -p tsconfig.json --noEmit",
 
+  "prisma:generate": "pnpm -w exec prisma generate --config prisma/prisma.config.ts",
+  "prisma:migrate:deploy": "pnpm -w exec prisma migrate deploy --config prisma/prisma.config.ts",
+  "prisma:migrate:dev": "pnpm -w exec prisma migrate dev --config prisma/prisma.config.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.10",

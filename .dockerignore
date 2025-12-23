@@ -18,6 +18,6 @@ build
 
 *.log
 
-.env
+
 deploy/tenant.env
 .DS_Store

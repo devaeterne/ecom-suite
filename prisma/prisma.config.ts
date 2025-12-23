@@ -1,19 +1,10 @@
+// prisma/prisma.config.ts
 import { defineConfig } from "prisma/config";
 
-if (!process.env.DATABASE_URL) {
-  // Docker/CI/prod env’den gelmeli.
-  throw new Error(
-    "❌ DATABASE_URL is missing (set it as an environment variable)"
-  );
-}
+const url = process.env.DATABASE_URL;
 
 export default defineConfig({
-  schema: "./schema.prisma",
-  datasource: {
-    url: process.env.DATABASE_URL,
-  },
-  migrations: {
-    // Root’tan çalışacak şekilde:
-    seed: "pnpm exec tsx prisma/seed/seed.ts",
-  },
+  schema: "./schema.prisma", // ✅ düzeltme: config dosyasına göre relatif
+  ...(url ? { datasource: { url } } : {}),
+  migrations: { seed: "node prisma/seed/seed.js" },
 });

@@ -1,11 +1,7 @@
 // prisma/seed/seed.ts
-import "dotenv/config";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-
-// ✅ IMPORTANT: generated client + enums buradan alınır
 import {
   PrismaClient,
   MemberRole,
@@ -22,14 +18,20 @@ function slugify(input: string) {
     .slice(0, 80);
 }
 
-async function main() {
-  const url = process.env.DATABASE_URL;
+function getUrl(): string {
+  const idx = process.argv.indexOf("--url");
+  const urlFromArg = idx !== -1 ? process.argv[idx + 1] : undefined;
+  const url = process.env.DATABASE_URL || urlFromArg;
+
   if (!url) throw new Error("DATABASE_URL is missing (seed)");
+  return url;
+}
+
+async function main() {
+  const url = getUrl();
 
   const pool = new Pool({ connectionString: url });
   const adapter = new PrismaPg(pool);
-
-  // Prisma 7: adapter zorunlu
   const prisma = new PrismaClient({ adapter } as any);
 
   try {
@@ -44,16 +46,14 @@ async function main() {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const forceReset =
-      (process.env.SEED_FORCE_PASSWORD_RESET || "false") === "true";
+      (process.env.SEED_FORCE_PASSWORD_RESET ?? "").toLowerCase() === "true";
 
-    // 1) Organization upsert
     const organization = await prisma.organization.upsert({
       where: { slug: orgSlug },
       update: { name: orgName },
       create: { name: orgName, slug: orgSlug },
     });
 
-    // 2) User create/update
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     const user = existingUser
@@ -65,7 +65,6 @@ async function main() {
           data: { email, passwordHash, status: UserStatus.ACTIVE },
         });
 
-    // password policy
     if (forceReset || !user.passwordHash) {
       await prisma.user.update({
         where: { id: user.id },
@@ -73,7 +72,6 @@ async function main() {
       });
     }
 
-    // 3) Membership upsert
     await prisma.membership.upsert({
       where: {
         organizationId_userId: {
@@ -89,7 +87,6 @@ async function main() {
       },
     });
 
-    // 4) Audit only on first create
     if (!existingUser) {
       await prisma.auditLog.create({
         data: {
@@ -104,7 +101,7 @@ async function main() {
 
     console.log("✅ Seed completed:");
     console.log(`   Org:  ${organization.name} (${organization.slug})`);
-    console.log(`   User: ${user.email} (OWNER)`);
+    console.log(`   User: ${email} (OWNER)`);
     console.log(`   Force password reset: ${forceReset}`);
   } finally {
     await prisma.$disconnect();

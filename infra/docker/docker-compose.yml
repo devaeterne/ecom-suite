@@ -48,7 +48,6 @@ services:
       - minio_data:/data
     restart: unless-stopped
 
-  # MinIO bucket init (idempotent)
   minio_init:
     image: minio/mc:latest
     container_name: ecom_minio_init
@@ -75,10 +74,69 @@ services:
       "
     restart: "no"
 
+  prisma_studio:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+      target: tools
+    container_name: ecom_prisma_studio
+    working_dir: /app
+    command: sh -lc "BROWSER=none pnpm exec prisma studio --config prisma/prisma.config.ts --port 5555 --browser none"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom_password}@postgres:5432/${POSTGRES_DB:-ecom}?schema=public
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "5555:5555"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../apps/api:/app/apps/api
+      - ../../packages:/app/packages
+      - ../../prisma:/app/prisma
+      - ../../package.json:/app/package.json
+      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ../../turbo.json:/app/turbo.json
+      - api_node_modules:/app/node_modules
+      - api_pnpm_store:/pnpm/store
+    restart: unless-stopped
+
+  # ✅ Prisma/Migrate/Studio/Seed için “tools” container
+  db_tools:
+    build:
+      context: ../../
+      dockerfile: apps/api/Dockerfile
+      target: tools
+    container_name: ecom_db_tools
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ecom}:${POSTGRES_PASSWORD:-ecom_password}@postgres:5432/${POSTGRES_DB:-ecom}?schema=public
+      NODE_ENV: ${NODE_ENV:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # interactive kullanım: docker compose run --rm db_tools <cmd>
+    entrypoint: ["sh", "-lc"]
+    command: ["tail -f /dev/null"]
+    volumes:
+      - ../../apps/api:/app/apps/api
+      - ../../packages:/app/packages
+      - ../../prisma:/app/prisma
+      - ../../deploy:/app/deploy:ro
+      - ../../package.json:/app/package.json
+      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ../../turbo.json:/app/turbo.json
+      - api_node_modules:/app/node_modules
+      - api_pnpm_store:/pnpm/store
+    restart: unless-stopped
+
   api:
     build:
       context: ../../
       dockerfile: apps/api/Dockerfile
+      target: tools
     container_name: ecom_api
     working_dir: /app
     command: sh -lc "pnpm --filter @ecom/api dev"
@@ -104,8 +162,18 @@ services:
         condition: service_healthy
       minio_init:
         condition: service_completed_successfully
+    volumes:
+      - ../../apps/api:/app/apps/api
+      - ../../packages:/app/packages
+      - ../../prisma:/app/prisma
+      - ../../deploy:/app/deploy:ro
+      - ../../package.json:/app/package.json
+      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ../../turbo.json:/app/turbo.json
+      - api_node_modules:/app/node_modules
+      - api_pnpm_store:/pnpm/store
     restart: unless-stopped
-
 
   admin:
     build:
@@ -113,12 +181,7 @@ services:
       dockerfile: apps/admin/Dockerfile
     container_name: ecom_admin
     working_dir: /app/apps/admin
-    command: >
-      sh -lc "
-      corepack enable &&
-      pnpm install --frozen-lockfile &&
-      pnpm dev -p 3002
-      "
+    command: sh -lc "pnpm dev -p 3002"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3001}
@@ -126,15 +189,15 @@ services:
       - "3002:3002"
     depends_on:
       - api
-    restart: unless-stopped
     volumes:
       - ../../apps/admin:/app/apps/admin
       - ../../packages:/app/packages
       - ../../prisma:/app/prisma
-      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
-      - ../../package.json:/app/package.json:ro
-      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
-      - ../../turbo.json:/app/turbo.json:ro
+      - ../../package.json:/app/package.json
+      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ../../turbo.json:/app/turbo.json
+    restart: unless-stopped
 
   storefront:
     build:
@@ -142,12 +205,7 @@ services:
       dockerfile: apps/storefront/Dockerfile
     container_name: ecom_storefront
     working_dir: /app/apps/storefront
-    command: >
-      sh -lc "
-      corepack enable &&
-      pnpm install --frozen-lockfile &&
-      pnpm dev -p 3000
-      "
+    command: sh -lc "pnpm dev -p 3000"
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3001}
@@ -155,15 +213,15 @@ services:
       - "3000:3000"
     depends_on:
       - api
-    restart: unless-stopped
     volumes:
       - ../../apps/storefront:/app/apps/storefront
       - ../../packages:/app/packages
       - ../../prisma:/app/prisma
-      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
-      - ../../package.json:/app/package.json:ro
-      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
-      - ../../turbo.json:/app/turbo.json:ro
+      - ../../package.json:/app/package.json
+      - ../../pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      - ../../pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ../../turbo.json:/app/turbo.json
+    restart: unless-stopped
 
 volumes:
   postgres_data:
