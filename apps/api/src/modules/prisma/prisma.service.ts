@@ -17,7 +17,7 @@ export class PrismaService
     const pool = new Pool({ connectionString: url });
     const adapter = new PrismaPg(pool);
 
-    super({ adapter });
+    super({ adapter } as any);
     this.pool = pool;
   }
 

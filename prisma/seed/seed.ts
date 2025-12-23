@@ -1,13 +1,17 @@
+// prisma/seed/seed.ts
 import "dotenv/config";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+
+// ✅ IMPORTANT: generated client + enums buradan alınır
 import {
   PrismaClient,
   MemberRole,
   UserStatus,
   AuditAction,
 } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 
 function slugify(input: string) {
   return input
@@ -22,9 +26,10 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is missing (seed)");
 
-  // ✅ Prisma 7 + adapter
   const pool = new Pool({ connectionString: url });
   const adapter = new PrismaPg(pool);
+
+  // Prisma 7: adapter zorunlu
   const prisma = new PrismaClient({ adapter } as any);
 
   try {
@@ -48,7 +53,7 @@ async function main() {
       create: { name: orgName, slug: orgSlug },
     });
 
-    // 2) User create/update (prod-safe)
+    // 2) User create/update
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     const user = existingUser
@@ -60,22 +65,15 @@ async function main() {
           data: { email, passwordHash, status: UserStatus.ACTIVE },
         });
 
-    // Password policy:
-    // - forceReset=true => her seed koşuşunda şifreyi güncelle (DEV)
-    // - forceReset=false => yalnızca passwordHash boşsa set et (OAuth vb.)
-    if (forceReset) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { passwordHash },
-      });
-    } else if (!user.passwordHash) {
+    // password policy
+    if (forceReset || !user.passwordHash) {
       await prisma.user.update({
         where: { id: user.id },
         data: { passwordHash },
       });
     }
 
-    // 3) Membership upsert => OWNER
+    // 3) Membership upsert
     await prisma.membership.upsert({
       where: {
         organizationId_userId: {
@@ -91,7 +89,7 @@ async function main() {
       },
     });
 
-    // 4) Audit: sadece ilk kullanıcı create'inde
+    // 4) Audit only on first create
     if (!existingUser) {
       await prisma.auditLog.create({
         data: {
