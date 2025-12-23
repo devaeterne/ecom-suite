@@ -1,0 +1,60 @@
+name: ecom_api
+
+services:
+  api:
+    image: node:20-bookworm-slim
+    container_name: ecom_api
+    working_dir: /app
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: development
+      PORT: ${API_PORT:-3001}
+
+      # DB/Cache/Object storage
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-ecom}
+      MINIO_USE_SSL: "false"
+
+      # İstersen tenant vb. path’ler burada
+      TENANT_CONFIG_PATH: ${TENANT_CONFIG_PATH:-/app/deploy/tenant.json}
+
+    ports:
+      - "${API_PORT:-3001}:3001"
+
+    volumes:
+      # ⚠️ API repo path: infra dışından mount edilir
+      - ${API_REPO_PATH:-../api}:/app
+
+    # Node slim'de openssl/ca-cert bazen lazım olur
+    command: >
+      sh -lc "
+      apt-get update &&
+      apt-get install -y --no-install-recommends openssl ca-certificates &&
+      rm -rf /var/lib/apt/lists/* &&
+      corepack enable &&
+      pnpm -v &&
+      pnpm install &&
+      pnpm exec prisma generate &&
+      pnpm exec nest start --watch
+      "
+
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - minio_init
+
+    networks:
+      - ecom_net
+
+networks:
+  ecom_net:
+    external: true

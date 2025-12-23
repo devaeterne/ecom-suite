@@ -1,0 +1,33 @@
+name: ecom_storefront
+
+services:
+  storefront:
+    image: node:20-bookworm-slim
+    container_name: ecom_storefront
+    working_dir: /app
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: development
+      # Browser tarafı için API erişimi
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-3001}}
+      PORT: ${STOREFRONT_PORT:-3000}
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${STOREFRONT_PORT:-3000}:3000"
+    volumes:
+      # Storefront repo mount
+      - ${STOREFRONT_REPO_PATH:-../storefront}:/app
+    command: >
+      sh -lc "
+      corepack enable &&
+      pnpm -v &&
+      pnpm install &&
+      pnpm dev -p 3000
+      "
+    networks:
+      - ecom_net
+
+networks:
+  ecom_net:
+    external: true

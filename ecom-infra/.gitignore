@@ -1,0 +1,24 @@
+
+---
+
+## 📄 `ecom-infra/.gitignore`
+
+```gitignore
+# Environment
+.env
+
+# Docker
+**/docker-compose.override.yml
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Temporary
+tmp/
+.cache/
