@@ -1,0 +1,22 @@
+# Node
+node_modules/
+.pnpm-store/
+.npm/
+.cache/
+
+# Env
+.env
+.env.*
+
+# Prisma
+prisma/dev.db
+
+# Build
+dist/
+coverage/
+
+# OS
+.DS_Store
+
+# Docker
+docker-data/

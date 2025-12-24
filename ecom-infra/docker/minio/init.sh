@@ -1,19 +1,25 @@
 #!/usr/bin/env sh
 set -e
 
-MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio:9000}"
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
-MINIO_BUCKET="${MINIO_BUCKET:-ecom}"
-MINIO_REGION="${MINIO_REGION:-eu-central-1}"
+# ---- Canonical inputs ----
+MINIO_HOST="${MINIO_HOST:-minio}"
+MINIO_PORT="${MINIO_PORT:-9000}"
 
-echo "⏳ Waiting for MinIO at ${MINIO_ENDPOINT} ..."
+# Root credentials (recommended)
+MINIO_ROOT_USER="${MINIO_ROOT_USER:-minio}"
+MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minio_password_123}"
+
+# Bucket & folders
+MINIO_BUCKET="${MINIO_BUCKET:-ecom}"
+
+echo "⏳ Waiting for MinIO via mc alias set... (http://${MINIO_HOST}:${MINIO_PORT})"
 
 i=0
-until mc alias set local "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}" >/dev/null 2>&1; do
+until mc alias set local "http://${MINIO_HOST}:${MINIO_PORT}" "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
   i=$((i+1))
   if [ "$i" -ge 60 ]; then
     echo "❌ MinIO not reachable after 120 seconds"
+    echo "   Check credentials + network + minio health"
     exit 1
   fi
   sleep 2
@@ -22,20 +28,15 @@ done
 echo "✅ MinIO reachable."
 
 echo "📦 Ensuring bucket '${MINIO_BUCKET}'..."
-mc mb -p "local/${MINIO_BUCKET}" || true
-
-echo "🌍 Setting region '${MINIO_REGION}' for bucket..."
-mc admin bucket remote set local "${MINIO_BUCKET}" \
-  --service "s3" \
-  --region "${MINIO_REGION}" >/dev/null 2>&1 || true
+mc mb -p "local/${MINIO_BUCKET}" >/dev/null 2>&1 || true
 
 echo "🔓 Setting public download policy..."
-mc anonymous set download "local/${MINIO_BUCKET}" || true
+mc anonymous set download "local/${MINIO_BUCKET}" >/dev/null 2>&1 || true
 
 echo "📁 Creating standard folders..."
-mc mkdir -p "local/${MINIO_BUCKET}/products" || true
-mc mkdir -p "local/${MINIO_BUCKET}/categories" || true
-mc mkdir -p "local/${MINIO_BUCKET}/brands" || true
-mc mkdir -p "local/${MINIO_BUCKET}/users" || true
+mc cp /dev/null "local/${MINIO_BUCKET}/products/.keep" >/dev/null 2>&1 || true
+mc cp /dev/null "local/${MINIO_BUCKET}/categories/.keep" >/dev/null 2>&1 || true
+mc cp /dev/null "local/${MINIO_BUCKET}/brands/.keep" >/dev/null 2>&1 || true
+mc cp /dev/null "local/${MINIO_BUCKET}/users/.keep" >/dev/null 2>&1 || true
 
 echo "✅ MinIO initialization completed."

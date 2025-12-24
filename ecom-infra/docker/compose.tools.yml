@@ -1,35 +1,30 @@
-name: ecom_suite
-
 services:
-  prisma_migrate:
-    image: node:20-bookworm-slim
-    working_dir: /work
-    env_file: ../.env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      PRISMA_VERSION: ${PRISMA_VERSION:-7.2.0}
-    volumes:
-      - ../prisma:/work/prisma:ro
-      - ../prisma:/work/prisma
-    entrypoint: ["sh", "-lc"]
-    command: >
-      npx -y prisma@${PRISMA_VERSION} migrate deploy
-      --schema /work/prisma/schema.prisma
-
   prisma_studio:
-    image: node:20-alpine
+    image: node:20-bookworm-slim
     container_name: ecom_prisma_studio
-    working_dir: /workspace
+    working_dir: /app
+    env_file:
+      - ../.env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      CI: "true"
+    volumes:
+      - ${API_REPO_PATH:-../ecom-api}:/app
+      - /app/node_modules
+    command: >
+      sh -lc "
+      apt-get update -y &&
+      apt-get install -y --no-install-recommends openssl ca-certificates &&
+      rm -rf /var/lib/apt/lists/* &&
+      corepack enable &&
+      pnpm install &&
+      pnpm exec prisma generate &&
+      pnpm exec prisma studio --hostname 0.0.0.0 --port ${PRISMA_STUDIO_PORT:-5555}
+      "
     ports:
       - "${PRISMA_STUDIO_PORT:-5555}:5555"
-    volumes:
-      - ../../../ecom-api:/workspace/ecom-api
-    entrypoint: ["sh", "-lc"]
-    command: >
-      npm -g i prisma@${PRISMA_VERSION:-7.2.0} &&
-      prisma studio --schema /workspace/ecom-api/prisma/schema.prisma --port 5555 --hostname 0.0.0.0
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - ecom_net
+
+networks:
+  ecom_net:
+    external: true
