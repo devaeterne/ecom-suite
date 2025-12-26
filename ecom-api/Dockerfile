@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends procps \
+  && apt-get install -y --no-install-recommends procps openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 COPY package.json pnpm-lock.yaml* ./
@@ -17,7 +17,7 @@ RUN pnpm run build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
-RUN apt-get update -y \
+RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production

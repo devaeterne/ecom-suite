@@ -55,7 +55,10 @@ services:
       sh -lc "
         set -eu
         cd /app
-
+        apt-get update -y &&
+        apt-get install -y --no-install-recommends openssl libssl3 ca-certificates procps &&
+        rm -rf /var/lib/apt/lists/* &&
+        
         corepack enable
         corepack prepare pnpm@10.26.1 --activate
 

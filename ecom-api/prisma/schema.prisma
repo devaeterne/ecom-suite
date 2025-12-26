@@ -7,7 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enums
+/**
+ * =========================
+ * ENUMS (mevcut)
+ * =========================
+ */
 enum ProductStatus {
   draft
   published
@@ -63,7 +67,37 @@ enum InventoryReservationStatus {
   released
 }
 
-// Ürün ve Varyant Modelleri
+enum MediaType {
+  IMAGE
+  VIDEO
+  FILE
+}
+
+enum PriceListType {
+  SALE
+  B2B
+  CAMPAIGN
+}
+
+enum AuthProviderType {
+  EMAIL_PASSWORD
+  GOOGLE
+  APPLE
+  GITHUB
+}
+
+enum RoleScope {
+  ADMIN
+  STOREFRONT
+}
+
+/**
+ * =========================
+ * 1) PRODUCT / CATALOG (mevcut + eklentiler)
+ * =========================
+ * Mevcut tabloların: catalog_product, catalog_product_variant, catalog_price_set, catalog_money_amount
+ */
+
 model CatalogProduct {
   id          String        @id @default(uuid()) @db.Uuid
   handle      String
@@ -88,7 +122,12 @@ model CatalogProduct {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  variants CatalogProductVariant[]
+  variants    CatalogProductVariant[]
+  media       ProductMedia[]
+  tags        ProductTagLink[]
+  categories  ProductCategoryLink[]
+  collections ProductCollectionLink[]
+  options     ProductOption[]
 
   @@index([status], map: "idx_catalog_product_status")
   @@index([rank, updatedAt(sort: Desc)], map: "idx_catalog_product_rank_updated")
@@ -108,21 +147,17 @@ model CatalogProductVariant {
   ean     String?
   upc     String?
 
-  // satış/operasyon flags
   isDefault Boolean @default(false)
   isActive  Boolean @default(true)
 
-  // inventory davranışı (Inventory modülüne bağlanınca kullanılacak)
   manageInventory Boolean @default(true)
   allowBackorder  Boolean @default(false)
 
-  // ölçü/lojistik (opsiyonel ama kurumsalda çok iş görür)
   weight Int?
   length Int?
   height Int?
   width  Int?
 
-  // entegrasyon
   externalRef String?
 
   metadata  Json      @default("{}")
@@ -134,27 +169,230 @@ model CatalogProductVariant {
 
   priceSets CatalogPriceSet[]
 
-  // kurumsal kalite: aynı product içinde tek default
   inventoryLevels       InventoryLevel[]
   inventoryReservations InventoryReservation[]
   cartLineItems         CartLineItem[]
   orderLineItems        OrderLineItem[]
 
+  optionValues       ProductVariantOptionValue[]
+  productBundleItems ProductBundleItem[]
+
   @@index([productId], map: "idx_catalog_variant_product")
   @@index([deletedAt], map: "idx_catalog_variant_deleted_at")
-  // hızlı lookup
   @@index([sku], map: "idx_catalog_variant_sku")
   @@index([barcode], map: "idx_catalog_variant_barcode")
   @@index([externalRef], map: "idx_catalog_variant_external_ref")
   @@map("catalog_product_variant")
 }
 
+/**
+ * Product Media (image/video)
+ */
+model ProductMedia {
+  id        String    @id @default(uuid()) @db.Uuid
+  productId String    @db.Uuid
+  type      MediaType @default(IMAGE)
+
+  url      String
+  altText  String?
+  rank     Int     @default(0)
+  metadata Json    @default("{}")
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  product CatalogProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, rank], map: "idx_product_media_product_rank")
+  @@index([deletedAt], map: "idx_product_media_deleted_at")
+  @@map("product_media")
+}
+
+/**
+ * Tags
+ */
+model ProductTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  value     String   @unique
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  products ProductTagLink[]
+
+  @@map("product_tag")
+}
+
+model ProductTagLink {
+  id        String @id @default(uuid()) @db.Uuid
+  productId String @db.Uuid
+  tagId     String @db.Uuid
+
+  product CatalogProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     ProductTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, tagId], map: "uniq_product_tag_link")
+  @@index([tagId], map: "idx_product_tag_link_tag")
+  @@map("product_tag_link")
+}
+
+/**
+ * Categories (hierarchical)
+ */
+model ProductCategory {
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String
+  handle   String  @unique
+  parentId String? @db.Uuid
+
+  rank     Int     @default(0)
+  isActive Boolean @default(true)
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children ProductCategory[] @relation("CategoryTree")
+
+  products ProductCategoryLink[]
+
+  @@index([parentId, rank], map: "idx_category_parent_rank")
+  @@map("product_category")
+}
+
+model ProductCategoryLink {
+  id         String @id @default(uuid()) @db.Uuid
+  productId  String @db.Uuid
+  categoryId String @db.Uuid
+
+  product  CatalogProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, categoryId], map: "uniq_product_category_link")
+  @@index([categoryId], map: "idx_product_category_link_category")
+  @@map("product_category_link")
+}
+
+/**
+ * Collections
+ */
+model ProductCollection {
+  id       String @id @default(uuid()) @db.Uuid
+  title    String
+  handle   String @unique
+  metadata Json   @default("{}")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  products ProductCollectionLink[]
+
+  @@map("product_collection")
+}
+
+model ProductCollectionLink {
+  id           String @id @default(uuid()) @db.Uuid
+  productId    String @db.Uuid
+  collectionId String @db.Uuid
+
+  product    CatalogProduct    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collection ProductCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, collectionId], map: "uniq_product_collection_link")
+  @@index([collectionId], map: "idx_product_collection_link_collection")
+  @@map("product_collection_link")
+}
+
+/**
+ * Options
+ */
+model ProductOption {
+  id        String @id @default(uuid()) @db.Uuid
+  productId String @db.Uuid
+
+  title String // e.g. "Size", "Color"
+  rank  Int    @default(0)
+
+  product CatalogProduct       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values  ProductOptionValue[]
+
+  @@index([productId, rank], map: "idx_product_option_product_rank")
+  @@map("product_option")
+}
+
+model ProductOptionValue {
+  id       String @id @default(uuid()) @db.Uuid
+  optionId String @db.Uuid
+
+  value String // e.g. "M", "Red"
+  rank  Int    @default(0)
+
+  option ProductOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  variants ProductVariantOptionValue[]
+
+  @@unique([optionId, value], map: "uniq_option_value")
+  @@index([optionId, rank], map: "idx_product_option_value_option_rank")
+  @@map("product_option_value")
+}
+
+model ProductVariantOptionValue {
+  id            String @id @default(uuid()) @db.Uuid
+  variantId     String @db.Uuid
+  optionValueId String @db.Uuid
+
+  variant     CatalogProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  optionValue ProductOptionValue    @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, optionValueId], map: "uniq_variant_option_value")
+  @@index([optionValueId], map: "idx_variant_option_value_value")
+  @@map("product_variant_option_value")
+}
+
+/**
+ * Bundle / Kit (optional)
+ */
+model ProductBundle {
+  id       String  @id @default(uuid()) @db.Uuid
+  title    String
+  handle   String  @unique
+  isActive Boolean @default(true)
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  items ProductBundleItem[]
+
+  @@map("product_bundle")
+}
+
+model ProductBundleItem {
+  id        String @id @default(uuid()) @db.Uuid
+  bundleId  String @db.Uuid
+  variantId String @db.Uuid
+
+  quantity Int @default(1)
+
+  bundle  ProductBundle         @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  variant CatalogProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([bundleId, variantId], map: "uniq_bundle_variant")
+  @@map("product_bundle_item")
+}
+
+/**
+ * =========================
+ * 2) PRICING (mevcut + ekler)
+ * =========================
+ */
 model CatalogPriceSet {
   id        String @id @default(uuid()) @db.Uuid
   variantId String @db.Uuid
 
-  // ileride: channelId / regionId / customerGroupId / campaignId eklenebilir
-  type     String? // "default", "sale", "b2b" gibi
+  type     String?
   isActive Boolean @default(true)
 
   prices CatalogMoneyAmount[]
@@ -175,11 +413,11 @@ model CatalogMoneyAmount {
   id         String @id @default(uuid()) @db.Uuid
   priceSetId String @db.Uuid
 
-  currencyCode String // "EUR", "TRY"
-  amount       Int // minor units: 1999 = 19.99
-  compareAt    Int? // optional: üstü çizili fiyat
-  minQuantity  Int? // optional: tier pricing başlangıcı
-  maxQuantity  Int? // optional: tier pricing bitişi
+  currencyCode String
+  amount       Int
+  compareAt    Int?
+  minQuantity  Int?
+  maxQuantity  Int?
 
   isActive Boolean @default(true)
 
@@ -196,6 +434,67 @@ model CatalogMoneyAmount {
   @@map("catalog_money_amount")
 }
 
+/**
+ * Price Lists + Rules (kampanya/segment/region)
+ */
+model PriceList {
+  id       String        @id @default(uuid()) @db.Uuid
+  title    String
+  type     PriceListType @default(SALE)
+  isActive Boolean       @default(true)
+
+  startsAt DateTime? @db.Timestamptz(6)
+  endsAt   DateTime? @db.Timestamptz(6)
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  rules PriceRule[]
+
+  @@index([isActive, startsAt, endsAt], map: "idx_price_list_active_window")
+  @@map("price_list")
+}
+
+model PriceRule {
+  id          String @id @default(uuid()) @db.Uuid
+  priceListId String @db.Uuid
+
+  attribute String // "regionId", "customerGroupId", "channelId"...
+  operator  String // "eq", "in", "gte"...
+  metadata  Json   @default("{}")
+
+  priceList PriceList        @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  values    PriceRuleValue[]
+
+  @@index([priceListId, attribute], map: "idx_price_rule_list_attr")
+  @@map("price_rule")
+}
+
+model PriceRuleValue {
+  id     String @id @default(uuid()) @db.Uuid
+  ruleId String @db.Uuid
+  value  String
+
+  rule PriceRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId], map: "idx_price_rule_value_rule")
+  @@map("price_rule_value")
+}
+
+model Currency {
+  code   String  @id // "EUR"
+  symbol String?
+  name   String?
+
+  @@map("currency")
+}
+
+/**
+ * =========================
+ * 3) INVENTORY (mevcut)
+ * =========================
+ */
 model InventoryLocation {
   id          String  @id @default(uuid()) @db.Uuid
   code        String
@@ -255,7 +554,6 @@ model InventoryReservation {
   referenceType String?
   referenceId   String?
 
-  // yeni audit alanları
   consumedAt     DateTime? @db.Timestamptz(6)
   releasedAt     DateTime? @db.Timestamptz(6)
   consumedByType String?
@@ -278,12 +576,16 @@ model InventoryReservation {
   @@index([expiresAt], map: "idx_inventory_res_expires_at")
   @@index([referenceType, referenceId], map: "idx_inventory_res_reference")
   @@index([deletedAt], map: "idx_inventory_res_deleted_at")
-  // yeni index (opsiyonel ama iyi)
   @@index([consumedAt], map: "idx_inventory_res_consumed_at")
   @@index([releasedAt], map: "idx_inventory_res_released_at")
   @@map("inventory_reservation")
 }
 
+/**
+ * =========================
+ * 4) CART (mevcut + shipping method eklenecek)
+ * =========================
+ */
 model Cart {
   id           String     @id @default(uuid()) @db.Uuid
   customerId   String?
@@ -294,8 +596,9 @@ model Cart {
   metadata     Json?
   expiresAt    DateTime?  @db.Timestamptz(6)
 
-  lineItems   CartLineItem[]
-  adjustments CartAdjustment[]
+  lineItems       CartLineItem[]
+  adjustments     CartAdjustment[]
+  shippingMethods CartShippingMethod[]
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
@@ -319,9 +622,7 @@ model CartLineItem {
   compareAtSnapshot Int?
   metadata          Json?
 
-  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
-
-  // (opsiyonel ama tavsiye) variant relation
+  cart    Cart                  @relation(fields: [cartId], references: [id], onDelete: Cascade)
   variant CatalogProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   reservations InventoryReservation[]
@@ -354,6 +655,29 @@ model CartAdjustment {
   @@map("cart_adjustment")
 }
 
+model CartShippingMethod {
+  id     String @id @default(uuid()) @db.Uuid
+  cartId String @db.Uuid
+
+  name         String
+  amount       Int
+  currencyCode String @default("EUR")
+  metadata     Json   @default("{}")
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([cartId], map: "idx_cart_shipping_cart")
+  @@map("cart_shipping_method")
+}
+
+/**
+ * =========================
+ * 5) CHECKOUT + ORDER (mevcut + snapshot address/shipping)
+ * =========================
+ */
 model Checkout {
   id         String         @id @default(uuid()) @db.Uuid
   cartId     String         @unique @db.Uuid
@@ -364,7 +688,6 @@ model Checkout {
   currencyCode String  @default("EUR")
   regionId     String?
 
-  // snapshot totals (order'a geçerken birebir taşınır)
   subtotal      Int @default(0)
   discountTotal Int @default(0)
   shippingTotal Int @default(0)
@@ -419,7 +742,7 @@ model CheckoutAddress {
 
 model Order {
   id         String  @id @default(uuid()) @db.Uuid
-  orderNo    String  @unique // "EC-2025-000001" gibi (app tarafı üretir)
+  orderNo    String  @unique
   checkoutId String? @unique @db.Uuid
   cartId     String? @db.Uuid
   customerId String?
@@ -442,15 +765,57 @@ model Order {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  lineItems    OrderLineItem[]
-  payments     OrderPayment[]       @relation("OrderPayments")
-  fulfillments OrderFulfillment[]
-  history      OrderStatusHistory[]
+  lineItems       OrderLineItem[]
+  payments        OrderPayment[]        @relation("OrderPayments")
+  fulfillments    OrderFulfillment[]
+  history         OrderStatusHistory[]
+  addresses       OrderAddress[]
+  shippingMethods OrderShippingMethod[]
 
   @@index([status, updatedAt(sort: Desc)], map: "idx_order_status_updated")
   @@index([customerId], map: "idx_order_customer")
   @@index([createdAt(sort: Desc)], map: "idx_order_created_at")
   @@map("order")
+}
+
+model OrderAddress {
+  id      String      @id @default(uuid()) @db.Uuid
+  orderId String      @db.Uuid
+  type    AddressType
+
+  firstName String?
+  lastName  String?
+  company   String?
+  phone     String?
+
+  address1    String?
+  address2    String?
+  city        String?
+  postalCode  String?
+  countryCode String?
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, type], map: "uniq_order_address_type")
+  @@map("order_address")
+}
+
+model OrderShippingMethod {
+  id      String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+
+  name         String
+  amount       Int
+  currencyCode String @default("EUR")
+  metadata     Json   @default("{}")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId], map: "idx_order_shipping_order")
+  @@map("order_shipping_method")
 }
 
 model OrderLineItem {
@@ -459,7 +824,7 @@ model OrderLineItem {
   variantId String @db.Uuid
 
   quantity     Int
-  unitPrice    Int // snapshot
+  unitPrice    Int
   compareAt    Int?
   currencyCode String @default("EUR")
 
@@ -484,14 +849,14 @@ model OrderPayment {
   orderId    String? @db.Uuid
   checkoutId String? @db.Uuid
 
-  provider String // "stripe", "iyzico", "manual"
+  provider String
   status   PaymentStatus @default(PENDING)
 
   amount       Int
   totalAmount  Int
   currencyCode String @default("EUR")
 
-  externalRef String? // provider intent id
+  externalRef String?
   metadata    Json    @default("{}")
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
@@ -511,7 +876,7 @@ model OrderFulfillment {
   id      String @id @default(uuid()) @db.Uuid
   orderId String @db.Uuid
 
-  status     String  @default("pending") // ileride enum
+  status     String  @default("pending")
   carrier    String?
   trackingNo String?
   metadata   Json    @default("{}")
@@ -539,4 +904,174 @@ model OrderStatusHistory {
 
   @@index([orderId, createdAt(sort: Desc)], map: "idx_order_history_order_created")
   @@map("order_status_history")
+}
+
+/**
+ * =========================
+ * 9) CUSTOMER (yeni)
+ * =========================
+ */
+model Customer {
+  id        String  @id @default(uuid()) @db.Uuid
+  email     String  @unique
+  firstName String?
+  lastName  String?
+  phone     String?
+  metadata  Json    @default("{}")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  addresses      CustomerAddress[]
+  groups         CustomerGroupCustomerLink[]
+  authIdentities AuthIdentity[]
+
+  @@map("customer")
+}
+
+model CustomerAddress {
+  id         String @id @default(uuid()) @db.Uuid
+  customerId String @db.Uuid
+
+  firstName   String?
+  lastName    String?
+  company     String?
+  phone       String?
+  address1    String?
+  address2    String?
+  city        String?
+  postalCode  String?
+  countryCode String?
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId], map: "idx_customer_address_customer")
+  @@map("customer_address")
+}
+
+model CustomerGroup {
+  id       String @id @default(uuid()) @db.Uuid
+  name     String @unique
+  metadata Json   @default("{}")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  customers CustomerGroupCustomerLink[]
+
+  @@map("customer_group")
+}
+
+model CustomerGroupCustomerLink {
+  id         String @id @default(uuid()) @db.Uuid
+  groupId    String @db.Uuid
+  customerId String @db.Uuid
+
+  group    CustomerGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, customerId], map: "uniq_customer_group_customer")
+  @@map("customer_group_customer_link")
+}
+
+/**
+ * =========================
+ * 10) ADMIN / USERS + 11) AUTH (yeni)
+ * =========================
+ */
+model User {
+  id       String  @id @default(uuid()) @db.Uuid
+  email    String  @unique
+  name     String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  roles          UserRoleLink[]
+  authIdentities AuthIdentity[]
+
+  @@map("user")
+}
+
+model Role {
+  id    String    @id @default(uuid()) @db.Uuid
+  name  String    @unique
+  scope RoleScope @default(ADMIN)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  permissions RolePermissionLink[]
+  users       UserRoleLink[]
+
+  @@map("role")
+}
+
+model Permission {
+  id                  String               @id @default(uuid()) @db.Uuid
+  key                 String               @unique // "product:write"
+  description         String?
+  rolePermissionLinks RolePermissionLink[]
+
+  @@map("permission")
+}
+
+model RolePermissionLink {
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId], map: "uniq_role_permission")
+  @@map("role_permission_link")
+}
+
+model UserRoleLink {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  roleId String @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId], map: "uniq_user_role")
+  @@map("user_role_link")
+}
+
+model AuthIdentity {
+  id         String           @id @default(uuid()) @db.Uuid
+  provider   AuthProviderType
+  providerId String // external id/email hash
+  userId     String?          @db.Uuid
+  customerId String?          @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@index([provider, providerId], map: "idx_auth_identity_provider")
+  @@map("auth_identity")
+}
+
+model Session {
+  id         String @id @default(uuid()) @db.Uuid
+  identityId String @db.Uuid
+
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(6)
+
+  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt], map: "idx_session_expires")
+  @@map("session")
 }
