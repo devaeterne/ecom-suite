@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 echo "🧹 Stopping all ecom stacks (base + api + tools + admin + storefront)..."
 docker compose \
   -f docker/compose.base.yml \
-  -f docker/compose.api.yml \
+  -f docker/compose.api.dev.yml \
   -f docker/compose.tools.yml \
   -f docker/compose.admin.yml \
   -f docker/compose.storefront.yml \

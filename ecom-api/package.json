@@ -7,8 +7,8 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
-    "dev": "node --watch --loader ts-node/esm src/main.ts",
-    "build": "tsc -p tsconfig.json",
+    "dev": "node -r tsconfig-paths/register ./node_modules/@nestjs/cli/bin/nest.js start --watch",
+    "build": "nest build -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "start": "node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
@@ -26,6 +26,7 @@
     "@nestjs/common": "^11.1.10",
     "@nestjs/core": "^11.1.10",
     "@nestjs/platform-fastify": "^11.1.10",
+    "@nestjs/schedule": "^6.1.0",
     "@nestjs/swagger": "^11.2.3",
     "@prisma/client": "^6.19.1",
     "class-transformer": "^0.5.1",
@@ -41,6 +42,8 @@
     "@types/node": "^25.0.3",
     "prisma": "^6.19.1",
     "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   }
 }

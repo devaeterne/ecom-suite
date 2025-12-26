@@ -84,7 +84,7 @@ export class HealthService implements OnModuleDestroy {
       // Prisma ping (en güvenlisi)
       // PrismaService doğrudan PrismaClient ise: this.prisma.$queryRaw kullan.
       // Eğer wrapper ise: this.prisma.client.$queryRaw.
-      await this.prisma.client.$queryRaw`SELECT 1`;
+      await this.prisma.$queryRaw`SELECT 1`;
       return true;
     });
 
