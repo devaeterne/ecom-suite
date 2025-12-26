@@ -12,7 +12,7 @@
 
     "baseUrl": ".",
     "paths": {
-      "@prisma/*": ["src/prisma/*"],
+      "@prisma/*": ["prisma/*"],
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"]
     }
