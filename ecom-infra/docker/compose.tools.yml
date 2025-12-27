@@ -7,18 +7,30 @@ services:
       - ../.env
     environment:
       CI: "true"
+
     volumes:
       - ${API_REPO_PATH:-../ecom-api}:/app
       - /app/node_modules
     command: >
       sh -lc "
-      apt-get update -y &&
-      apt-get install -y --no-install-recommends openssl ca-certificates &&
-      rm -rf /var/lib/apt/lists/* &&
-      corepack enable &&
-      pnpm install &&
-      pnpm exec prisma generate &&
-      pnpm exec prisma studio --hostname 0.0.0.0 --port ${PRISMA_STUDIO_PORT:-5555}
+        set -eu
+        cd /app
+
+        apt-get update -y &&
+        apt-get install -y --no-install-recommends openssl ca-certificates &&
+        rm -rf /var/lib/apt/lists/*
+
+        corepack enable
+        corepack prepare pnpm@10.26.1 --activate
+
+        # Container içinde pnpm build script engelini kapat
+        pnpm config set ignored-built-dependencies --json '[]' || true
+
+        pnpm install
+        pnpm prisma:generate
+
+        echo \"DATABASE_URL=${DATABASE_URL:-<empty>}\" | sed 's/password=[^@]*/password=*** /g' || true
+        exec pnpm prisma studio --port ${PRISMA_STUDIO_PORT:-5555} --browser none
       "
     ports:
       - "${PRISMA_STUDIO_PORT:-5555}:5555"

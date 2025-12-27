@@ -58,14 +58,13 @@ services:
         apt-get update -y &&
         apt-get install -y --no-install-recommends openssl libssl3 ca-certificates procps &&
         rm -rf /var/lib/apt/lists/* &&
-        
+    
         corepack enable
         corepack prepare pnpm@10.26.1 --activate
-
+    
         pnpm install
         pnpm prisma:generate
-        pnpm prisma:migrate
-
+    
         echo 'Starting Nest...'
         exec node -r tsconfig-paths/register ./node_modules/@nestjs/cli/bin/nest.js start --watch
       "
