@@ -2688,15 +2688,24 @@ model Session {
   tenantId String  @db.Uuid
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
-  identityId String @db.Uuid
+  identityId String       @db.Uuid
+  identity   AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
-  token     String   @unique
+  // ❗ raw token yerine hash
+  tokenHash String @unique @map("token_hash")
+
+  // opsiyonel ama çok faydalı
+  typ       String    @default("admin") // "admin" | "store"
+  revokedAt DateTime? @db.Timestamptz(6)
+
   expiresAt DateTime @db.Timestamptz(6)
 
-  identity AuthIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
   @@index([expiresAt], map: "idx_session_expires")
   @@index([tenantId])
+  @@index([identityId])
   @@map("session")
 }
 

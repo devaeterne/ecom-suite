@@ -11,7 +11,7 @@ function sha256(raw: string) {
 }
 
 @Injectable()
-export class AdminAuthService {
+export class StoreAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionsRepo: SessionsRepository,
@@ -28,18 +28,21 @@ export class AdminAuthService {
         id: true,
         tenantId: true,
         passwordHash: true,
-        userId: true,
+        customerId: true,
+        providerId: true,
       },
     });
 
-    if (!identity?.passwordHash || !identity.userId) {
+    // Store’da customerId zorunlu diyorsan burada enforce edebilirsin:
+    if (!identity?.passwordHash)
       throw new UnauthorizedException("Invalid credentials");
+    if (!identity.customerId) {
+      throw new UnauthorizedException("Invalid store credentials");
     }
 
     const ok = await bcrypt.compare(password, identity.passwordHash);
     if (!ok) throw new UnauthorizedException("Invalid credentials");
 
-    // Refresh (raw) + DB’de hash
     const refreshRaw = this.tokenService.newRefreshToken();
     const tokenHash = sha256(refreshRaw);
     const expiresAt = new Date(
@@ -51,14 +54,14 @@ export class AdminAuthService {
       identityId: identity.id,
       tokenHash,
       expiresAt,
-      typ: "admin",
+      typ: "store",
     });
 
     const accessToken = this.tokenService.signAccessToken(
       {
         sub: identity.id,
         tenantId: identity.tenantId,
-        typ: "admin",
+        typ: "store",
       },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
@@ -71,12 +74,10 @@ export class AdminAuthService {
 
     const session = await this.sessionsRepo.findValidByTokenHash({
       tokenHash,
-      typ: "admin",
+      typ: "store",
     });
-
     if (!session) throw new UnauthorizedException("Invalid session");
 
-    // Rotate refresh
     const newRefreshRaw = this.tokenService.newRefreshToken();
     const newHash = sha256(newRefreshRaw);
     const newExpiresAt = new Date(
@@ -89,46 +90,12 @@ export class AdminAuthService {
       {
         sub: session.identityId,
         tenantId: session.tenantId,
-        typ: "admin",
+        typ: "store",
       },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
 
     return { accessToken, refreshRaw: newRefreshRaw };
-  }
-  async me(identityId: string, tenantId: string) {
-    const identity = await this.prisma.authIdentity.findFirst({
-      where: { id: identityId, tenantId },
-      select: {
-        id: true,
-        tenantId: true,
-        provider: true,
-        providerId: true,
-        userId: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!identity) throw new UnauthorizedException("Identity not found");
-
-    return {
-      identityId: identity.id,
-      tenantId: identity.tenantId,
-      typ: "admin" as const,
-      user: {
-        id: identity.user?.id ?? identity.userId ?? null,
-        email: identity.user?.email ?? identity.providerId,
-        name: identity.user?.name ?? null,
-        roles: [],
-        permissions: [],
-      },
-    };
   }
 
   async logout(refreshRaw: string) {
@@ -136,9 +103,8 @@ export class AdminAuthService {
 
     const session = await this.sessionsRepo.findValidByTokenHash({
       tokenHash,
-      typ: "admin",
+      typ: "store",
     });
-
     if (!session) return;
 
     await this.sessionsRepo.revoke(session.id);

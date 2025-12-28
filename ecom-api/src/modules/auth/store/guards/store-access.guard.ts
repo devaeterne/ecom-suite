@@ -7,11 +7,11 @@ import {
 import { TokenService } from "@/modules/crypto/token.service";
 
 @Injectable()
-export class AdminAccessGuard implements CanActivate {
+export class StoreAccessGuard implements CanActivate {
   constructor(private readonly tokenService: TokenService) {}
 
-  canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<any>();
+  canActivate(ctx: ExecutionContext): boolean {
+    const req = ctx.switchToHttp().getRequest<any>();
     const auth = req.headers?.authorization as string | undefined;
 
     if (!auth || !auth.startsWith("Bearer ")) {
@@ -21,11 +21,9 @@ export class AdminAccessGuard implements CanActivate {
     const token = auth.slice("Bearer ".length).trim();
     const payload = this.tokenService.verifyAccessToken(token);
 
-    if (payload?.typ !== "admin") {
+    if (payload?.typ !== "store")
       throw new UnauthorizedException("Invalid token type");
-    }
 
-    // req.user attach
     req.user = payload;
     return true;
   }

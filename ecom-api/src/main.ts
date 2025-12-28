@@ -6,29 +6,35 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
+
 import multipart from "@fastify/multipart";
+import cookie from "@fastify/cookie";
+import cors from "@fastify/cors";
+
+import { env } from "./config/env";
+import { buildCorsOptions } from "./infrastructure/http/cors";
 
 async function bootstrap() {
+  const adapter = new FastifyAdapter({
+    trustProxy: env.TRUST_PROXY ? true : false,
+  });
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter()
+    adapter
   );
 
   app.setGlobalPrefix("api");
 
-  // ✅ Multipart (Dekont upload vb.)
-  // 10MB limit + güvenli defaults
   await app.register(multipart, {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB
-      files: 1,
-    },
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   });
 
-  app.enableCors({
-    origin: true,
-    credentials: true,
+  await app.register(cookie, {
+    secret: env.COOKIE_SECRET, // env.ts'e ekle
   });
+
+  await app.register(cors, buildCorsOptions());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -48,10 +54,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api/docs", app, document);
 
-  await app.listen(
-    process.env.API_PORT ? Number(process.env.API_PORT) : 3000,
-    "0.0.0.0"
-  );
+  await app.listen(env.API_PORT ?? 3000, "0.0.0.0");
 }
 
 bootstrap();

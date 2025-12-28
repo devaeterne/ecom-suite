@@ -6,27 +6,32 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
-import { ApiBody, ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOkResponse,
+  ApiTags,
+} from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { AdminAuthService } from "./admin-auth.service";
-import { AdminLoginDto } from "./dto/admin-login.dto";
-import { AdminAuthResponseDto } from "./dto/admin-auth-response.dto";
+import { StoreAuthService } from "./store-auth.service";
+import { StoreAccessGuard } from "./guards/store-access.guard";
+
+import { AdminLoginDto } from "../admin/dto/admin-login.dto"; // aynı DTO’yu reuse edebiliriz
+import { AdminAuthResponseDto } from "../admin/dto/admin-auth-response.dto";
+
 import {
   COOKIE_NAMES,
-  adminRefreshCookieOptions,
-  clearAdminRefreshCookieOptions,
+  storeRefreshCookieOptions,
+  clearStoreRefreshCookieOptions,
 } from "@/infrastructure/http/cookies";
 
-import { UseGuards } from "@nestjs/common";
-import { ApiBearerAuth } from "@nestjs/swagger";
-import { AdminAccessGuard } from "./guards/admin-access.guard";
-
-@ApiTags("Admin Auth")
-@Controller("admin/auth")
-export class AdminAuthController {
-  constructor(private readonly service: AdminAuthService) {}
+@ApiTags("Store Auth")
+@Controller("store/auth")
+export class StoreAuthController {
+  constructor(private readonly service: StoreAuthService) {}
 
   @Post("login")
   @ApiBody({ type: AdminLoginDto })
@@ -41,11 +46,10 @@ export class AdminAuthController {
     );
 
     reply.setCookie(
-      COOKIE_NAMES.adminRefresh,
+      COOKIE_NAMES.storeRefresh,
       refreshRaw,
-      adminRefreshCookieOptions()
+      storeRefreshCookieOptions()
     );
-
     return { accessToken };
   }
 
@@ -55,7 +59,7 @@ export class AdminAuthController {
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
   ): Promise<AdminAuthResponseDto> {
-    const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.adminRefresh];
+    const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.storeRefresh];
     if (!refreshRaw) throw new UnauthorizedException("Missing refresh cookie");
 
     const { accessToken, refreshRaw: newRefresh } = await this.service.refresh(
@@ -63,11 +67,10 @@ export class AdminAuthController {
     );
 
     reply.setCookie(
-      COOKIE_NAMES.adminRefresh,
+      COOKIE_NAMES.storeRefresh,
       newRefresh,
-      adminRefreshCookieOptions()
+      storeRefreshCookieOptions()
     );
-
     return { accessToken };
   }
 
@@ -76,22 +79,20 @@ export class AdminAuthController {
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
   ) {
-    const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.adminRefresh];
+    const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.storeRefresh];
     if (refreshRaw) await this.service.logout(refreshRaw);
 
     reply.clearCookie(
-      COOKIE_NAMES.adminRefresh,
-      clearAdminRefreshCookieOptions()
+      COOKIE_NAMES.storeRefresh,
+      clearStoreRefreshCookieOptions()
     );
-
     return { ok: true };
   }
 
   @Get("me")
-  @UseGuards(AdminAccessGuard)
+  @UseGuards(StoreAccessGuard)
   @ApiBearerAuth()
   async me(@Req() req: any) {
-    const { sub, tenantId } = req.user;
-    return this.service.me(sub, tenantId);
+    return { user: req.user };
   }
 }
