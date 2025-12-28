@@ -1,30 +1,35 @@
-import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
+import { ValidationPipe } from "@nestjs/common";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
-import { Logger, ValidationPipe } from "@nestjs/common";
-import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
-import { AppModule } from "./app.module";
-import { env } from "./config/env";
+import multipart from "@fastify/multipart";
 
 async function bootstrap() {
-  const logger = new Logger("Bootstrap");
-
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: true }),
-    { bufferLogs: true }
+    new FastifyAdapter()
   );
 
-  // Kurumsal default: SIGTERM/SIGINT ile temiz kapanış
-  app.enableShutdownHooks();
+  app.setGlobalPrefix("api");
 
-  // API prefix
-  app.setGlobalPrefix("/api");
+  // ✅ Multipart (Dekont upload vb.)
+  // 10MB limit + güvenli defaults
+  await app.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+      files: 1,
+    },
+  });
 
-  // Validation
+  app.enableCors({
+    origin: true,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -33,33 +38,20 @@ async function bootstrap() {
     })
   );
 
-  // CORS (admin/storefront dev)
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
-
-  // Swagger
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle("ECOM API")
-    .setDescription("ecom-suite backend API")
-    .setVersion("1.0.0")
+  const config = new DocumentBuilder()
+    .setTitle("ecom-suite API")
+    .setDescription("Admin + Storefront API")
+    .setVersion("1.0")
     .addBearerAuth()
-    // Swagger UI /docs, API /api
-    .addServer("/api")
     .build();
 
-  const doc = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("docs", app as any, doc);
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup("api/docs", app, document);
 
-  await app.listen(env.API_PORT, "0.0.0.0");
-  logger.log(`🚀 API listening on http://localhost:${env.API_PORT}/api`);
-  logger.log(`📚 Swagger UI at    http://localhost:${env.API_PORT}/docs`);
+  await app.listen(
+    process.env.API_PORT ? Number(process.env.API_PORT) : 3000,
+    "0.0.0.0"
+  );
 }
 
-bootstrap().catch((err) => {
-  // Fail-fast
-  // eslint-disable-next-line no-console
-  console.error(err);
-  process.exit(1);
-});
+bootstrap();

@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import Redis from "ioredis";
 import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
 
-import { PrismaService } from "../../prisma/prisma.service";
+import { PrismaService } from "../prisma/prisma.service";
 import { env } from "../config/env";
 
 type CheckResult = {

@@ -1,0 +1,13 @@
+{
+  "code": "acme",
+  "name": "ACME Ltd",
+  "isActive": true,
+  "metadata": {
+    "currencyCode": "EUR",
+    "timezone": "Europe/Podgorica"
+  },
+  "bootstrapAdmin": {
+    "email": "admin@acme.com",
+    "password": "ChangeMe123!"
+  }
+}
