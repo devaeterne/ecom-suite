@@ -10,7 +10,7 @@ node_modules/
 
 # Prisma
 prisma/dev.db
-src/prisma/generated
+ecom-api/src/prisma/generated/
 
 # Build
 dist/
