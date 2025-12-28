@@ -2662,10 +2662,13 @@ model AuthIdentity {
   tenantId String  @db.Uuid
   tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
-  provider   AuthProviderType
-  providerId String // external id/email hash
-  userId     String?          @db.Uuid
-  customerId String?          @db.Uuid
+  provider          AuthProviderType
+  providerId        String // external id/email hash
+  userId            String?          @db.Uuid
+  customerId        String?          @db.Uuid
+  passwordHash      String?
+  passwordAlgo      String?
+  passwordUpdatedAt DateTime?        @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
@@ -2674,6 +2677,7 @@ model AuthIdentity {
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   sessions Session[]
 
+  @@unique([tenantId, provider, providerId], map: "uniq_auth_identity_tenant_provider")
   @@index([provider, providerId], map: "idx_auth_identity_provider")
   @@index([tenantId])
   @@map("auth_identity")

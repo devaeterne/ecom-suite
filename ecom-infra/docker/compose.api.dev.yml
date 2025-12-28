@@ -1,3 +1,5 @@
+#ecom-infra/docker/compose.api.dev.yml
+
 services:
   api:
     image: node:20-bookworm-slim
@@ -24,8 +26,8 @@ services:
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_BUCKET: ${MINIO_BUCKET:-ecom}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      TENANT_CONFIG_PATH: /app/src/config/tenant.json
 
-      TENANT_CONFIG_PATH: ${TENANT_CONFIG_PATH:-/app/deploy/tenant.json}
 
       # ts-node / tools için (seed vb.)
       TS_NODE_PROJECT: "tsconfig.json"
@@ -39,7 +41,7 @@ services:
     volumes:
       - ${API_REPO_PATH:?set API_REPO_PATH to your ecom-api path}:/app
       - /app/node_modules
-
+      
     healthcheck:
       test:
         [
