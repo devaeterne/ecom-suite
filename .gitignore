@@ -10,6 +10,7 @@ node_modules/
 
 # Prisma
 prisma/dev.db
+src/prisma/generated
 
 # Build
 dist/
