@@ -6,66 +6,75 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { createHash } from "crypto";
+import { verify } from "jsonwebtoken";
+
+type AdminJwtPayload = {
+  sub: string; // auth_identity.id
+  tenantId: string;
+  typ: string; // "admin"
+  iat: number;
+  exp: number;
+};
 
 @Injectable()
 export class AdminAuthGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
-  private hashToken(raw: string) {
-    // Not: Projede token hash algoritmanız farklıysa bunu aynı şekilde değiştirin.
-    return createHash("sha256").update(raw).digest("hex");
+  private getBearer(req: any): string | null {
+    const auth = req.headers?.authorization?.toString() ?? "";
+    const m = auth.match(/^Bearer\s+(.+)$/i);
+    return m?.[1] ?? null;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req: any = context.switchToHttp().getRequest();
 
-    const rawToken =
-      req.cookies?.admin_access ||
-      req.cookies?.admin_session ||
-      req.headers["x-admin-token"];
-
-    if (!rawToken || typeof rawToken !== "string") {
+    const accessToken = this.getBearer(req);
+    if (!accessToken) {
       throw new UnauthorizedException("Admin authentication required");
     }
 
-    const tokenHash = this.hashToken(rawToken);
+    const secret =
+      process.env.ADMIN_JWT_SECRET ||
+      process.env.JWT_ACCESS_SECRET ||
+      process.env.JWT_SECRET ||
+      process.env.AUTH_JWT_SECRET;
 
-    const session = await this.prisma.session.findFirst({
-      where: {
-        tokenHash,
-        revokedAt: null,
-        typ: "admin",
-      },
-      select: {
-        tenantId: true,
-        identity: {
-          select: {
-            userId: true,
+    if (!secret) {
+      throw new UnauthorizedException("JWT secret missing");
+    }
+
+    let payload: AdminJwtPayload;
+    try {
+      payload = verify(accessToken, secret) as AdminJwtPayload;
+    } catch {
+      throw new UnauthorizedException("Invalid or expired access token");
+    }
+
+    if (!payload?.sub || !payload?.tenantId || payload.typ !== "admin") {
+      throw new UnauthorizedException("Invalid admin token payload");
+    }
+
+    // ✅ JWT sub = auth_identity.id
+    const identity = await this.prisma.authIdentity.findUnique({
+      where: { id: payload.sub },
+      include: {
+        user: {
+          include: {
+            roles: {
+              where: { tenantId: payload.tenantId },
+              include: { role: true },
+            },
           },
         },
       },
     });
 
-    if (!session || !session.identity?.userId) {
-      throw new UnauthorizedException("Invalid admin session");
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: session.identity.userId },
-      include: {
-        roles: {
-          where: { tenantId: session.tenantId, deletedAt: null },
-          include: { role: true },
-        },
-      },
-    });
-
-    if (!user || user.deletedAt) {
+    const user = identity?.user;
+    if (!identity || !user) {
       throw new UnauthorizedException("User not found");
     }
 
-    // Admin erişimi: role.scope in (ADMIN, STAFF)
     const hasAdminAccess = user.roles.some((link) =>
       ["ADMIN", "STAFF"].includes(link.role.scope)
     );
@@ -74,14 +83,16 @@ export class AdminAuthGuard implements CanActivate {
       throw new ForbiddenException("Admin access denied");
     }
 
-    // req.user contract
     req.user = {
       id: user.id,
+      identityId: identity.id,
       email: user.email,
-      tenantId: user.tenantId, // User zaten tenant scoped
-      sessionTenantId: session.tenantId, // guard/debug için
+      tenantId: payload.tenantId,
+      typ: "admin",
       roles: user.roles.map((r) => r.role.name),
     };
+
+    req.tenant = { id: payload.tenantId };
 
     return true;
   }

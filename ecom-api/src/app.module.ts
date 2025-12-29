@@ -10,6 +10,7 @@ import { StoreAuthModule } from "@/modules/auth/store/store-auth.module";
 import { MailModule } from "@/infrastructure/mail/mail.module";
 import { PasswordResetModule } from "@/modules/auth/reset/password-reset.module";
 import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-module";
+import { AdminModule } from "@/modules/admin/admin.module";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-m
     MailModule,
     PasswordResetModule,
     AuthRateLimitModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

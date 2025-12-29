@@ -1,43 +1,50 @@
-import type { FastifyCorsOptions } from "@fastify/cors";
-import { env } from "@/config/env";
+type CorsOrigin = string | RegExp;
 
-function normalizeOrigin(o: string) {
-  return o.trim().replace(/\/+$/, "");
+function normalizeOrigin(origin?: string | null) {
+  if (!origin) return null;
+  try {
+    // fastify cors origin bazen full origin string verir
+    return origin;
+  } catch {
+    return origin;
+  }
 }
 
-function buildAllowlist() {
-  const base = [env.ADMIN_ORIGIN, env.STORE_ORIGIN]
-    .filter(Boolean)
-    .map(normalizeOrigin);
+export function buildCorsOptions() {
+  const env = process.env.NODE_ENV ?? "development";
 
-  const extra = (env.EXTRA_ORIGINS ?? "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .map(normalizeOrigin);
+  const allowlist: CorsOrigin[] = [
+    // Prod domainler (örnek)
+    "https://admin.domain.com",
+    "https://domain.com",
+    "https://api.domain.com",
 
-  return Array.from(new Set([...base, ...extra]));
-}
+    // Dev localhost
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+  ];
 
-export function buildCorsOptions(): FastifyCorsOptions {
-  const allowlist = buildAllowlist();
+  // wildcard dev kolaylığı (istersen kapatırız)
+  const devRegex = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 
   return {
-    origin: (origin, callback) => {
-      // curl/server-to-server gibi durumlarda origin gelmeyebilir
-      if (!origin) return callback(null, true);
-
-      const normalized = normalizeOrigin(origin);
-      const ok = allowlist.includes(normalized);
-
-      return callback(
-        ok ? null : new Error(`CORS blocked for origin: ${origin}`),
-        ok
-      );
-    },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-    maxAge: 600,
+    origin: (
+      origin: string | undefined,
+      cb: (err: Error | null, ok: boolean) => void
+    ) => {
+      const o = normalizeOrigin(origin);
+
+      // curl / server-to-server -> Origin yoksa CORS bloklamayalım
+      if (!o) return cb(null, true);
+
+      if (allowlist.includes(o)) return cb(null, true);
+
+      if (env !== "production" && devRegex.test(o)) return cb(null, true);
+
+      return cb(new Error(`CORS blocked for origin: ${o}`), false);
+    },
   };
 }
