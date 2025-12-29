@@ -6,6 +6,9 @@ import { CryptoModule } from "@/modules/crypto/crypto.module";
 import { SessionsModule } from "@/modules/sessions/sessions.module";
 import { MailModule } from "@/infrastructure/mail/mail.module";
 import { SecurityModule } from "@/infrastructure/security/security.module";
+import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-module";
+import { AuthAuditLogModule } from "@/modules/auth/audit/auth-audit-log.module";
+import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
 
 @Module({
   imports: [
@@ -14,6 +17,9 @@ import { SecurityModule } from "@/infrastructure/security/security.module";
     CryptoModule,
     MailModule,
     SecurityModule,
+    AuthRateLimitModule,
+    AuthAuditLogModule,
+    TenantBootstrapModule,
   ],
   controllers: [PasswordResetController],
   providers: [PasswordResetService],

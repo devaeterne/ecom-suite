@@ -129,4 +129,36 @@ export class CacheService {
     await this.setJson(key, fresh, ttlSeconds);
     return fresh;
   }
+  // ----------------------------
+  // Rate limit primitives (atomic)
+  // ----------------------------
+
+  /**
+   * Atomic window counter:
+   * - INCR
+   * - if first hit -> EXPIRE(windowSeconds)
+   * - return {count, ttl}
+   */
+  async incrWindow(
+    key: string,
+    windowSeconds: number
+  ): Promise<{ count: number; ttl: number }> {
+    const script = `
+      local current = redis.call("INCR", KEYS[1])
+      if current == 1 then
+        redis.call("EXPIRE", KEYS[1], ARGV[1])
+      end
+      local ttl = redis.call("TTL", KEYS[1])
+      return {current, ttl}
+    `;
+
+    const res = (await this.client.eval(
+      script,
+      1,
+      key,
+      String(windowSeconds)
+    )) as [number, number];
+
+    return { count: Number(res[0]), ttl: Number(res[1]) };
+  }
 }

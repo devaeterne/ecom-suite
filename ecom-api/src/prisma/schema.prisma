@@ -2730,7 +2730,10 @@ model Session {
   userAgent       String?
   rotatedFromHash String?   @map("rotated_from_hash")
   lastUsedAt      DateTime? @db.Timestamptz(6)
+  rotatedToHash   String?   @map("rotated_to_hash") // NEW
+  reuseDetectedAt DateTime? @map("reuse_detected_at") @db.Timestamptz(6) // NEW
 
+  @@index([identityId, revokedAt], map: "idx_session_identity_revoked")
   @@index([expiresAt], map: "idx_session_expires")
   @@index([tenantId])
   @@index([identityId])
