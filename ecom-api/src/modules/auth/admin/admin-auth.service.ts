@@ -8,6 +8,7 @@ import * as bcrypt from "bcrypt";
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
+import { SessionTyp } from "@/modules/sessions/sessions.repository";
 
 function sha256(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -30,6 +31,7 @@ export class AdminAuthService {
     const active = await this.sessionsRepo.listActiveByIdentity({
       tenantId,
       identityId,
+      take: 50,
       typ: "admin",
     });
 
@@ -119,7 +121,7 @@ export class AdminAuthService {
     const tokenHash = sha256(refreshRaw);
 
     // revoked dahil çekiyoruz
-    const session = await this.sessionsRepo.findByTokenHash({
+    const session = await this.sessionsRepo.findAnyByTokenHash({
       tokenHash,
       typ: "admin",
     });
@@ -131,6 +133,7 @@ export class AdminAuthService {
       await this.sessionsRepo.revokeAllByIdentity({
         tenantId: session.tenantId,
         identityId: session.identityId,
+        typ: session.typ as SessionTyp,
       });
 
       await this.audit.log(session.tenantId, {
@@ -165,7 +168,12 @@ export class AdminAuthService {
 
     await this.sessionsRepo.rotate({
       sessionId: session.id,
-      newTokenHash: newHash,
+      tenantId: session.tenantId,
+      identityId: session.identityId,
+      typ: session.typ as any, // aşağıda typ cast’ini de düzeltiyoruz
+      familyId: session.familyId,
+      oldTokenHash: session.tokenHash,
+      newTokenHash: tokenHash,
       newExpiresAt,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
@@ -193,13 +201,12 @@ export class AdminAuthService {
   }
 
   async logoutAll(identityId: string, tenantId: string) {
-    await this.sessionsRepo.revokeAllByIdentity({ tenantId, identityId });
-    await this.audit.log(tenantId, {
-      action: AUDIT.ADMIN_LOGOUT_ALL,
-      actorIdentityId: identityId,
-      success: true,
-      meta: { typ: "admin" },
+    await this.sessionsRepo.revokeAllByIdentity({
+      tenantId,
+      identityId,
+      typ: "admin" as SessionTyp,
     });
+
     return { ok: true };
   }
 

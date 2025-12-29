@@ -7,154 +7,173 @@ export type SessionTyp = "admin" | "store";
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: {
+  async create(params: {
     tenantId: string;
     identityId: string;
     tokenHash: string;
     expiresAt: Date;
     typ: SessionTyp;
-
-    familyId?: string;
-    rotatedFromHash?: string | null;
+    familyId: string;
     ip?: string | null;
     userAgent?: string | null;
     lastUsedAt?: Date | null;
   }) {
+    const {
+      tenantId,
+      identityId,
+      tokenHash,
+      expiresAt,
+      typ,
+      familyId,
+      ip,
+      userAgent,
+      lastUsedAt,
+    } = params;
     return this.prisma.session.create({
       data: {
-        tenantId: data.tenantId,
-        identityId: data.identityId,
-        tokenHash: data.tokenHash,
-        expiresAt: data.expiresAt,
-        typ: data.typ,
-
-        familyId: data.familyId,
-        rotatedFromHash: data.rotatedFromHash ?? null,
-        ip: data.ip ?? null,
-        userAgent: data.userAgent ?? null,
-        lastUsedAt: data.lastUsedAt ?? new Date(),
+        tenantId,
+        identityId,
+        tokenHash, // prisma field (db: token_hash)
+        expiresAt,
+        typ,
+        familyId,
+        ip: ip ?? null,
+        userAgent: userAgent ?? null,
+        lastUsedAt: lastUsedAt ?? null,
       },
     });
   }
 
-  // Only active & not expired
+  findAnyByTokenHash(params: { tokenHash: string; typ: SessionTyp }) {
+    const { tokenHash, typ } = params;
+    return this.prisma.session.findFirst({
+      where: { tokenHash, typ },
+    });
+  }
+
   findValidByTokenHash(params: { tokenHash: string; typ: SessionTyp }) {
+    const { tokenHash, typ } = params;
+    const now = new Date();
     return this.prisma.session.findFirst({
       where: {
-        tokenHash: params.tokenHash,
-        typ: params.typ,
+        tokenHash,
+        typ,
         revokedAt: null,
-        expiresAt: { gt: new Date() },
+        expiresAt: { gt: now },
       },
     });
   }
 
-  // Includes revoked/expired (reuse detection için)
-  findByTokenHash(params: { tokenHash: string; typ: SessionTyp }) {
-    return this.prisma.session.findFirst({
+  async revoke(sessionId: string) {
+    const now = new Date();
+    return this.prisma.session.update({
+      where: { id: sessionId },
+      data: { revokedAt: now },
+    });
+  }
+
+  async revokeMany(ids: string[]) {
+    const now = new Date();
+    return this.prisma.session.updateMany({
+      where: { id: { in: ids } },
+      data: { revokedAt: now },
+    });
+  }
+
+  async revokeAllByIdentity(params: {
+    tenantId: string;
+    identityId: string;
+    typ: SessionTyp;
+  }) {
+    const now = new Date();
+    const { tenantId, identityId, typ } = params;
+    return this.prisma.session.updateMany({
+      where: { tenantId, identityId, typ, revokedAt: null },
+      data: { revokedAt: now },
+    });
+  }
+
+  async listActiveByIdentity(params: {
+    tenantId: string;
+    identityId: string;
+    typ: SessionTyp;
+    take: number;
+    orderBy?: "asc" | "desc";
+  }) {
+    const now = new Date();
+    const { tenantId, identityId, typ, take, orderBy = "desc" } = params;
+    return this.prisma.session.findMany({
       where: {
-        tokenHash: params.tokenHash,
-        typ: params.typ,
+        tenantId,
+        identityId,
+        typ,
+        revokedAt: null,
+        expiresAt: { gt: now },
       },
+      take,
+      orderBy: { createdAt: orderBy },
     });
   }
 
-  // Rotate: DO NOT overwrite tokenHash. Revoke old + create new
+  async markReuse(sessionId: string) {
+    const now = new Date();
+    return this.prisma.session.update({
+      where: { id: sessionId },
+      data: { reuseDetectedAt: now },
+    });
+  }
+
+  /**
+   * Rotate refresh: mevcut session revoke edilir, rotatedToHash set edilir,
+   * yeni session create edilir (rotatedFromHash set edilir).
+   */
   async rotate(params: {
     sessionId: string;
+    tenantId: string;
+    identityId: string;
+    typ: SessionTyp;
+    familyId: string;
+    oldTokenHash: string;
     newTokenHash: string;
     newExpiresAt: Date;
     ip?: string | null;
     userAgent?: string | null;
   }) {
     const now = new Date();
+    const {
+      sessionId,
+      tenantId,
+      identityId,
+      typ,
+      familyId,
+      oldTokenHash,
+      newTokenHash,
+      newExpiresAt,
+      ip,
+      userAgent,
+    } = params;
 
-    return this.prisma.$transaction(async (tx) => {
-      const cur = await tx.session.findUnique({
-        where: { id: params.sessionId },
-      });
-      if (!cur) return null;
-
-      await tx.session.update({
-        where: { id: cur.id },
-        data: {
-          revokedAt: now,
-          rotatedToHash: params.newTokenHash,
-          lastUsedAt: now,
-          ip: params.ip ?? cur.ip,
-          userAgent: params.userAgent ?? cur.userAgent,
-        },
-      });
-
-      const next = await tx.session.create({
-        data: {
-          tenantId: cur.tenantId,
-          identityId: cur.identityId,
-          typ: cur.typ,
-          tokenHash: params.newTokenHash,
-          expiresAt: params.newExpiresAt,
-
-          familyId: cur.familyId,
-          rotatedFromHash: cur.tokenHash,
-          lastUsedAt: now,
-          ip: params.ip ?? cur.ip,
-          userAgent: params.userAgent ?? cur.userAgent,
-        },
-      });
-
-      return { current: cur, next };
-    });
-  }
-
-  revoke(sessionId: string) {
-    return this.prisma.session.update({
+    await this.prisma.session.update({
       where: { id: sessionId },
-      data: { revokedAt: new Date() },
-    });
-  }
-
-  // Mark reuse on a specific session
-  markReuse(sessionId: string) {
-    return this.prisma.session.update({
-      where: { id: sessionId },
-      data: { reuseDetectedAt: new Date() },
-    });
-  }
-
-  // GLOBAL revoke for identity
-  revokeAllByIdentity(params: { tenantId: string; identityId: string }) {
-    return this.prisma.session.updateMany({
-      where: {
-        tenantId: params.tenantId,
-        identityId: params.identityId,
-        revokedAt: null,
+      data: {
+        revokedAt: now,
+        rotatedToHash: newTokenHash,
       },
-      data: { revokedAt: new Date() },
     });
-  }
 
-  listActiveByIdentity(params: {
-    tenantId: string;
-    identityId: string;
-    typ?: SessionTyp;
-  }) {
-    return this.prisma.session.findMany({
-      where: {
-        tenantId: params.tenantId,
-        identityId: params.identityId,
-        revokedAt: null,
-        ...(params.typ ? { typ: params.typ } : {}),
+    return this.prisma.session.create({
+      data: {
+        tenantId,
+        identityId,
+        typ,
+        familyId,
+        tokenHash: newTokenHash,
+        expiresAt: newExpiresAt,
+        rotatedFromHash: oldTokenHash,
+        ip: ip ?? null,
+        userAgent: userAgent ?? null,
+        lastUsedAt: now,
       },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, createdAt: true },
-    });
-  }
-
-  revokeMany(ids: string[]) {
-    if (ids.length === 0) return Promise.resolve({ count: 0 });
-    return this.prisma.session.updateMany({
-      where: { id: { in: ids } },
-      data: { revokedAt: new Date() },
     });
   }
 }

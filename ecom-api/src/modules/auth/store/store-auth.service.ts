@@ -14,6 +14,7 @@ import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-te
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
+import { SessionTyp } from "@/modules/sessions/sessions.repository";
 
 function sha256(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -38,6 +39,8 @@ export class StoreAuthService {
       tenantId,
       identityId,
       typ: "store",
+      take: 20,
+      orderBy: "desc",
     });
 
     if (active.length <= this.MAX_ACTIVE_SESSIONS) return;
@@ -246,7 +249,7 @@ export class StoreAuthService {
   async refresh(refreshRaw: string, meta: ReqMeta = {}) {
     const tokenHash = sha256(refreshRaw);
 
-    const session = await this.sessionsRepo.findByTokenHash({
+    const session = await this.sessionsRepo.findAnyByTokenHash({
       tokenHash,
       typ: "store",
     });
@@ -260,6 +263,7 @@ export class StoreAuthService {
       await this.sessionsRepo.revokeAllByIdentity({
         tenantId: session.tenantId,
         identityId: session.identityId,
+        typ: "store" as SessionTyp,
       });
 
       await this.audit.log(session.tenantId, {
@@ -294,7 +298,12 @@ export class StoreAuthService {
 
     await this.sessionsRepo.rotate({
       sessionId: session.id,
-      newTokenHash: newHash,
+      tenantId: session.tenantId,
+      identityId: session.identityId,
+      typ: session.typ as any, // aşağıda typ cast’ini de düzeltiyoruz
+      familyId: session.familyId,
+      oldTokenHash: session.tokenHash,
+      newTokenHash: tokenHash,
       newExpiresAt,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
@@ -345,7 +354,11 @@ export class StoreAuthService {
 
   // Logout all sessions for this identity (global revoke)
   async logoutAll(identityId: string, tenantId: string) {
-    await this.sessionsRepo.revokeAllByIdentity({ tenantId, identityId });
+    await this.sessionsRepo.revokeAllByIdentity({
+      tenantId,
+      identityId,
+      typ: "store",
+    });
 
     await this.audit.log(tenantId, {
       action: AUDIT.STORE_LOGOUT_ALL,

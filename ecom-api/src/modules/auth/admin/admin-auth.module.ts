@@ -8,7 +8,7 @@ import { SessionsModule } from "@/modules/sessions/sessions.module";
 import { CryptoModule } from "@/modules/crypto/crypto.module";
 import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard";
 import { AuthAuditLogModule } from "@/modules/auth/audit/auth-audit-log.module";
-import { AuthRateLimitModule } from "../rate-limit/auth-rate-limit-module";
+import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-module";
 import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
 
 @Module({

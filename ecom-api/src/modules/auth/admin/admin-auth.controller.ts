@@ -36,10 +36,13 @@ import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-te
 
 function getReqMeta(req: FastifyRequest) {
   const xf = (req.headers["x-forwarded-for"] as string | undefined) ?? "";
-  const ip = (xf.split(",")[0]?.trim() || (req as any).ip || null) as
+  const ip = (xf.split(",")[0]?.trim() || (req as any).ip || undefined) as
     | string
-    | null;
-  const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
+    | undefined;
+
+  const userAgent =
+    (req.headers["user-agent"] as string | undefined) ?? undefined;
+
   return { ip, userAgent };
 }
 
@@ -71,7 +74,7 @@ export class AdminAuthController {
           typ: "admin",
           action: "login",
           tenantId,
-          ip: meta.ip,
+          ip: meta.ip ?? null,
           identityKey: dto.email?.toLowerCase() ?? null,
         },
         10,
@@ -162,12 +165,15 @@ export class AdminAuthController {
   @UseGuards(AdminAccessGuard)
   @ApiBearerAuth()
   async logoutAll(
-    @Req() req: any,
+    @Req() req: FastifyRequest & { user: any },
     @Res({ passthrough: true }) reply: FastifyReply
   ) {
-    const { sub, tenantId } = req.user;
+    const { sub, tenantId } = (req as any).user;
+    const meta = getReqMeta(req);
+
     await this.service.logoutAll(sub, tenantId);
 
+    // refresh cookie scope: Path=/api/admin/auth/refresh
     reply.clearCookie(
       COOKIE_NAMES.adminRefresh,
       clearAdminRefreshCookieOptions()
