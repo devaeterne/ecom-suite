@@ -6,9 +6,10 @@ import { CryptoModule } from "@/modules/crypto/crypto.module";
 import { StoreAuthController } from "@/modules/auth/store/store-auth.controller";
 import { StoreAuthService } from "@/modules/auth/store/store-auth.service";
 import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
+import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
 
 @Module({
-  imports: [PrismaModule, SessionsModule, CryptoModule],
+  imports: [PrismaModule, SessionsModule, CryptoModule, TenantBootstrapModule],
   controllers: [StoreAuthController],
   providers: [StoreAuthService, StoreAccessGuard],
 })

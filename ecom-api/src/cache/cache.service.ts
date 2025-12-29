@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import Redis from "ioredis";
-import { env } from "../config/env";
+import { env } from "@/config/env";
 
 type TTLSeconds = number;
 

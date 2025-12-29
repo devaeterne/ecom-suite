@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { SessionsRepository } from "./sessions.repository";
+import { SessionsRepository } from "@/modules/sessions/sessions.repository";
 
 @Module({
   providers: [SessionsRepository],

@@ -1,5 +1,5 @@
 import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./app.module";
+import { AppModule } from "@/app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import {
@@ -11,8 +11,8 @@ import multipart from "@fastify/multipart";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 
-import { env } from "./config/env";
-import { buildCorsOptions } from "./infrastructure/http/cors";
+import { env } from "@/config/env";
+import { buildCorsOptions } from "@/infrastructure/http/cors";
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({

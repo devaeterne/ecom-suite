@@ -2657,6 +2657,29 @@ model UserRoleLink {
   @@map("user_role_link")
 }
 
+model PasswordResetToken {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation("TenantPasswordResetTokens", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  identityId String       @db.Uuid
+  identity   AuthIdentity @relation("IdentityPasswordResetTokens", fields: [identityId], references: [id], onDelete: Cascade)
+
+  typ       String    @default("store") // "admin" | "store"
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(6)
+  usedAt    DateTime? @db.Timestamptz(6)
+
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId])
+  @@index([identityId])
+  @@index([expiresAt])
+  @@map("password_reset_token")
+}
+
 model AuthIdentity {
   id       String  @id @default(uuid()) @db.Uuid
   tenantId String  @db.Uuid
@@ -2673,9 +2696,10 @@ model AuthIdentity {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  sessions Session[]
+  user                User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer            Customer?            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[] @relation("IdentityPasswordResetTokens")
 
   @@unique([tenantId, provider, providerId], map: "uniq_auth_identity_tenant_provider")
   @@index([provider, providerId], map: "idx_auth_identity_provider")
@@ -2693,19 +2717,24 @@ model Session {
 
   // ❗ raw token yerine hash
   tokenHash String @unique @map("token_hash")
-
   // opsiyonel ama çok faydalı
-  typ       String    @default("admin") // "admin" | "store"
+  typ       String @default("admin") // "admin" | "store"
+  familyId  String @default(uuid()) @db.Uuid
+
+  expiresAt DateTime  @db.Timestamptz(6)
   revokedAt DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
 
-  expiresAt DateTime @db.Timestamptz(6)
-
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  ip              String?
+  userAgent       String?
+  rotatedFromHash String?   @map("rotated_from_hash")
+  lastUsedAt      DateTime? @db.Timestamptz(6)
 
   @@index([expiresAt], map: "idx_session_expires")
   @@index([tenantId])
   @@index([identityId])
+  @@index([familyId])
   @@map("session")
 }
 
@@ -2824,6 +2853,8 @@ model Tenant {
   tenantBankAccounts          TenantBankAccount[]
   bankTransferInstructions    BankTransferInstruction[]
   tenantPaymentProfile        TenantPaymentProfile?
+  passwordResetTokens         PasswordResetToken[]         @relation("TenantPasswordResetTokens")
+  authAuditLogs               AuthAuditLog[]               @relation("TenantAuthAuditLogs")
 
   @@index([isActive])
   @@index([deletedAt])
@@ -3173,12 +3204,12 @@ model AuditLog {
   tenantId String @db.Uuid
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  action AuditAction
-
   // actor
   actorUserId String? @db.Uuid
   actorType   String  @default("user")
   actorLabel  String?
+
+  action AuditAction
 
   entityType  String
   entityId    String? @db.Uuid
@@ -3207,6 +3238,32 @@ model AuditLog {
   @@index([tenantId, actorUserId, createdAt(sort: Desc)], map: "idx_audit_log_tenant_actor_time")
   @@index([tenantId, deletedAt], map: "idx_audit_log_tenant_deleted_at")
   @@map("audit_log")
+}
+
+model AuthAuditLog {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation("TenantAuthAuditLogs", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  actorIdentityId String? @db.Uuid
+  actorUserId     String? @db.Uuid
+  actorCustomerId String? @db.Uuid
+
+  action           String
+  targetIdentityId String? @db.Uuid
+  targetUserId     String? @db.Uuid
+  targetCustomerId String? @db.Uuid
+
+  ip        String?
+  userAgent String?
+  meta      Json    @default("{}")
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([tenantId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("auth_audit_log")
 }
 
 model FileObject {

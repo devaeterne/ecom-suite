@@ -10,9 +10,9 @@ import {
 import { ApiBody, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { AdminAuthService } from "./admin-auth.service";
-import { AdminLoginDto } from "./dto/admin-login.dto";
-import { AdminAuthResponseDto } from "./dto/admin-auth-response.dto";
+import { AdminAuthService } from "@/modules/auth/admin/admin-auth.service";
+import { AdminLoginDto } from "@/modules/auth/admin/dto/admin-login.dto";
+import { AdminAuthResponseDto } from "@/modules/auth/admin/dto/admin-auth-response.dto";
 import {
   COOKIE_NAMES,
   adminRefreshCookieOptions,
@@ -21,7 +21,7 @@ import {
 
 import { UseGuards } from "@nestjs/common";
 import { ApiBearerAuth } from "@nestjs/swagger";
-import { AdminAccessGuard } from "./guards/admin-access.guard";
+import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard";
 
 @ApiTags("Admin Auth")
 @Controller("admin/auth")

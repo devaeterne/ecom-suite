@@ -1,0 +1,143 @@
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
+import { TokenService } from "@/modules/crypto/token.service";
+import { HashService } from "@/infrastructure/security/hash.service";
+import { MailService } from "@/infrastructure/mail/mail.service";
+import { env } from "@/config/env";
+import { createHash } from "crypto";
+
+function sha256(raw: string) {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+@Injectable()
+export class PasswordResetService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tokenService: TokenService,
+    private readonly hashService: HashService,
+    private readonly mailer: MailService
+  ) {}
+
+  private appUrl(typ: "admin" | "store") {
+    return typ === "admin" ? env.ADMIN_APP_URL : env.STORE_APP_URL;
+  }
+
+  async requestReset(params: {
+    tenantId: string;
+    typ: "admin" | "store";
+    email: string;
+    ip?: string;
+    userAgent?: string;
+  }) {
+    // email enumeration engelle: her durumda ok=true döneceğiz.
+    const identity = await this.prisma.authIdentity.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        provider: "EMAIL_PASSWORD",
+        providerId: { equals: params.email, mode: "insensitive" },
+        ...(params.typ === "admin"
+          ? { userId: { not: null } }
+          : { customerId: { not: null } }),
+      },
+    });
+
+    if (!identity) return; // sessiz
+
+    const raw = this.tokenService.newRefreshToken(); // zaten secure random üretin var
+    const tokenHash = sha256(raw);
+    const expiresAt = new Date(
+      Date.now() + env.RESET_TOKEN_TTL_MINUTES * 60 * 1000
+    );
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        tenantId: params.tenantId,
+        identityId: identity.id,
+        typ: params.typ,
+        tokenHash,
+        expiresAt,
+        ip: params.ip,
+        userAgent: params.userAgent,
+      },
+    });
+
+    const link = `${this.appUrl(
+      params.typ
+    )}/reset-password?token=${encodeURIComponent(raw)}`;
+
+    await this.mailer.send({
+      to: params.email,
+      subject:
+        params.typ === "admin" ? "Admin password reset" : "Password reset",
+      html: `
+        <p>Şifre sıfırlama talebi alındı.</p>
+        <p><a href="${link}">Şifreyi sıfırla</a></p>
+        <p>Bu link ${env.RESET_TOKEN_TTL_MINUTES} dakika geçerlidir.</p>
+      `,
+      text: `Şifre sıfırlama linki: ${link} (TTL ${env.RESET_TOKEN_TTL_MINUTES} dk)`,
+    });
+  }
+
+  async resetPassword(params: {
+    tenantId: string;
+    typ: "admin" | "store";
+    token: string;
+    newPassword: string;
+  }) {
+    const tokenHash = sha256(params.token);
+
+    const row = await this.prisma.passwordResetToken.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        typ: params.typ,
+        tokenHash,
+      },
+    });
+
+    if (!row) return { ok: true }; // security: aynı cevap
+    if (row.usedAt) return { ok: true };
+    if (row.expiresAt.getTime() < Date.now()) return { ok: true };
+
+    const identity = await this.prisma.authIdentity.findFirst({
+      where: {
+        id: row.identityId,
+        tenantId: params.tenantId,
+        ...(params.typ === "admin"
+          ? { userId: { not: null } }
+          : { customerId: { not: null } }),
+      },
+    });
+
+    if (!identity) return { ok: true };
+
+    const newHash = await this.hashService.hashPassword(params.newPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.authIdentity.update({
+        where: { id: identity.id },
+        data: {
+          passwordHash: newHash,
+          passwordAlgo: "bcrypt",
+          passwordUpdatedAt: new Date(),
+        },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      }),
+      // önemli: tüm session’ları düşür
+      this.prisma.session.updateMany({
+        where: {
+          tenantId: params.tenantId,
+          identityId: identity.id,
+          typ: params.typ,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    return { ok: true };
+  }
+}

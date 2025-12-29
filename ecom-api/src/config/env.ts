@@ -24,6 +24,15 @@ export const env = {
   // DB
   DATABASE_URL: req("DATABASE_URL"),
 
+  // mail + reset ttl + app url
+  ADMIN_APP_URL: req("ADMIN_APP_URL", "https://admin.domain.com"),
+  STORE_APP_URL: req("STORE_APP_URL", "https://domain.com"),
+  RESET_TOKEN_TTL_MINUTES: 20,
+  MAIL_FROM: req("MAIL_FROM", "no-reply@localhost"),
+  SMTP_HOST: req("SMTP_HOST", "smtp.domain.com"),
+  SMTP_PORT: num("SMTP_PORT", "587"),
+  SMTP_USER: req("SMTP_USER", "user"),
+  SMTP_PASSWORD: req("SMTP_PASSWORD", "password"),
   // Redis
   REDIS_HOST: req("REDIS_HOST", "redis"),
   REDIS_PORT: num("REDIS_PORT", "6379"),
