@@ -7,8 +7,10 @@ import { PermissionsAdminController } from "@/modules/admin/rbac/permissions.adm
 import { RolesService } from "@/modules/admin/rbac/roles.service";
 import { RolesAdminController } from "@/modules/admin/rbac/roles.admin.controller";
 import { RbacBootstrapAdminController } from "./bootstrap.admin.controller";
+import { SecurityModule } from "@/infrastructure/security/security.module";
 
 @Module({
+  imports: [SecurityModule],
   controllers: [
     PermissionsAdminController,
     RolesAdminController,

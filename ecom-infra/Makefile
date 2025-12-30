@@ -27,8 +27,12 @@ rebuild:
 	@docker compose --env-file .env \
 	  -f docker/compose.base.yml \
 	  -f docker/compose.api.dev.yml \
-	  up -d --no-recreate api
-
+	  up -d api
+down:
+	@docker compose --env-file .env \
+	  -f docker/compose.base.yml \
+	  -f docker/compose.api.dev.yml \
+	  down
 logs:
 	@docker compose --env-file .env \
 	  -f docker/compose.base.yml \

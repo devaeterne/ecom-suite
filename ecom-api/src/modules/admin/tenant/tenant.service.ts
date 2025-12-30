@@ -1,57 +1,59 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { TenantMePatchDto } from "@/modules/admin/dto/tenant-me.patch.dto";
+import { TenantMePatchDto } from "@/modules/admin/tenant/dto/tenant-me.patch.dto";
+
+type JsonObj = Record<string, any>;
+
+function asObj(v: any): JsonObj {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as JsonObj) : {};
+}
 
 @Injectable()
 export class TenantService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMe(tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
+    const t = await this.prisma.tenant.findFirst({
+      where: { id: tenantId, deletedAt: null },
     });
-
-    if (!tenant || tenant.deletedAt)
-      throw new NotFoundException("Tenant not found");
-    return tenant;
+    if (!t) throw new NotFoundException("Tenant not found");
+    return t;
   }
 
-  async updateMe(tenantId: string, dto: TenantMePatchDto) {
-    const tenant = await this.getMe(tenantId);
+  async patchMe(tenantId: string, dto: TenantMePatchDto) {
+    const t = await this.getMe(tenantId);
 
-    // Prisma JsonValue -> güvenli object cast
-    let metadata: any = tenant.metadata ?? {};
-    if (
-      typeof metadata !== "object" ||
-      metadata === null ||
-      Array.isArray(metadata)
-    ) {
-      metadata = {};
-    }
+    const metadata = asObj(t.metadata);
 
-    const nextMetadata: any = {
+    // metadata merge (deep-ish)
+    const nextMetadata: JsonObj = {
       ...metadata,
       branding: {
-        ...(metadata.branding ?? {}),
-        ...(dto.logoUrl ? { logoUrl: dto.logoUrl } : {}),
+        ...asObj(metadata.branding),
+        ...asObj(dto.branding),
       },
       i18n: {
-        ...(metadata.i18n ?? {}),
-        ...(dto.locale ? { locale: dto.locale } : {}),
-        ...(dto.currencyCode ? { currencyCode: dto.currencyCode } : {}),
+        ...asObj(metadata.i18n),
+        ...asObj(dto.i18n),
       },
       domains: {
-        ...(metadata.domains ?? {}),
-        ...(dto.domains ?? {}),
+        ...asObj(metadata.domains),
+        ...asObj(dto.domains),
       },
     };
 
-    return this.prisma.tenant.update({
+    // Optional: canonical tenant.name sync (branding.name gelirse)
+    const nextName =
+      dto.branding?.name !== undefined ? dto.branding.name : t.name ?? null;
+
+    const updated = await this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
-        ...(dto.name ? { name: dto.name } : {}),
-        metadata: nextMetadata,
+        ...(nextName !== undefined ? { name: nextName } : {}),
+        metadata: nextMetadata as any,
       },
     });
+
+    return updated;
   }
 }

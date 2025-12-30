@@ -25,4 +25,8 @@ export const SEED_PERMISSIONS: SeedPermission[] = [
   // System (ileride)
   { key: "system:read", description: "Sistem ayarlarını görüntüleme" },
   { key: "system:write", description: "Sistem ayarlarını güncelleme" },
+
+  // Session
+  { key: "session:read", description: "Read sessions" },
+  { key: "session:write", description: "Revoke sessions" },
 ];

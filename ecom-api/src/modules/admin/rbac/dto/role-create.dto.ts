@@ -1,4 +1,10 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsBoolean,
+} from "class-validator";
 import { RoleScope } from "@prisma/client";
 
 export class RoleCreateDto {
@@ -14,4 +20,8 @@ export class RoleCreateDto {
   @IsString()
   @MaxLength(255)
   description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

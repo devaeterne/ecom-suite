@@ -79,7 +79,15 @@ export class PasswordResetController {
       throw e;
     }
 
-    await this.service.requestReset(dto);
+    // ✅ Service metodunu güncellenmiş parametrelerle çağırın
+    await this.service.requestReset({
+      tenantId,
+      typ: dto.typ || "store", // dto'dan geliyorsa, yoksa default "store"
+      email: dto.email,
+      ip: meta.ip ?? undefined,
+      userAgent: meta.userAgent ?? undefined,
+    });
+
     return { ok: true };
   }
 
@@ -88,7 +96,7 @@ export class PasswordResetController {
     const meta = getReqMeta(req);
     const tenantId = await this.activeTenant.getTenantId();
 
-    // confirm dto’da token alanının adı projene göre değişebilir
+    // confirm dto'da token alanının adı projene göre değişebilir
     const token = (dto as any).token ?? (dto as any).code ?? null;
 
     try {
@@ -127,7 +135,14 @@ export class PasswordResetController {
       throw e;
     }
 
-    await this.service.confirmReset(dto);
+    // ✅ Service'deki yeni metod adı: resetPassword (confirmReset değil)
+    await this.service.resetPassword({
+      tenantId,
+      typ: dto.typ || "store", // dto'dan geliyorsa, yoksa default "store"
+      token: token,
+      newPassword: dto.newPassword, // dto'da bu alan olmalı
+    });
+
     return { ok: true };
   }
 }

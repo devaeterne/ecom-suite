@@ -140,4 +140,71 @@ export class PasswordResetService {
 
     return { ok: true };
   }
+
+  async issue(params: {
+    tenantId: string;
+    typ: "admin" | "store";
+    identityId: string; // hedef authIdentity
+    ip?: string;
+    userAgent?: string;
+    sendMail?: boolean;
+    email?: string; // sendMail true ise gerekli
+  }) {
+    const identity = await this.prisma.authIdentity.findFirst({
+      where: {
+        id: params.identityId,
+        tenantId: params.tenantId,
+        ...(params.typ === "admin"
+          ? { userId: { not: null } }
+          : { customerId: { not: null } }),
+      },
+    });
+
+    // security: her durumda ok gibi davranmak istiyorsan null dön, yoksa hata fırlat
+    if (!identity) return { ok: false as const };
+
+    const raw = this.tokenService.newRefreshToken();
+    const tokenHash = sha256(raw);
+    const expiresAt = new Date(
+      Date.now() + env.RESET_TOKEN_TTL_MINUTES * 60 * 1000
+    );
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        tenantId: params.tenantId,
+        identityId: identity.id,
+        typ: params.typ,
+        tokenHash,
+        expiresAt,
+        ip: params.ip,
+        userAgent: params.userAgent,
+      },
+    });
+
+    const link = `${this.appUrl(
+      params.typ
+    )}/reset-password?token=${encodeURIComponent(raw)}`;
+
+    if (params.sendMail && params.email) {
+      await this.mailer.send({
+        to: params.email,
+        subject:
+          params.typ === "admin"
+            ? "Admin invite / password setup"
+            : "Password setup",
+        html: `
+          <p>Hesabınız oluşturuldu. Şifre belirlemek için:</p>
+          <p><a href="${link}">Şifre belirle</a></p>
+          <p>Bu link ${env.RESET_TOKEN_TTL_MINUTES} dakika geçerlidir.</p>
+        `,
+        text: `Şifre belirleme linki: ${link} (TTL ${env.RESET_TOKEN_TTL_MINUTES} dk)`,
+      });
+    }
+
+    // DEV smoke test için raw token döndür
+    const isDev = env.NODE_ENV !== "production";
+    return isDev
+      ? { ok: true as const, token: raw, link }
+      : { ok: true as const };
+  }
 }

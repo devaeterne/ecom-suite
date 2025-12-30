@@ -10,6 +10,8 @@ import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard
 import { AuthAuditLogModule } from "@/modules/auth/audit/auth-audit-log.module";
 import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-module";
 import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
+import { SecurityModule } from "@/infrastructure/security/security.module";
+import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 
 @Module({
   imports: [
@@ -19,9 +21,10 @@ import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-
     AuthAuditLogModule,
     AuthRateLimitModule,
     TenantBootstrapModule,
+    SecurityModule,
   ],
   controllers: [AdminAuthController],
-  providers: [AdminAuthService, AdminAccessGuard],
-  exports: [AdminAuthService],
+  providers: [AdminAuthService, AdminAccessGuard, AdminAuthGuard],
+  exports: [AdminAuthService, AdminAuthGuard],
 })
 export class AdminAuthModule {}

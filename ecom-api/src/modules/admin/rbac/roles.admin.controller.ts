@@ -12,9 +12,9 @@ import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
 import { RolesService } from "@/modules/admin/rbac/roles.service";
-import { RoleCreateDto } from "@/modules/admin/rbac/dto/role-create.dto";
-import { RoleUpdateDto } from "@/modules/admin/rbac/dto/role-update.dto";
 import { RolePermissionsDto } from "@/modules/admin/rbac/dto/role-permissions.dto";
+import { RoleCreateDto } from "@/modules/admin/rbac/dto/role-create.dto";
+import { RolePatchDto } from "@/modules/admin/rbac/dto/role-patch.dto";
 
 @Controller("admin/roles")
 @UseGuards(AdminAuthGuard, PermissionGuard)
@@ -35,21 +35,21 @@ export class RolesAdminController {
 
   @Patch(":id")
   @RequirePermission("rbac:write")
-  async update(
+  async patch(
     @Req() req: any,
     @Param("id") id: string,
-    @Body() dto: RoleUpdateDto
+    @Body() dto: RolePatchDto
   ) {
     return this.rolesService.updateRole(req.tenant.id, id, dto);
   }
 
   @Post(":id/permissions")
   @RequirePermission("rbac:write")
-  async replacePermissions(
+  async setPermissions(
     @Req() req: any,
     @Param("id") id: string,
     @Body() dto: RolePermissionsDto
   ) {
-    return this.rolesService.replaceRolePermissions(req.tenant.id, id, dto);
+    return this.rolesService.setRolePermissions(req.tenant.id, id, dto);
   }
 }

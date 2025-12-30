@@ -23,7 +23,7 @@ export class RbacBootstrapAdminController {
     const tenantId = req.tenant.id as string;
     const userId = req.user.id as string;
 
-    // 1) Tenant-scoped Owner role
+    // 1) Ensure Owner role
     let owner = await this.prisma.role.findFirst({
       where: { tenantId, name: "Owner", deletedAt: null },
     });
@@ -40,40 +40,54 @@ export class RbacBootstrapAdminController {
       });
     }
 
-    // 2) Global permissions (tenantId = null)
+    // 2) Read global permissions
     const perms = await this.prisma.permission.findMany({
       where: { tenantId: null, deletedAt: null },
       select: { id: true, key: true },
+      orderBy: { key: "asc" },
     });
 
-    const now = new Date();
+    // 3) Read existing links (including soft-deleted)
+    const existing = await this.prisma.rolePermissionLink.findMany({
+      where: { tenantId, roleId: owner.id },
+      select: { id: true, permissionId: true, deletedAt: true },
+    });
 
-    await this.prisma.$transaction([
-      // 3) clear existing role perms (soft)
-      this.prisma.rolePermissionLink.updateMany({
-        where: { tenantId, roleId: owner.id, deletedAt: null },
-        data: { deletedAt: now },
-      }),
+    const existingByPermId = new Map(existing.map((l) => [l.permissionId, l]));
 
-      // 4) add all permissions
-      this.prisma.rolePermissionLink.createMany({
-        data: perms.map((p) => ({
-          tenantId,
-          roleId: owner!.id,
-          permissionId: p.id,
-        })),
-        skipDuplicates: true,
-      }),
+    // 4) Transaction: undelete existing links, create missing links, ensure user role
+    await this.prisma.$transaction(async (tx) => {
+      // 4a) ensure each permission link active
+      for (const p of perms) {
+        const link = existingByPermId.get(p.id);
 
-      // 5) attach role to current user
-      this.prisma.userRoleLink.upsert({
+        if (link) {
+          if (link.deletedAt !== null) {
+            await tx.rolePermissionLink.update({
+              where: { id: link.id },
+              data: { deletedAt: null },
+            });
+          }
+        } else {
+          await tx.rolePermissionLink.create({
+            data: {
+              tenantId,
+              roleId: owner!.id,
+              permissionId: p.id,
+            },
+          });
+        }
+      }
+
+      // 4b) ensure user has Owner role
+      await tx.userRoleLink.upsert({
         where: {
-          tenantId_userId_roleId: { tenantId, userId, roleId: owner.id },
+          tenantId_userId_roleId: { tenantId, userId, roleId: owner!.id },
         },
-        create: { tenantId, userId, roleId: owner.id },
+        create: { tenantId, userId, roleId: owner!.id },
         update: { deletedAt: null },
-      }),
-    ]);
+      });
+    });
 
     return {
       ok: true,
