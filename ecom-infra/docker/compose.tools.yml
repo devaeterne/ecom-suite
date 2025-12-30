@@ -36,7 +36,33 @@ services:
       - "${PRISMA_STUDIO_PORT:-5555}:5555"
     networks:
       - ecom_net
-
+  db_tools:
+    image: node:20-bookworm-slim
+    container_name: ecom_db_tools
+    working_dir: /app
+    env_file:
+      - ../.env
+    environment:
+      CI: "true"
+      TS_NODE_PROJECT: "tsconfig.json"
+    volumes:
+      - ${API_REPO_PATH:-../ecom-api}:/app
+      - /app/node_modules
+    command: >
+      sh -lc "
+        set -eu
+        cd /app
+        apt-get update -y &&
+        apt-get install -y --no-install-recommends openssl ca-certificates &&
+        rm -rf /var/lib/apt/lists/*
+        corepack enable
+        corepack prepare pnpm@10.26.1 --activate
+        pnpm install
+        pnpm prisma:generate
+        echo 'db_tools ready'
+      "
+    networks:
+      - ecom_net
 networks:
   ecom_net:
     external: true

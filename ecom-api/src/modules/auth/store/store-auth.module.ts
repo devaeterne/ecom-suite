@@ -8,7 +8,7 @@ import { StoreAuthService } from "@/modules/auth/store/store-auth.service";
 import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
 import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
 import { AuthAuditLogModule } from "@/modules/auth/audit/auth-audit-log.module";
-import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit-module";
+import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit.module";
 
 @Module({
   imports: [

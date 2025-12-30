@@ -13,7 +13,7 @@ import { PasswordResetService } from "@/modules/auth/reset/password-reset.servic
 import { ResetRequestDto } from "@/modules/auth/reset/dto/reset-request.dto";
 import { ResetConfirmDto } from "@/modules/auth/reset/dto/reset-confirm.dto";
 
-import { AuthRateLimitService } from "@modules/auth/rate-limit/auth-rate-limit-service";
+import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-tenant.service";
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";

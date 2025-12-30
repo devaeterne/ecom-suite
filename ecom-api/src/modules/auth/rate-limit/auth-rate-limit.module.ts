@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { CacheModule } from "@/cache/cache.module";
-import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit-service";
+import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 
 @Module({
   imports: [CacheModule],

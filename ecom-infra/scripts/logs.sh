@@ -1,23 +1,14 @@
-#!/usr/bin/env bash
-set -euo pipefail
+# scripts/logs.sh
+ENV_MODE="${ENV_MODE:-dev}"   # dev | prod
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
-
-SERVICE="${1:-}"
-
-if [[ -z "$SERVICE" ]]; then
-  echo "Usage: ./scripts/logs.sh <service>"
-  echo "Examples:"
-  echo "  ./scripts/logs.sh postgres"
-  echo "  ./scripts/logs.sh api"
-  echo "  ./scripts/logs.sh minio"
-  exit 1
+API_COMPOSE="docker/compose.api.dev.yml"
+if [[ "$ENV_MODE" == "prod" ]]; then
+  API_COMPOSE="docker/compose.api.prod.yml"
 fi
 
 docker compose \
   -f docker/compose.base.yml \
-  -f docker/compose.api.yml \
+  -f "$API_COMPOSE" \
   -f docker/compose.tools.yml \
   -f docker/compose.admin.yml \
   -f docker/compose.storefront.yml \

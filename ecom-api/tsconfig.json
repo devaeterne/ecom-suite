@@ -13,10 +13,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@test/*": ["test/*"],
       "@prisma/*": ["src/prisma/*"],
       "@modules/*": ["src/modules/*"],
       "@common/*": ["src/common/*"]
     }
   },
-  "include": ["src", "src/prisma"]
+  "include": ["src", "src/prisma", "test"]
 }

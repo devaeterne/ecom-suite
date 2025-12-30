@@ -28,7 +28,7 @@ import {
 } from "@/infrastructure/http/cookies";
 import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard";
 
-import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit-service";
+import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
 

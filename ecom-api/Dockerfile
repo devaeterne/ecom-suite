@@ -3,13 +3,13 @@ WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends procps openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile || pnpm install
 
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm exec prisma generate
@@ -20,6 +20,10 @@ WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# ✅ BURASI EKSİK
+RUN corepack enable && corepack prepare pnpm@10.26.1 --activate
+
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules

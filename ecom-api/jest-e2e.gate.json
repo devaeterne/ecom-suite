@@ -1,0 +1,20 @@
+{
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^@test/(.*)$": "<rootDir>/test/$1",
+    "^@modules/(.*)$": "<rootDir>/src/modules/$1",
+    "^@infrastructure/(.*)$": "<rootDir>/src/infrastructure/$1",
+    "^@config/(.*)$": "<rootDir>/src/config/$1"
+  },
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testRegex": ".gate.e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", { "isolatedModules": false }]
+  },
+  "testEnvironment": "node",
+  "testTimeout": 60000,
+  "detectOpenHandles": true,
+  "verbose": true,
+  "clearMocks": true
+}

@@ -1,0 +1,67 @@
+services:
+  db_e2e:
+    image: postgres:16
+    container_name: ecom_db_e2e
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ecom_e2e
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecom_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: 
+      - e2e_net
+
+  api_e2e:
+    image: node:20-bookworm-slim
+    container_name: ecom_api_e2e
+    depends_on:
+      db_e2e:
+        condition: service_healthy
+      redis_e2e:
+        condition: service_healthy
+    working_dir: /app
+    environment:
+      NODE_ENV: test
+      CI: "true"
+      DATABASE_URL: postgresql://postgres:postgres@db_e2e:5432/ecom_e2e?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@db_e2e:5432/ecom_e2e_shadow?schema=public
+      TENANT_CONFIG_PATH: /app/src/config/tenant.json
+      STORAGE_ENABLED: "false"
+      REDIS_URL: redis://redis_e2e:6379
+      REDIS_HOST: redis_e2e
+      REDIS_PORT: "6379"
+    volumes:
+      - ../../ecom-api:/app
+    command: >
+      sh -lc "
+        apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/* ;
+        corepack enable && corepack prepare pnpm@10.26.1 --activate ;
+        pnpm install --no-frozen-lockfile ;
+        pnpm prisma db push --schema src/prisma/schema.prisma --force-reset ;
+        pnpm prisma generate --schema src/prisma/schema.prisma ;
+        pnpm db:seed &&
+        pnpm test:e2e:gate
+      "
+    networks: 
+      - e2e_net
+  redis_e2e:
+    image: redis:7-alpine
+    container_name: ecom_redis_e2e
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks:
+      - e2e_net
+
+networks:
+  e2e_net:
+    driver: bridge

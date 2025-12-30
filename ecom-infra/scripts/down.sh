@@ -1,16 +1,15 @@
-#!/usr/bin/env bash
-set -euo pipefail
+# scripts/down.sh
+REMOVE_ORPHANS="${REMOVE_ORPHANS:-false}"
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+DOWN_ARGS=()
+if [[ "$REMOVE_ORPHANS" == "true" ]]; then
+  DOWN_ARGS+=(--remove-orphans)
+fi
 
-echo "🧹 Stopping all ecom stacks (base + api + tools + admin + storefront)..."
 docker compose \
   -f docker/compose.base.yml \
   -f docker/compose.api.dev.yml \
   -f docker/compose.tools.yml \
   -f docker/compose.admin.yml \
   -f docker/compose.storefront.yml \
-  down
-
-echo "✅ Down."
+  down "${DOWN_ARGS[@]}"

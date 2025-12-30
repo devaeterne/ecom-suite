@@ -19,7 +19,8 @@ export type TenantConfig = z.infer<typeof TenantConfigSchema>;
 @Injectable()
 export class TenantConfigService {
   getConfig(): TenantConfig {
-    const path = process.env.TENANT_CONFIG_PATH ?? "/app/config/tenant.json";
+    const path =
+      process.env.TENANT_CONFIG_PATH ?? "/app/src/config/tenant.json";
 
     const st = statSync(path);
     if (st.isDirectory()) {

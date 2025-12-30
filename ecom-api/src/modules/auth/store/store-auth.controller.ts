@@ -31,7 +31,7 @@ import {
   clearStoreRefreshCookieOptions,
 } from "@/infrastructure/http/cookies";
 
-import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit-service";
+import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-tenant.service";
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";

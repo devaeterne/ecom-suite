@@ -27,7 +27,13 @@ export class StorageService implements OnModuleInit {
     },
   });
 
-  async onModuleInit(): Promise<void> {
+  async onModuleInit() {
+    if (process.env.STORAGE_ENABLED === "false") {
+      this.logger.warn(
+        "Storage disabled (STORAGE_ENABLED=false). Skipping bucket ensure."
+      );
+      return;
+    }
     await this.ensureBucket();
   }
 
