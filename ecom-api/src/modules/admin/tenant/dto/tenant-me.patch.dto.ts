@@ -1,56 +1,80 @@
 import {
-  IsArray,
   IsOptional,
   IsString,
-  MaxLength,
+  IsObject,
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
 
-export class TenantDomainsDto {
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  domains?: string[];
-}
-
-export class TenantBrandingDto {
+export class TenantBrandingPatchDto {
   @IsOptional()
   @IsString()
-  @MaxLength(2048)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+}
+
+export class TenantI18nPatchDto {
+  @IsOptional()
+  @IsString()
+  locale?: string;
+
+  @IsOptional()
+  @IsString()
+  currencyCode?: string;
+}
+
+export class TenantDomainsPatchDto {
+  @IsOptional()
+  @IsString()
+  admin?: string;
+
+  @IsOptional()
+  @IsString()
+  storefront?: string;
+
+  @IsOptional()
+  @IsString()
+  api?: string;
+}
+
+/**
+ * Backward-compatible PATCH DTO:
+ * - testlerin gönderdiği flat alanları kabul eder: { name, logoUrl, locale, currencyCode, domains }
+ * - ileride UI için nested structure da kabul eder: { branding, i18n, domains }
+ */
+export class TenantMePatchDto {
+  // ---- flat (minimal patch / legacy)
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
   logoUrl?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(120)
-  name?: string;
-}
-
-export class TenantI18nDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(16)
-  locale?: string; // "tr-TR"
+  locale?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(8)
-  currency?: string; // "TRY"
-}
-
-export class TenantMePatchDto {
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => TenantBrandingDto)
-  branding?: TenantBrandingDto;
+  currencyCode?: string;
 
   @IsOptional()
+  @IsObject()
+  domains?: TenantDomainsPatchDto;
+
+  // ---- nested (preferred)
+  @IsOptional()
   @ValidateNested()
-  @Type(() => TenantI18nDto)
-  i18n?: TenantI18nDto;
+  @Type(() => TenantBrandingPatchDto)
+  branding?: TenantBrandingPatchDto;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => TenantDomainsDto)
-  domains?: TenantDomainsDto;
+  @Type(() => TenantI18nPatchDto)
+  i18n?: TenantI18nPatchDto;
 }

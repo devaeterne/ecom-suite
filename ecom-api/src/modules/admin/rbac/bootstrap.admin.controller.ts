@@ -4,6 +4,7 @@ import {
   Post,
   Req,
   UseGuards,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
@@ -20,8 +21,27 @@ export class RbacBootstrapAdminController {
       throw new ForbiddenException("Bootstrap disabled in production");
     }
 
-    const tenantId = req.tenant.id as string;
-    const userId = req.user.id as string;
+    const tenantId: string | undefined = req.tenant?.id ?? req.user?.tenantId;
+    if (!tenantId) throw new UnauthorizedException("Missing tenant context");
+
+    // Guard sonrası req.user.id = userId olmalı
+    let userId: string | undefined = req.user?.id;
+
+    // Safety: eğer guard eskiyse veya farklı akış varsa identityId'den resolve et
+    if (!userId) {
+      const identityId: string | undefined =
+        req.user?.sub ?? req.user?.identityId;
+      if (!identityId) throw new UnauthorizedException("Missing user context");
+
+      const ident = await this.prisma.authIdentity.findFirst({
+        where: { id: identityId, tenantId },
+        select: { userId: true },
+      });
+
+      if (!ident?.userId)
+        throw new UnauthorizedException("Identity has no user");
+      userId = ident.userId;
+    }
 
     // 1) Ensure Owner role
     let owner = await this.prisma.role.findFirst({
@@ -74,6 +94,7 @@ export class RbacBootstrapAdminController {
               tenantId,
               roleId: owner!.id,
               permissionId: p.id,
+              deletedAt: null,
             },
           });
         }
@@ -82,9 +103,18 @@ export class RbacBootstrapAdminController {
       // 4b) ensure user has Owner role
       await tx.userRoleLink.upsert({
         where: {
-          tenantId_userId_roleId: { tenantId, userId, roleId: owner!.id },
+          tenantId_userId_roleId: {
+            tenantId,
+            userId: userId!,
+            roleId: owner!.id,
+          },
         },
-        create: { tenantId, userId, roleId: owner!.id },
+        create: {
+          tenantId,
+          userId: userId!,
+          roleId: owner!.id,
+          deletedAt: null,
+        },
         update: { deletedAt: null },
       });
     });

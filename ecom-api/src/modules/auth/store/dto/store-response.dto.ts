@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 
-export class StoreResponseDto {
+export class StoreAuthResponseDto {
   @ApiProperty()
   accessToken!: string;
 }

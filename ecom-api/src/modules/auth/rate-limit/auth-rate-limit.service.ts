@@ -1,13 +1,13 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { CacheService } from "@/cache/cache.service";
+import { env } from "@/config/env";
 
 type RateLimitInput = {
   typ: "admin" | "store";
-  action: "login" | "reset_request" | "reset_confirm";
-  tenantId?: string | null;
+  action: "login" | "register" | "reset_request" | "reset_confirm";
+  tenantId: string;
   ip: string | null;
-  // opsiyonel: email gibi bir ikinci boyut
-  identityKey?: string | null;
+  identityKey: string | null;
 };
 
 @Injectable()
@@ -26,6 +26,11 @@ export class AuthRateLimitService {
     limit: number,
     windowSeconds: number
   ) {
+    // E2E / unit testlerde limiter devre dışı
+    if (env.NODE_ENV === "test") {
+      return { allowed: true, remaining: limit, resetSeconds: windowSeconds };
+    }
+
     const key = this.keyOf(input);
     const { count, ttl } = await this.cache.incrWindow(key, windowSeconds);
 

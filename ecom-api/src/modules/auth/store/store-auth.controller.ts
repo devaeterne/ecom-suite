@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpException,
   HttpStatus,
+  HttpCode,
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
@@ -23,12 +24,14 @@ import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard
 
 import { StoreRegisterDto } from "@/modules/auth/store/dto/store-register.dto";
 import { StoreLoginDto } from "@/modules/auth/store/dto/store-login.dto";
-import { StoreResponseDto } from "@/modules/auth/store/dto/store-response.dto";
+import { StoreAuthResponseDto } from "@/modules/auth/store/dto/store-response.dto";
 
 import {
   COOKIE_NAMES,
   storeRefreshCookieOptions,
   clearStoreRefreshCookieOptions,
+  clearStoreAccessCookieOptions,
+  storeAccessCookieOptions,
 } from "@/infrastructure/http/cookies";
 
 import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
@@ -56,13 +59,14 @@ export class StoreAuthController {
   ) {}
 
   @Post("register")
+  @HttpCode(200)
   @ApiBody({ type: StoreRegisterDto })
-  @ApiOkResponse({ type: StoreResponseDto })
+  @ApiOkResponse({ type: StoreAuthResponseDto })
   async register(
     @Body() dto: StoreRegisterDto,
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
-  ): Promise<StoreResponseDto> {
+  ): Promise<StoreAuthResponseDto> {
     const meta = getReqMeta(req);
     const tenantId = await this.activeTenant.getTenantId();
 
@@ -71,7 +75,7 @@ export class StoreAuthController {
       await this.rl.assertAllowed(
         {
           typ: "store",
-          action: "login",
+          action: "register",
           tenantId,
           ip: meta.ip,
           identityKey: dto.email?.toLowerCase() ?? null,
@@ -101,8 +105,17 @@ export class StoreAuthController {
       throw e;
     }
 
-    const { accessToken, refreshRaw } = await this.service.register(dto, meta);
+    const { accessToken, refreshRaw } = await this.service.register(
+      tenantId,
+      dto,
+      meta
+    );
 
+    reply.setCookie(
+      COOKIE_NAMES.storeAccess,
+      accessToken,
+      storeAccessCookieOptions()
+    );
     reply.setCookie(
       COOKIE_NAMES.storeRefresh,
       refreshRaw,
@@ -113,13 +126,14 @@ export class StoreAuthController {
   }
 
   @Post("login")
+  @HttpCode(200)
   @ApiBody({ type: StoreLoginDto })
-  @ApiOkResponse({ type: StoreResponseDto })
+  @ApiOkResponse({ type: StoreAuthResponseDto })
   async login(
     @Body() dto: StoreLoginDto,
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
-  ): Promise<StoreResponseDto> {
+  ): Promise<StoreAuthResponseDto> {
     const meta = getReqMeta(req);
     const tenantId = await this.activeTenant.getTenantId();
 
@@ -159,11 +173,17 @@ export class StoreAuthController {
     }
 
     const { accessToken, refreshRaw } = await this.service.login(
+      tenantId,
       dto.email,
       dto.password,
       meta
     );
 
+    reply.setCookie(
+      COOKIE_NAMES.storeAccess,
+      accessToken,
+      storeAccessCookieOptions()
+    );
     reply.setCookie(
       COOKIE_NAMES.storeRefresh,
       refreshRaw,
@@ -174,11 +194,12 @@ export class StoreAuthController {
   }
 
   @Post("refresh")
-  @ApiOkResponse({ type: StoreResponseDto })
+  @HttpCode(200)
+  @ApiOkResponse({ type: StoreAuthResponseDto })
   async refresh(
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
-  ): Promise<StoreResponseDto> {
+  ): Promise<StoreAuthResponseDto> {
     const meta = getReqMeta(req);
 
     const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.storeRefresh];
@@ -196,11 +217,17 @@ export class StoreAuthController {
       newRefresh,
       storeRefreshCookieOptions()
     );
+    reply.setCookie(
+      COOKIE_NAMES.storeAccess,
+      accessToken,
+      storeAccessCookieOptions()
+    );
 
     return { accessToken };
   }
 
   @Post("logout")
+  @HttpCode(200)
   async logout(
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply
@@ -216,6 +243,10 @@ export class StoreAuthController {
       COOKIE_NAMES.storeRefresh,
       clearStoreRefreshCookieOptions()
     );
+    reply.clearCookie(
+      COOKIE_NAMES.storeAccess,
+      clearStoreAccessCookieOptions()
+    );
 
     return { ok: true };
   }
@@ -223,17 +254,23 @@ export class StoreAuthController {
   @Post("logout-all")
   @UseGuards(StoreAccessGuard)
   @ApiBearerAuth()
+  @HttpCode(200)
   async logoutAll(
     @Req() req: any,
     @Res({ passthrough: true }) reply: FastifyReply
   ) {
-    const { sub, tenantId } = req.user;
+    const meta = getReqMeta(req as any);
 
-    await this.service.logoutAll(sub, tenantId);
+    const { sub, tenantId } = req.user;
+    await this.service.logoutAll(sub, tenantId, meta);
 
     reply.clearCookie(
       COOKIE_NAMES.storeRefresh,
       clearStoreRefreshCookieOptions()
+    );
+    reply.clearCookie(
+      COOKIE_NAMES.storeAccess,
+      clearStoreAccessCookieOptions()
     );
 
     return { ok: true };
@@ -243,6 +280,7 @@ export class StoreAuthController {
   @UseGuards(StoreAccessGuard)
   @ApiBearerAuth()
   async me(@Req() req: any) {
-    return { user: req.user };
+    const { sub, tenantId } = req.user;
+    return this.service.me(sub, tenantId);
   }
 }

@@ -1,6 +1,11 @@
 import type { INestApplication } from "@nestjs/common";
 import { agent as makeAgent, api, type HttpAgent } from "@test/helpers/http";
 
+function decodeJwtNoVerify(token: string) {
+  const [, p] = token.split(".");
+  const json = Buffer.from(p, "base64url").toString("utf8");
+  return JSON.parse(json);
+}
 /**
  * Headers
  */
@@ -22,7 +27,7 @@ export async function loginAdmin(
   opts?: { expectStatus?: number }
 ): Promise<{ accessToken?: string; agent: HttpAgent }> {
   const ag = makeAgent(app);
-  const expectStatus = opts?.expectStatus ?? 201;
+  const expectStatus = opts?.expectStatus ?? 200;
 
   const res = await ag
     .post("/api/admin/auth/login")
@@ -43,7 +48,7 @@ export async function loginStore(
   opts?: { expectStatus?: number }
 ): Promise<{ accessToken?: string; agent: HttpAgent }> {
   const ag = makeAgent(app);
-  const expectStatus = opts?.expectStatus ?? 201;
+  const expectStatus = opts?.expectStatus ?? 200;
 
   const res = await ag
     .post("/api/store/auth/login")
@@ -59,7 +64,9 @@ export async function loginStore(
  */
 export async function registerStoreUser(app: INestApplication, payload: any) {
   const res = await api(app).post("/api/store/auth/register").send(payload);
-  if (![200, 201, 409].includes(res.status)) {
+
+  // policy: duplicate -> 409, success -> 200
+  if (![200, 409].includes(res.status)) {
     throw new Error(
       `Unexpected register status=${res.status}, body=${JSON.stringify(
         res.body
@@ -71,29 +78,33 @@ export async function registerStoreUser(app: INestApplication, payload: any) {
 /**
  * Admin refresh/logout flows (cookie agent)
  */
-export async function refreshAdmin(agent: HttpAgent, expectStatus = 201) {
-  return agent.post("/api/admin/auth/refresh").send({}).expect(expectStatus);
+export async function refreshAdmin(agent: HttpAgent, expectStatus = 200) {
+  const res = await agent
+    .post("/api/admin/auth/refresh")
+    .send({})
+    .expect(expectStatus);
+  return res;
 }
 
-export async function logoutAdmin(agent: HttpAgent, expectStatus = 201) {
+export async function logoutAdmin(agent: HttpAgent, expectStatus = 200) {
   return agent.post("/api/admin/auth/logout").send({}).expect(expectStatus);
 }
 
-export async function logoutAllAdmin(agent: HttpAgent, expectStatus = 201) {
+export async function logoutAllAdmin(agent: HttpAgent, expectStatus = 200) {
   return agent.post("/api/admin/auth/logout-all").send({}).expect(expectStatus);
 }
 
 /**
  * Store refresh/logout flows (cookie agent)
  */
-export async function refreshStore(agent: HttpAgent, expectStatus = 201) {
+export async function refreshStore(agent: HttpAgent, expectStatus = 200) {
   return agent.post("/api/store/auth/refresh").send({}).expect(expectStatus);
 }
 
-export async function logoutStore(agent: HttpAgent, expectStatus = 201) {
+export async function logoutStore(agent: HttpAgent, expectStatus = 200) {
   return agent.post("/api/store/auth/logout").send({}).expect(expectStatus);
 }
 
-export async function logoutAllStore(agent: HttpAgent, expectStatus = 201) {
+export async function logoutAllStore(agent: HttpAgent, expectStatus = 200) {
   return agent.post("/api/store/auth/logout-all").send({}).expect(expectStatus);
 }

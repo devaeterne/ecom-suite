@@ -1,20 +1,23 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { SessionsRepository } from "@/modules/sessions/sessions.repository";
-import { TokenService } from "@/modules/crypto/token.service";
+import {
+  SessionsRepository,
+  SessionTyp,
+} from "@/modules/sessions/sessions.repository";
+import { TokenService } from "@/infrastructure/security/token.service";
 import { env } from "@/config/env";
 import { createHash, randomUUID } from "crypto";
 import * as bcrypt from "bcrypt";
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
-import { SessionTyp } from "@/modules/sessions/sessions.repository";
+
+type ReqMeta = { ip?: string | null; userAgent?: string | null };
+type LoginResult = { accessToken: string; refreshRaw: string };
 
 function sha256(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
 }
-
-type ReqMeta = { ip?: string | null; userAgent?: string | null };
 
 @Injectable()
 export class AdminAuthService {
@@ -31,29 +34,31 @@ export class AdminAuthService {
     const active = await this.sessionsRepo.listActiveByIdentity({
       tenantId,
       identityId,
-      take: 50,
       typ: "admin",
+      take: 50,
+      orderBy: "desc",
     });
 
     if (active.length <= this.MAX_ACTIVE_SESSIONS) return;
 
-    const overflow = active.slice(0, active.length - this.MAX_ACTIVE_SESSIONS);
-    const ids = overflow.map((s: { id: string }) => s.id);
-    await this.sessionsRepo.revokeMany(ids);
+    // en eski oturumları revoke et
+    const overflow = active.slice(this.MAX_ACTIVE_SESSIONS);
+    await this.sessionsRepo.revokeMany(overflow.map((s) => s.id));
   }
 
-  async login(email: string, password: string, meta: ReqMeta = {}) {
+  async login(
+    tenantId: string,
+    email: string,
+    password: string,
+    meta: ReqMeta = {}
+  ): Promise<LoginResult> {
     const identity = await this.prisma.authIdentity.findFirst({
       where: {
+        tenantId, // ✅ tenant scoped
         provider: "EMAIL_PASSWORD",
         providerId: { equals: email, mode: "insensitive" },
       },
-      select: {
-        id: true,
-        tenantId: true,
-        passwordHash: true,
-        userId: true,
-      },
+      select: { id: true, tenantId: true, passwordHash: true, userId: true },
     });
 
     if (!identity?.passwordHash || !identity.userId) {
@@ -69,38 +74,35 @@ export class AdminAuthService {
         reason: "INVALID_PASSWORD",
         ip: meta.ip ?? null,
         userAgent: meta.userAgent ?? null,
-        meta: { typ: "admin", email },
+        meta: { typ: "admin", email: email.toLowerCase() },
       });
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    const refreshRaw = this.tokenService.newRefreshToken();
-    const tokenHash = sha256(refreshRaw);
     const expiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
+    const familyId = randomUUID();
 
-    const familyId = randomUUID(); // her login -> yeni family
-
-    await this.sessionsRepo.create({
-      tenantId: identity.tenantId,
-      identityId: identity.id,
-      tokenHash,
-      expiresAt,
-      typ: "admin",
-      familyId,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
-      lastUsedAt: new Date(),
-    });
+    const { rawToken: refreshRaw } =
+      await this.sessionsRepo.createWithGeneratedToken({
+        tenantId: identity.tenantId,
+        identityId: identity.id,
+        expiresAt,
+        typ: "admin",
+        familyId,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+      });
 
     await this.enforceSessionLimit(identity.tenantId, identity.id);
 
     const accessToken = this.tokenService.signAccessToken(
       {
-        sub: identity.id,
+        sub: identity.id, // identityId
         tenantId: identity.tenantId,
         typ: "admin",
+        identityId: identity.id, // ✅ critical (permission layer için)
       },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
@@ -111,7 +113,7 @@ export class AdminAuthService {
       success: true,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
-      meta: { typ: "admin", email, familyId },
+      meta: { typ: "admin", email: email.toLowerCase(), familyId },
     });
 
     return { accessToken, refreshRaw };
@@ -120,14 +122,13 @@ export class AdminAuthService {
   async refresh(refreshRaw: string, meta: ReqMeta = {}) {
     const tokenHash = sha256(refreshRaw);
 
-    // revoked dahil çekiyoruz
     const session = await this.sessionsRepo.findAnyByTokenHash({
       tokenHash,
       typ: "admin",
     });
     if (!session) throw new UnauthorizedException("Invalid session");
 
-    // REUSE DETECTED -> GLOBAL REVOKE
+    // reuse detected -> global revoke
     if (session.revokedAt) {
       await this.sessionsRepo.markReuse(session.id);
       await this.sessionsRepo.revokeAllByIdentity({
@@ -146,7 +147,6 @@ export class AdminAuthService {
         meta: {
           typ: "admin",
           triggerSessionId: session.id,
-          triggerTokenHash: session.tokenHash,
           familyId: session.familyId,
         },
       });
@@ -154,36 +154,42 @@ export class AdminAuthService {
       throw new UnauthorizedException("Refresh reuse detected");
     }
 
-    // expired
     if (session.expiresAt.getTime() <= Date.now()) {
       await this.sessionsRepo.revoke(session.id);
       throw new UnauthorizedException("Session expired");
     }
 
-    const newRefreshRaw = this.tokenService.newRefreshToken();
-    const newHash = sha256(newRefreshRaw);
     const newExpiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
 
-    await this.sessionsRepo.rotate({
-      sessionId: session.id,
-      tenantId: session.tenantId,
-      identityId: session.identityId,
-      typ: session.typ as any, // aşağıda typ cast’ini de düzeltiyoruz
-      familyId: session.familyId,
-      oldTokenHash: session.tokenHash,
-      newTokenHash: tokenHash,
-      newExpiresAt,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
+    const { rawToken: newRefreshRaw } =
+      await this.sessionsRepo.rotateWithGeneratedToken({
+        sessionId: session.id,
+        tenantId: session.tenantId,
+        identityId: session.identityId,
+        typ: "admin",
+        familyId: session.familyId,
+        oldTokenHash: session.tokenHash,
+        newExpiresAt,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+      });
+
+    // ✅ refresh'te de userId claim'ini taşı
+    const ident = await this.prisma.authIdentity.findFirst({
+      where: { id: session.identityId, tenantId: session.tenantId },
+      select: { id: true, userId: true },
     });
+    if (!ident?.userId)
+      throw new UnauthorizedException("Identity user missing");
 
     const accessToken = this.tokenService.signAccessToken(
       {
-        sub: session.identityId,
+        sub: ident.userId, // ✅ userId
         tenantId: session.tenantId,
         typ: "admin",
+        identityId: ident.id,
       },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
@@ -200,11 +206,39 @@ export class AdminAuthService {
     return { accessToken, refreshRaw: newRefreshRaw };
   }
 
+  async logout(refreshRaw: string, meta: ReqMeta = {}) {
+    const tokenHash = sha256(refreshRaw);
+
+    const session = await this.sessionsRepo.findValidByTokenHash({
+      tokenHash,
+      typ: "admin",
+    });
+    if (!session) return;
+
+    await this.sessionsRepo.revoke(session.id);
+
+    await this.audit.log(session.tenantId, {
+      action: AUDIT.ADMIN_LOGOUT,
+      actorIdentityId: session.identityId,
+      success: true,
+      ip: meta.ip ?? null,
+      userAgent: meta.userAgent ?? null,
+      meta: { typ: "admin", sessionId: session.id },
+    });
+  }
+
   async logoutAll(identityId: string, tenantId: string) {
     await this.sessionsRepo.revokeAllByIdentity({
       tenantId,
       identityId,
-      typ: "admin" as SessionTyp,
+      typ: "admin",
+    });
+
+    await this.audit.log(tenantId, {
+      action: AUDIT.ADMIN_LOGOUT_ALL,
+      actorIdentityId: identityId,
+      success: true,
+      meta: { typ: "admin" },
     });
 
     return { ok: true };
@@ -237,27 +271,5 @@ export class AdminAuthService {
         permissions: [],
       },
     };
-  }
-
-  async logout(refreshRaw: string, meta: ReqMeta = {}) {
-    const tokenHash = sha256(refreshRaw);
-
-    const session = await this.sessionsRepo.findValidByTokenHash({
-      tokenHash,
-      typ: "admin",
-    });
-
-    if (!session) return;
-
-    await this.sessionsRepo.revoke(session.id);
-
-    await this.audit.log(session.tenantId, {
-      action: AUDIT.ADMIN_LOGOUT,
-      actorIdentityId: session.identityId,
-      success: true,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
-      meta: { typ: "admin", sessionId: session.id },
-    });
   }
 }

@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { TokenService } from "@/modules/crypto/token.service";
+import { TokenService } from "@/modules/crypto/token.service-old";
 
 @Module({
   providers: [TokenService],

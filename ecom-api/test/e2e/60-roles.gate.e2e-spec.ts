@@ -2,7 +2,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import { loginAdmin, bearer, loginAdmin as login2 } from "@test/helpers/auth";
+import { loginAdmin, bearer } from "@test/helpers/auth";
 
 describe("Roles Admin (gate e2e)", () => {
   let app: INestApplication;
@@ -17,9 +17,14 @@ describe("Roles Admin (gate e2e)", () => {
     if (!owner.accessToken) throw new Error("owner accessToken missing");
     ownerToken = owner.accessToken;
 
-    const support = await login2(app, fx.support.email, fx.support.password, {
-      expectStatus: 201,
-    });
+    const support = await loginAdmin(
+      app,
+      fx.support.email,
+      fx.support.password,
+      {
+        expectStatus: 200,
+      }
+    );
     supportToken = support.accessToken; // may be undefined if cookie-only
   });
 
@@ -47,7 +52,7 @@ describe("Roles Admin (gate e2e)", () => {
   });
 
   it("owner can patch role", async () => {
-    if (!createdRoleId) return; // create might have failed earlier; keep gate resilient
+    if (!createdRoleId) return;
     await api(app)
       .patch(`/api/admin/roles/${createdRoleId}`)
       .set(bearer(ownerToken))
@@ -57,21 +62,22 @@ describe("Roles Admin (gate e2e)", () => {
 
   it("owner can set role permissions", async () => {
     if (!createdRoleId) return;
-    // Minimal: send empty array or a dummy list depending on API contract
+
     const res = await api(app)
       .post(`/api/admin/roles/${createdRoleId}/permissions`)
       .set(bearer(ownerToken))
       .send({ permissionKeys: [] })
       .expect((r) => {
-        if (![200, 201].includes(r.status))
+        if (![200, 201].includes(r.status)) {
           throw new Error(`Expected 200/201, got ${r.status}`);
+        }
       });
 
     expect(res.body).toBeTruthy();
   });
 
   it("support cannot create role (403) - if token available", async () => {
-    if (!supportToken) return; // if you are cookie-only, we'll move this to agent-based later
+    if (!supportToken) return;
     await api(app)
       .post("/api/admin/roles")
       .set(bearer(supportToken))

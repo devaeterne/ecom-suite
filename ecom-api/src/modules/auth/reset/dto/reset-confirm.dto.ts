@@ -13,5 +13,5 @@ export class ResetConfirmDto {
 
   @ApiProperty({ enum: ["admin", "store"], example: "admin" })
   @IsIn(["admin", "store"])
-  typ!: "admin" | "store";
+  typ?: "admin" | "store";
 }

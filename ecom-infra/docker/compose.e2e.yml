@@ -39,16 +39,22 @@ services:
       - ../../ecom-api:/app
     command: >
       sh -lc "
-        apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/* ;
+        apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates postgresql-client && rm -rf /var/lib/apt/lists/* ;
+        until pg_isready -h db_e2e -p 5432 -U postgres -d ecom_e2e; do
+          echo '⏳ waiting for db_e2e...';
+          sleep 1;
+        done;
+        echo '✅ db_e2e ready';
         corepack enable && corepack prepare pnpm@10.26.1 --activate ;
         pnpm install --no-frozen-lockfile ;
         pnpm prisma db push --schema src/prisma/schema.prisma --force-reset ;
         pnpm prisma generate --schema src/prisma/schema.prisma ;
-        pnpm db:seed &&
+        pnpm seed:e2e ;
         pnpm test:e2e:gate
       "
     networks: 
       - e2e_net
+      
   redis_e2e:
     image: redis:7-alpine
     container_name: ecom_redis_e2e

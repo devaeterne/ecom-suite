@@ -11,6 +11,9 @@ import { MailModule } from "@/infrastructure/mail/mail.module";
 import { PasswordResetModule } from "@/modules/auth/reset/password-reset.module";
 import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit.module";
 import { AdminModule } from "@/modules/admin/admin.module";
+import { RedisModule } from "@nestjs-modules/ioredis";
+import { redisConfig } from "@/config/redis.config";
+import { CatalogModule } from "./modules/catalog/catalog.module";
 
 @Module({
   imports: [
@@ -26,6 +29,8 @@ import { AdminModule } from "@/modules/admin/admin.module";
     PasswordResetModule,
     AuthRateLimitModule,
     AdminModule,
+    RedisModule.forRoot(redisConfig),
+    CatalogModule,
   ],
 })
 export class AppModule {}

@@ -42,19 +42,20 @@ describe("Admin Auth (gate e2e)", () => {
 
   it("refresh works (cookie agent)", async () => {
     const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    await refreshAdmin(agent, 201); // adjust to 200 if needed
+
+    await refreshAdmin(agent, 200); // adjust to 200 if needed
     await agent.get("/api/admin/auth/me").expect(200);
   });
 
   it("logout invalidates session (agent)", async () => {
     const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    await logoutAdmin(agent, 201);
+    await logoutAdmin(agent, 200);
     await agent.get("/api/admin/auth/me").expect(401);
   });
 
   it("logout-all invalidates session (agent)", async () => {
     const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    await logoutAllAdmin(agent, 201);
+    await logoutAllAdmin(agent, 200);
     await agent.get("/api/admin/auth/me").expect(401);
   });
 });

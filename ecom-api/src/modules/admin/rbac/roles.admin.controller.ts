@@ -22,19 +22,19 @@ export class RolesAdminController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Get()
-  @RequirePermission("rbac:read")
+  @RequirePermission("admin:roles:read")
   async list(@Req() req: any) {
     return this.rolesService.listRoles(req.tenant.id);
   }
 
   @Post()
-  @RequirePermission("rbac:write")
+  @RequirePermission("admin:roles:create")
   async create(@Req() req: any, @Body() dto: RoleCreateDto) {
     return this.rolesService.createRole(req.tenant.id, dto);
   }
 
   @Patch(":id")
-  @RequirePermission("rbac:write")
+  @RequirePermission("admin:roles:update")
   async patch(
     @Req() req: any,
     @Param("id") id: string,
@@ -44,7 +44,7 @@ export class RolesAdminController {
   }
 
   @Post(":id/permissions")
-  @RequirePermission("rbac:write")
+  @RequirePermission("admin:roles:permissions")
   async setPermissions(
     @Req() req: any,
     @Param("id") id: string,

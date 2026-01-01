@@ -31,7 +31,7 @@ describe("Identities Admin (gate e2e)", () => {
         email: fx.identity.email,
         roleScope: fx.identity.roleScope,
       })
-      .expect(201);
+      .expect(200);
 
     expect(res.body?.id).toBeTruthy();
   });

@@ -24,27 +24,50 @@ export class TenantService {
     const t = await this.getMe(tenantId);
 
     const metadata = asObj(t.metadata);
+    const prevBranding = asObj(metadata.branding);
+    const prevI18n = asObj(metadata.i18n);
+    const prevDomains = asObj(metadata.domains);
 
-    // metadata merge (deep-ish)
+    // Flat alanlar -> nested normalize (geriye dönük uyum)
+    const brandingPatch = {
+      ...(dto.branding ?? {}),
+      ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
+      ...(dto.name !== undefined ? { name: dto.name } : {}),
+    };
+
+    const i18nPatch = {
+      ...(dto.i18n ?? {}),
+      ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+      ...(dto.currencyCode !== undefined
+        ? { currencyCode: dto.currencyCode }
+        : {}),
+    };
+
+    const domainsPatch = {
+      ...(dto.domains ?? {}),
+    };
+
     const nextMetadata: JsonObj = {
       ...metadata,
       branding: {
-        ...asObj(metadata.branding),
-        ...asObj(dto.branding),
+        ...prevBranding,
+        ...asObj(brandingPatch),
       },
       i18n: {
-        ...asObj(metadata.i18n),
-        ...asObj(dto.i18n),
+        ...prevI18n,
+        ...asObj(i18nPatch),
       },
       domains: {
-        ...asObj(metadata.domains),
-        ...asObj(dto.domains),
+        ...prevDomains,
+        ...asObj(domainsPatch),
       },
     };
 
-    // Optional: canonical tenant.name sync (branding.name gelirse)
-    const nextName =
-      dto.branding?.name !== undefined ? dto.branding.name : t.name ?? null;
+    // Canonical tenant.name güncellemesi:
+    // - dto.name varsa o
+    // - yoksa branding.name varsa o
+    // - yoksa mevcut t.name
+    const nextName = dto.name ?? dto.branding?.name ?? t.name ?? null;
 
     const updated = await this.prisma.tenant.update({
       where: { id: tenantId },

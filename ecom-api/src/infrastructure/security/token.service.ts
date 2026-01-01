@@ -7,8 +7,10 @@ export type AccessPayload = {
   sub: string;
   tenantId: string;
   typ: "admin" | "store";
+  userId?: string;
   iat?: number;
   exp?: number;
+  identityId?: string;
 };
 
 @Injectable()

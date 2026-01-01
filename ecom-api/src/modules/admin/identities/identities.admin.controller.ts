@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   UseGuards,
+  HttpCode,
 } from "@nestjs/common";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
@@ -22,21 +23,23 @@ export class IdentitiesAdminController {
   constructor(private readonly svc: IdentitiesService) {}
 
   @Get()
-  @RequirePermission("identity:read")
+  @RequirePermission("admin:identities:read")
   async list(@Req() req: any) {
     const items = await this.svc.list(req.tenant.id);
     return items.map(presentIdentity);
   }
 
   @Post()
-  @RequirePermission("identity:write")
+  @HttpCode(200)
+  @RequirePermission("admin:identities:create")
   async create(@Req() req: any, @Body() dto: IdentityCreateDto) {
     const u = await this.svc.create(req.tenant.id, dto);
     return presentIdentity(u);
   }
 
+  // Şimdilik create ile koru (seed’de update yok, hızlı geçiş)
   @Patch(":id")
-  @RequirePermission("identity:write")
+  @RequirePermission("admin:identities:create")
   async patch(
     @Req() req: any,
     @Param("id") id: string,
@@ -46,8 +49,9 @@ export class IdentitiesAdminController {
     return presentIdentity(u);
   }
 
+  // Şimdilik create ile koru (seed’de invite yok)
   @Post(":id/invite")
-  @RequirePermission("identity:write")
+  @RequirePermission("admin:identities:create")
   async invite(@Req() req: any, @Param("id") id: string) {
     return this.svc.invite(req.tenant.id, id);
   }

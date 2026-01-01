@@ -16,7 +16,56 @@ function bool(name: string, fallback = "false") {
   return v === "true" || v === "1" || v === "yes";
 }
 
-export const env = {
+export type Env = {
+  // Core
+  NODE_ENV: string;
+  API_PORT: number;
+
+  // DB
+  DATABASE_URL: string;
+
+  // Mail + reset ttl + app url
+  ADMIN_APP_URL: string;
+  STORE_APP_URL: string;
+  RESET_TOKEN_TTL_MINUTES: number;
+  MAIL_FROM: string;
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_USER: string;
+  SMTP_PASSWORD: string;
+
+  // Redis
+  REDIS_HOST: string;
+  REDIS_PORT: number;
+
+  // MinIO
+  MINIO_ENDPOINT: string;
+  MINIO_PORT: number;
+  MINIO_BUCKET: string;
+  MINIO_USE_SSL: boolean;
+  MINIO_ROOT_USER: string;
+  MINIO_ROOT_PASSWORD: string;
+
+  // CORS / Cookie
+  ADMIN_ORIGIN: string;
+  STORE_ORIGIN: string;
+  EXTRA_ORIGINS: string;
+
+  JWT_ACCESS_SECRET: string;
+  ACCESS_TOKEN_TTL_SECONDS: number;
+  REFRESH_TTL_DAYS: number;
+
+  COOKIE_SECRET: string;
+  COOKIE_DOMAIN?: string;
+  COOKIE_SECURE: boolean;
+
+  // Sessions
+  SESSIONS_MAX_ACTIVE: number;
+
+  TRUST_PROXY: boolean;
+};
+
+export const env: Env = {
   // Core
   NODE_ENV: process.env.NODE_ENV ?? "development",
   API_PORT: num("API_PORT", "3000"),
@@ -27,12 +76,14 @@ export const env = {
   // mail + reset ttl + app url
   ADMIN_APP_URL: req("ADMIN_APP_URL", "https://admin.domain.com"),
   STORE_APP_URL: req("STORE_APP_URL", "https://domain.com"),
-  RESET_TOKEN_TTL_MINUTES: 20,
+  RESET_TOKEN_TTL_MINUTES: num("RESET_TOKEN_TTL_MINUTES", "20"),
+
   MAIL_FROM: req("MAIL_FROM", "no-reply@localhost"),
   SMTP_HOST: req("SMTP_HOST", "smtp.domain.com"),
   SMTP_PORT: num("SMTP_PORT", "587"),
   SMTP_USER: req("SMTP_USER", "user"),
   SMTP_PASSWORD: req("SMTP_PASSWORD", "password"),
+
   // Redis
   REDIS_HOST: req("REDIS_HOST", "redis"),
   REDIS_PORT: num("REDIS_PORT", "6379"),
@@ -48,18 +99,21 @@ export const env = {
   // CORS / Cookie
   ADMIN_ORIGIN: req("ADMIN_ORIGIN", "http://localhost:3001"),
   STORE_ORIGIN: req("STORE_ORIGIN", "http://localhost:3000"),
-  EXTRA_ORIGINS: process.env.EXTRA_ORIGINS ?? "", // virgülle: https://a.com,https://b.com
+  EXTRA_ORIGINS: process.env.EXTRA_ORIGINS ?? "",
 
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? "dev-change-me",
-  ACCESS_TOKEN_TTL_SECONDS: Number(process.env.ACCESS_TOKEN_TTL_SECONDS ?? 900),
-  REFRESH_TTL_DAYS: Number(process.env.REFRESH_TTL_DAYS ?? 14),
+  ACCESS_TOKEN_TTL_SECONDS: num("ACCESS_TOKEN_TTL_SECONDS", "900"),
+  REFRESH_TTL_DAYS: num("REFRESH_TTL_DAYS", "14"),
 
   COOKIE_SECRET: process.env.COOKIE_SECRET ?? "dev-cookie-secret",
   COOKIE_DOMAIN: process.env.COOKIE_DOMAIN ?? undefined,
-  COOKIE_SECURE: (process.env.COOKIE_SECURE ?? "false") === "true",
+  COOKIE_SECURE: bool("COOKIE_SECURE", "false"),
+
+  // Sessions
+  SESSIONS_MAX_ACTIVE: num("SESSIONS_MAX_ACTIVE", "25"),
 
   TRUST_PROXY: bool(
     "TRUST_PROXY",
-    process.env.NODE_ENV === "production" ? "true" : "false"
+    (process.env.NODE_ENV ?? "development") === "production" ? "true" : "false"
   ),
-} as const;
+};

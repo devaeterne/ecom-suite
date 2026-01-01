@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { TokenService } from "@/modules/crypto/token.service";
+import { TokenService } from "@/infrastructure/security/token.service";
 import { HashService } from "@/infrastructure/security/hash.service";
 import { MailService } from "@/infrastructure/mail/mail.service";
 import { env } from "@/config/env";

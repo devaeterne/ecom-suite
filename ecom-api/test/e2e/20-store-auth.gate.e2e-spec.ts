@@ -42,7 +42,7 @@ describe("Store Auth (gate e2e)", () => {
       fx.storeUser.email,
       fx.storeUser.password
     );
-    await refreshStore(agent, 201);
+    await refreshStore(agent, 200);
     await agent.get("/api/store/auth/me").expect(200);
   });
 
@@ -52,7 +52,7 @@ describe("Store Auth (gate e2e)", () => {
       fx.storeUser.email,
       fx.storeUser.password
     );
-    await logoutStore(agent, 201);
+    await logoutStore(agent, 200);
     await agent.get("/api/store/auth/me").expect(401);
   });
 
@@ -62,7 +62,7 @@ describe("Store Auth (gate e2e)", () => {
       fx.storeUser.email,
       fx.storeUser.password
     );
-    await logoutAllStore(agent, 201);
+    await logoutAllStore(agent, 200);
     await agent.get("/api/store/auth/me").expect(401);
   });
 

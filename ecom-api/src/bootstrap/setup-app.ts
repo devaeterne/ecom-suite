@@ -8,6 +8,8 @@ import cors from "@fastify/cors";
 
 import { env } from "@/config/env";
 import { buildCorsOptions } from "@/infrastructure/http/cors";
+// setup-app.ts içinde
+import { HttpExceptionFilter } from "@/infrastructure/http/http-exception.filter";
 
 type SetupOpts = {
   enableSwagger?: boolean;
@@ -21,7 +23,7 @@ export async function setupApp(
 
   // Route davranışı e2e + prod aynı olsun
   app.setGlobalPrefix("api");
-
+  app.useGlobalFilters(new HttpExceptionFilter());
   // Fastify plugin’leri (e2e’de de gerçekçi olur)
   const fastify = (app as NestFastifyApplication)
     .getHttpAdapter()

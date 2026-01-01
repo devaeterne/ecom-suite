@@ -7,6 +7,7 @@ import {
 import { Reflector } from "@nestjs/core";
 import { PrismaService } from "@/prisma/prisma.service";
 import { REQUIRE_PERMISSION_KEY } from "@/infrastructure/auth/decorators/permission.decorator";
+import { RoleScope } from "@prisma/client";
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -24,38 +25,64 @@ export class PermissionGuard implements CanActivate {
     if (!requiredPermission) return true;
 
     const req: any = context.switchToHttp().getRequest();
-    const user = req.user;
-    const tenant = req.tenant;
 
-    if (!user?.id || !tenant?.id) {
+    // Tenant context (AdminAuthGuard / AdminAccessGuard zaten set ediyor ama safe fallback)
+    const tenantId =
+      req?.tenant?.id ?? req?.user?.tenantId ?? req?.user?.tenant?.id ?? null;
+
+    // User context: Permission sistemi userId ile çalışıyor (identityId değil)
+    const rawUser = req?.user ?? {};
+    const userId = rawUser.id ?? rawUser.userId ?? null;
+
+    // Debug için gerekirse (payload.sub çoğu yerde identityId)
+    const identityId = rawUser.identityId ?? rawUser.sub ?? null;
+
+    if (!tenantId || !userId) {
       throw new ForbiddenException("Tenant or user context missing");
     }
 
-    // Permission.key global unique. Tenant override yoksa tenantId null kalır.
-    const permission = await this.prisma.permission.findFirst({
+    // 1) ADMIN scope role varsa permission check bypass
+    const isAdminScoped = await this.prisma.userRoleLink.findFirst({
       where: {
-        key: requiredPermission,
+        tenantId,
+        userId,
         deletedAt: null,
-        roleLinks: {
-          some: {
-            tenantId: tenant.id,
-            role: {
-              users: {
-                some: {
-                  tenantId: tenant.id,
-                  userId: user.id,
-                  deletedAt: null,
-                },
-              },
+        role: {
+          tenantId,
+          scope: RoleScope.ADMIN,
+          deletedAt: null,
+          isActive: true,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (isAdminScoped) return true;
+
+    // 2) Permission kontrolü (rolePermissionLink -> role -> users join)
+    const link = await this.prisma.rolePermissionLink.findFirst({
+      where: {
+        tenantId,
+        deletedAt: null,
+        permission: { key: requiredPermission, deletedAt: null },
+        role: {
+          tenantId,
+          deletedAt: null,
+          isActive: true,
+          users: {
+            some: {
+              tenantId,
+              userId,
+              deletedAt: null,
             },
-            deletedAt: null,
           },
         },
       },
       select: { id: true },
     });
 
-    if (!permission) {
+    if (!link) {
+      // istersen burada debug meta ekleyebilirsin (identityId vb.)
       throw new ForbiddenException(`Missing permission: ${requiredPermission}`);
     }
 

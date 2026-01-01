@@ -1,48 +1,46 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
+import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 
 export type SessionTyp = "admin" | "store";
+
+/**
+ * Prisma P2002 unique violation bazen meta.target ile gelir, bazen gelmez.
+ * Hem meta.target hem message fallback ile tokenHash uniq violation yakalanır.
+ */
+function isUniqueTokenHashError(e: unknown) {
+  if (!(e instanceof Prisma.PrismaClientKnownRequestError)) return false;
+  if (e.code !== "P2002") return false;
+
+  const target = (e.meta as any)?.target;
+
+  if (Array.isArray(target)) {
+    if (target.includes("tokenHash") || target.includes("token_hash"))
+      return true;
+  } else if (typeof target === "string") {
+    if (target.includes("tokenHash") || target.includes("token_hash"))
+      return true;
+  }
+
+  // meta yoksa message fallback
+  const msg = String((e as any)?.message ?? "");
+  return msg.includes("token_hash") || msg.includes("tokenHash");
+}
+
+/** URL-safe, yüksek entropili raw token */
+function newRefreshTokenRaw() {
+  return crypto.randomBytes(32).toString("base64url"); // ~43 char
+}
+
+/** DB'ye raw token yazmayız, hash saklarız */
+function sha256Hex(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex"); // 64 char
+}
 
 @Injectable()
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  async create(params: {
-    tenantId: string;
-    identityId: string;
-    tokenHash: string;
-    expiresAt: Date;
-    typ: SessionTyp;
-    familyId: string;
-    ip?: string | null;
-    userAgent?: string | null;
-    lastUsedAt?: Date | null;
-  }) {
-    const {
-      tenantId,
-      identityId,
-      tokenHash,
-      expiresAt,
-      typ,
-      familyId,
-      ip,
-      userAgent,
-      lastUsedAt,
-    } = params;
-    return this.prisma.session.create({
-      data: {
-        tenantId,
-        identityId,
-        tokenHash, // prisma field (db: token_hash)
-        expiresAt,
-        typ,
-        familyId,
-        ip: ip ?? null,
-        userAgent: userAgent ?? null,
-        lastUsedAt: lastUsedAt ?? null,
-      },
-    });
-  }
 
   findAnyByTokenHash(params: { tokenHash: string; typ: SessionTyp }) {
     const { tokenHash, typ } = params;
@@ -102,6 +100,7 @@ export class SessionsRepository {
   }) {
     const now = new Date();
     const { tenantId, identityId, typ, take, orderBy = "desc" } = params;
+
     return this.prisma.session.findMany({
       where: {
         tenantId,
@@ -124,22 +123,80 @@ export class SessionsRepository {
   }
 
   /**
-   * Rotate refresh: mevcut session revoke edilir, rotatedToHash set edilir,
-   * yeni session create edilir (rotatedFromHash set edilir).
+   * Yeni refresh token üretir + session create eder.
+   * tokenHash collision olursa retry ile yeniden üretir.
+   *
+   * DÖNÜŞ: rawToken + created session
    */
-  async rotate(params: {
+  async createWithGeneratedToken(params: {
+    tenantId: string;
+    identityId: string;
+    expiresAt: Date;
+    typ: SessionTyp;
+    familyId: string;
+    ip?: string | null;
+    userAgent?: string | null;
+    lastUsedAt?: Date | null;
+  }) {
+    const {
+      tenantId,
+      identityId,
+      expiresAt,
+      typ,
+      familyId,
+      ip,
+      userAgent,
+      lastUsedAt,
+    } = params;
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const rawToken = newRefreshTokenRaw();
+      const tokenHash = sha256Hex(rawToken);
+
+      try {
+        const session = await this.prisma.session.create({
+          data: {
+            tenantId,
+            identityId,
+            tokenHash,
+            expiresAt,
+            typ,
+            familyId,
+            ip: ip ?? null,
+            userAgent: userAgent ?? null,
+            lastUsedAt: lastUsedAt ?? null,
+          },
+        });
+
+        return { rawToken, session };
+      } catch (e) {
+        if (!isUniqueTokenHashError(e)) throw e;
+        // collision -> retry
+      }
+    }
+
+    throw new Error("Failed to create session (refresh token collision)");
+  }
+
+  /**
+   * Rotate refresh:
+   * - mevcut session revoke edilir ve rotatedToHash set edilir
+   * - yeni session create edilir (rotatedFromHash set edilir)
+   *
+   * Create collision olursa retry: yeni token üret, transaction'ı tekrar dene.
+   * DÖNÜŞ: rawToken + new session
+   */
+  async rotateWithGeneratedToken(params: {
     sessionId: string;
     tenantId: string;
     identityId: string;
     typ: SessionTyp;
     familyId: string;
     oldTokenHash: string;
-    newTokenHash: string;
     newExpiresAt: Date;
     ip?: string | null;
     userAgent?: string | null;
   }) {
-    const now = new Date();
     const {
       sessionId,
       tenantId,
@@ -147,33 +204,48 @@ export class SessionsRepository {
       typ,
       familyId,
       oldTokenHash,
-      newTokenHash,
       newExpiresAt,
       ip,
       userAgent,
     } = params;
 
-    await this.prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        revokedAt: now,
-        rotatedToHash: newTokenHash,
-      },
-    });
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const now = new Date(); // her denemede güncel timestamp istersen burada
+      const rawToken = newRefreshTokenRaw();
+      const newTokenHash = sha256Hex(rawToken);
 
-    return this.prisma.session.create({
-      data: {
-        tenantId,
-        identityId,
-        typ,
-        familyId,
-        tokenHash: newTokenHash,
-        expiresAt: newExpiresAt,
-        rotatedFromHash: oldTokenHash,
-        ip: ip ?? null,
-        userAgent: userAgent ?? null,
-        lastUsedAt: now,
-      },
-    });
+      try {
+        const [, created] = await this.prisma.$transaction([
+          this.prisma.session.update({
+            where: { id: sessionId },
+            data: {
+              revokedAt: now,
+              rotatedToHash: newTokenHash,
+            },
+          }),
+          this.prisma.session.create({
+            data: {
+              tenantId,
+              identityId,
+              typ,
+              familyId,
+              tokenHash: newTokenHash,
+              expiresAt: newExpiresAt,
+              rotatedFromHash: oldTokenHash,
+              ip: ip ?? null,
+              userAgent: userAgent ?? null,
+              lastUsedAt: now,
+            },
+          }),
+        ]);
+
+        return { rawToken, session: created };
+      } catch (e) {
+        if (!isUniqueTokenHashError(e)) throw e;
+        // collision -> retry
+      }
+    }
+
+    throw new Error("Failed to rotate refresh token (collision)");
   }
 }

@@ -9,7 +9,6 @@ import {
 
 export class RolePermissionsDto {
   @IsArray()
-  @ArrayNotEmpty()
   @IsString({ each: true })
   permissionKeys!: string[];
 

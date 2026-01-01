@@ -1,96 +1,87 @@
 import {
   Injectable,
-  ConflictException,
   UnauthorizedException,
+  ConflictException,
 } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { SessionsRepository } from "@/modules/sessions/sessions.repository";
-import { TokenService } from "@/modules/crypto/token.service";
 import { env } from "@/config/env";
-import { createHash, randomUUID } from "crypto";
+import { TokenService } from "@/infrastructure/security/token.service";
+import {
+  SessionsRepository,
+  SessionTyp,
+} from "@/modules/sessions/sessions.repository";
+import { randomUUID, createHash } from "crypto";
 import * as bcrypt from "bcrypt";
-
-import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-tenant.service";
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
-import { SessionTyp } from "@/modules/sessions/sessions.repository";
+import { StoreRegisterDto } from "@/modules/auth/store/dto/store-register.dto";
 
-function sha256(raw: string) {
-  return createHash("sha256").update(raw).digest("hex");
+export type ReqMeta = { ip?: string | null; userAgent?: string | null };
+
+function sha256(input: string) {
+  return createHash("sha256").update(input).digest("hex");
 }
-
-type ReqMeta = { ip?: string | null; userAgent?: string | null };
 
 @Injectable()
 export class StoreAuthService {
-  private readonly MAX_ACTIVE_SESSIONS = 10;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sessionsRepo: SessionsRepository,
     private readonly tokenService: TokenService,
-    private readonly activeTenant: ActiveTenantService,
+    private readonly sessionsRepo: SessionsRepository,
     private readonly audit: AuthAuditLogService
   ) {}
 
   private async enforceSessionLimit(tenantId: string, identityId: string) {
+    const max = Number(env.SESSIONS_MAX_ACTIVE ?? 25);
+    if (!Number.isFinite(max) || max <= 0) return;
+
     const active = await this.sessionsRepo.listActiveByIdentity({
       tenantId,
       identityId,
       typ: "store",
-      take: 20,
+      take: max + 10,
       orderBy: "desc",
     });
 
-    if (active.length <= this.MAX_ACTIVE_SESSIONS) return;
+    if (active.length <= max) return;
 
-    const overflow = active.slice(0, active.length - this.MAX_ACTIVE_SESSIONS);
-    const ids = overflow.map((s: { id: string }) => s.id);
-    await this.sessionsRepo.revokeMany(ids);
+    // en yeniler desc geliyor; max'ten sonrasını revoke et
+    const toRevoke = active.slice(max).map((s) => s.id);
+    await this.sessionsRepo.revokeMany(toRevoke);
   }
 
-  // Register (customer + identity)
-  async register(
-    input: {
-      email: string;
-      password: string;
-      firstName?: string;
-      lastName?: string;
-    },
-    meta: ReqMeta = {}
-  ) {
-    const tenantId = await this.activeTenant.getTenantId();
-    const email = input.email.trim().toLowerCase();
+  /**
+   * Store register: tenantId controller’dan gelir (ActiveTenantService).
+   * AuthIdentity + Customer tenant-scoped.
+   */
+  async register(tenantId: string, dto: StoreRegisterDto, meta: ReqMeta = {}) {
+    const email = dto.email.toLowerCase().trim();
 
-    const exists = await this.prisma.customer.findFirst({
-      where: { tenantId, email },
+    // aynı tenant içinde email tekrarını engelle
+    const exists = await this.prisma.authIdentity.findFirst({
+      where: {
+        tenantId,
+        provider: "EMAIL_PASSWORD",
+        providerId: { equals: email, mode: "insensitive" },
+      },
       select: { id: true },
     });
+
     if (exists) {
-      await this.audit.log(tenantId, {
-        action: AUDIT.STORE_REGISTER,
-        success: false,
-        reason: "EMAIL_ALREADY_REGISTERED",
-        ip: meta.ip ?? null,
-        userAgent: meta.userAgent ?? null,
-        meta: { typ: "store", email },
-      });
-      throw new ConflictException("Email already registered");
+      throw new ConflictException("Email already used");
     }
 
-    const passwordHash = await bcrypt.hash(input.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const customer = await tx.customer.create({
         data: {
           tenantId,
           email,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          metadata: {},
+          firstName: dto.firstName ?? null,
+          lastName: dto.lastName ?? null,
         },
-        select: { id: true, tenantId: true, email: true },
       });
 
       const identity = await tx.authIdentity.create({
@@ -103,31 +94,26 @@ export class StoreAuthService {
           passwordAlgo: "bcrypt",
           passwordUpdatedAt: new Date(),
         },
-        select: { id: true, tenantId: true },
       });
 
       return { customer, identity };
     });
 
-    const refreshRaw = this.tokenService.newRefreshToken();
-    const tokenHash = sha256(refreshRaw);
     const expiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
-
     const familyId = randomUUID();
 
-    await this.sessionsRepo.create({
-      tenantId: created.identity.tenantId,
-      identityId: created.identity.id,
-      tokenHash,
-      expiresAt,
-      typ: "store",
-      familyId,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
-      lastUsedAt: new Date(),
-    });
+    const { rawToken: refreshRaw } =
+      await this.sessionsRepo.createWithGeneratedToken({
+        tenantId: created.identity.tenantId,
+        identityId: created.identity.id,
+        expiresAt,
+        typ: "store",
+        familyId,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+      });
 
     await this.enforceSessionLimit(
       created.identity.tenantId,
@@ -149,18 +135,25 @@ export class StoreAuthService {
       success: true,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
-      meta: { typ: "store", email, familyId },
+      meta: { typ: "store" },
     });
 
     return { accessToken, refreshRaw };
   }
 
-  // Login
-  async login(email: string, password: string, meta: ReqMeta = {}) {
+  async login(
+    tenantId: string,
+    email: string,
+    password: string,
+    meta: ReqMeta = {}
+  ) {
+    const normalizedEmail = email.toLowerCase().trim();
+
     const identity = await this.prisma.authIdentity.findFirst({
       where: {
+        tenantId,
         provider: "EMAIL_PASSWORD",
-        providerId: { equals: email, mode: "insensitive" },
+        providerId: { equals: normalizedEmail, mode: "insensitive" },
       },
       select: {
         id: true,
@@ -170,66 +163,52 @@ export class StoreAuthService {
       },
     });
 
-    if (!identity?.passwordHash) {
-      // tenantId yoksa audit yazamayız (tenant zorunlu). Burayı “tenant resolver” ile iyileştiririz.
-      throw new UnauthorizedException("Invalid credentials");
-    }
-
-    if (!identity.customerId) {
-      await this.audit.log(identity.tenantId, {
+    if (!identity?.passwordHash || !identity.customerId) {
+      await this.audit.log(tenantId, {
         action: AUDIT.STORE_LOGIN_FAIL,
-        actorIdentityId: identity.id,
         success: false,
-        reason: "NOT_A_STORE_IDENTITY",
+        reason: "INVALID_CREDENTIALS",
         ip: meta.ip ?? null,
         userAgent: meta.userAgent ?? null,
-        meta: { typ: "store", email },
+        meta: { typ: "store", email: normalizedEmail },
       });
-      throw new UnauthorizedException("Invalid store credentials");
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     const ok = await bcrypt.compare(password, identity.passwordHash);
     if (!ok) {
-      await this.audit.log(identity.tenantId, {
+      await this.audit.log(tenantId, {
         action: AUDIT.STORE_LOGIN_FAIL,
         actorIdentityId: identity.id,
         success: false,
         reason: "INVALID_PASSWORD",
         ip: meta.ip ?? null,
         userAgent: meta.userAgent ?? null,
-        meta: { typ: "store", email },
+        meta: { typ: "store", email: normalizedEmail },
       });
       throw new UnauthorizedException("Invalid credentials");
     }
 
-    const refreshRaw = this.tokenService.newRefreshToken();
-    const tokenHash = sha256(refreshRaw);
     const expiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
-
     const familyId = randomUUID();
 
-    await this.sessionsRepo.create({
-      tenantId: identity.tenantId,
-      identityId: identity.id,
-      tokenHash,
-      expiresAt,
-      typ: "store",
-      familyId,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
-      lastUsedAt: new Date(),
-    });
+    const { rawToken: refreshRaw } =
+      await this.sessionsRepo.createWithGeneratedToken({
+        tenantId: identity.tenantId,
+        identityId: identity.id,
+        expiresAt,
+        typ: "store",
+        familyId,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+      });
 
     await this.enforceSessionLimit(identity.tenantId, identity.id);
 
     const accessToken = this.tokenService.signAccessToken(
-      {
-        sub: identity.id,
-        tenantId: identity.tenantId,
-        typ: "store",
-      },
+      { sub: identity.id, tenantId: identity.tenantId, typ: "store" },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
 
@@ -239,13 +218,12 @@ export class StoreAuthService {
       success: true,
       ip: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
-      meta: { typ: "store", email, familyId },
+      meta: { typ: "store" },
     });
 
     return { accessToken, refreshRaw };
   }
 
-  // Refresh with reuse detection + global revoke
   async refresh(refreshRaw: string, meta: ReqMeta = {}) {
     const tokenHash = sha256(refreshRaw);
 
@@ -253,17 +231,14 @@ export class StoreAuthService {
       tokenHash,
       typ: "store",
     });
-    if (!session) {
-      throw new UnauthorizedException("Invalid session");
-    }
+    if (!session) throw new UnauthorizedException("Invalid session");
 
-    // reuse -> global revoke
     if (session.revokedAt) {
       await this.sessionsRepo.markReuse(session.id);
       await this.sessionsRepo.revokeAllByIdentity({
         tenantId: session.tenantId,
         identityId: session.identityId,
-        typ: "store" as SessionTyp,
+        typ: session.typ as SessionTyp,
       });
 
       await this.audit.log(session.tenantId, {
@@ -276,45 +251,37 @@ export class StoreAuthService {
         meta: {
           typ: "store",
           triggerSessionId: session.id,
-          triggerTokenHash: session.tokenHash,
           familyId: session.familyId,
         },
       });
 
-      throw new UnauthorizedException("Refresh reuse detected");
+      throw new UnauthorizedException("Session reuse detected");
     }
 
-    // expired
     if (session.expiresAt.getTime() <= Date.now()) {
       await this.sessionsRepo.revoke(session.id);
       throw new UnauthorizedException("Session expired");
     }
 
-    const newRefreshRaw = this.tokenService.newRefreshToken();
-    const newHash = sha256(newRefreshRaw);
     const newExpiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
 
-    await this.sessionsRepo.rotate({
-      sessionId: session.id,
-      tenantId: session.tenantId,
-      identityId: session.identityId,
-      typ: session.typ as any, // aşağıda typ cast’ini de düzeltiyoruz
-      familyId: session.familyId,
-      oldTokenHash: session.tokenHash,
-      newTokenHash: tokenHash,
-      newExpiresAt,
-      ip: meta.ip ?? null,
-      userAgent: meta.userAgent ?? null,
-    });
+    const { rawToken: newRefreshRaw } =
+      await this.sessionsRepo.rotateWithGeneratedToken({
+        sessionId: session.id,
+        tenantId: session.tenantId,
+        identityId: session.identityId,
+        typ: "store",
+        familyId: session.familyId,
+        oldTokenHash: session.tokenHash,
+        newExpiresAt,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+      });
 
     const accessToken = this.tokenService.signAccessToken(
-      {
-        sub: session.identityId,
-        tenantId: session.tenantId,
-        typ: "store",
-      },
+      { sub: session.identityId, tenantId: session.tenantId, typ: "store" },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
 
@@ -330,7 +297,6 @@ export class StoreAuthService {
     return { accessToken, refreshRaw: newRefreshRaw };
   }
 
-  // Logout
   async logout(refreshRaw: string, meta: ReqMeta = {}) {
     const tokenHash = sha256(refreshRaw);
 
@@ -338,7 +304,7 @@ export class StoreAuthService {
       tokenHash,
       typ: "store",
     });
-    if (!session) return;
+    if (!session) return { ok: true };
 
     await this.sessionsRepo.revoke(session.id);
 
@@ -350,10 +316,11 @@ export class StoreAuthService {
       userAgent: meta.userAgent ?? null,
       meta: { typ: "store", sessionId: session.id },
     });
+
+    return { ok: true };
   }
 
-  // Logout all sessions for this identity (global revoke)
-  async logoutAll(identityId: string, tenantId: string) {
+  async logoutAll(identityId: string, tenantId: string, meta: ReqMeta = {}) {
     await this.sessionsRepo.revokeAllByIdentity({
       tenantId,
       identityId,
@@ -364,9 +331,26 @@ export class StoreAuthService {
       action: AUDIT.STORE_LOGOUT_ALL,
       actorIdentityId: identityId,
       success: true,
+      ip: meta.ip ?? null,
+      userAgent: meta.userAgent ?? null,
       meta: { typ: "store" },
     });
 
     return { ok: true };
+  }
+
+  async me(identityId: string, tenantId: string) {
+    const identity = await this.prisma.authIdentity.findFirst({
+      where: { id: identityId, tenantId },
+      include: { customer: true },
+    });
+    if (!identity) throw new UnauthorizedException("Invalid identity");
+
+    return {
+      identityId: identity.id,
+      tenantId: identity.tenantId,
+      typ: "store" as const,
+      customer: identity.customer,
+    };
   }
 }
