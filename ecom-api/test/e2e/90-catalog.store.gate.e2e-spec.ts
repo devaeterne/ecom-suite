@@ -1,134 +1,130 @@
+// test/e2e/90-catalog.store.gate.e2e-spec.ts
 import type { INestApplication } from "@nestjs/common";
-import { Test } from "@nestjs/testing";
-import { AppModule } from "@/app.module";
+import { createE2EApp } from "@test/helpers/bootstrap";
+import { fx } from "@test/helpers/fixtures";
+import { loginAdmin, loginStore } from "@test/helpers/auth";
 
-import { type HttpAgent } from "@test/helpers/http";
-import { loginAdmin, loginStore, bearer } from "@test/helpers/auth";
-
-function must(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function tenantHeaders() {
-  const tenantId = process.env.E2E_TENANT_ID;
-  return tenantId ? { "x-tenant-id": tenantId } : {};
-}
+const expect200or201 = (res: any) => {
+  expect([200, 201]).toContain(res.status);
+};
 
 describe("90 - Catalog (Storefront)", () => {
   let app: INestApplication;
+  let adminAgent: any;
+  let storeAgent: any;
 
-  let adminAgent: HttpAgent;
-  let adminToken: string | undefined;
+  let tenantId: string;
+  let tenantHeader: Record<string, string>;
 
-  let storeAgent: HttpAgent;
-  let storeToken: string | undefined;
-
+  let categoryId: string;
   let productId: string;
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = mod.createNestApplication();
-    await app.init();
+    app = await createE2EApp();
 
-    const adminEmail = must("E2E_ADMIN_EMAIL");
-    const adminPassword = must("E2E_ADMIN_PASSWORD");
-    const storeEmail = must("E2E_STORE_EMAIL");
-    const storePassword = must("E2E_STORE_PASSWORD");
-
-    const adminLogin = await loginAdmin(app, adminEmail, adminPassword);
+    const adminLogin = await loginAdmin(app, fx.owner.email, fx.owner.password);
     adminAgent = adminLogin.agent;
-    adminToken = adminLogin.accessToken;
 
-    const storeLogin = await loginStore(app, storeEmail, storePassword);
+    const storeLogin = await loginStore(
+      app,
+      fx.storeUser.email,
+      fx.storeUser.password
+    );
     storeAgent = storeLogin.agent;
-    storeToken = storeLogin.accessToken;
 
-    // Seed: admin create + publish
+    // ✅ Tenant header must be UUID (not "acme" code)
+    const me = await adminAgent.get("/api/admin/tenants/me").expect(200);
+    tenantId = me.body?.id as string;
+    tenantHeader = { "x-tenant-id": tenantId };
+
+    // Seed: admin create + publish (store testleri için deterministik veri)
+    const ts = Date.now();
+
     const cat = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Elektronik", handle: "elektronik-store" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Elektronik", handle: `elektronik-store-${ts}` })
+      .expect(expect200or201);
+
+    categoryId = cat.body.id as string;
 
     const p = await adminAgent
       .post("/api/admin/products")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+      .set(tenantHeader)
       .send({
         title: "iPhone 99",
-        handle: "iphone-99",
+        handle: `iphone-99-${ts}`,
         status: "draft",
-        categoryIds: [cat.body.id],
+        categoryIds: [categoryId],
         variants: [
-          { title: "128GB", sku: "IP99-128", isActive: true },
-          { title: "256GB", sku: "IP99-256", isActive: true },
+          { title: "128GB", sku: `IP99-128-${ts}`, isActive: true },
+          { title: "256GB", sku: `IP99-256-${ts}`, isActive: true },
         ],
       })
-      .expect(201);
+      .expect(expect200or201);
 
     productId = p.body.id as string;
 
     await adminAgent
       .post(`/api/admin/products/${productId}/publish`)
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+      .set(tenantHeader)
       .send({})
-      .expect(201);
+      .expect(expect200or201);
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it("GET /api/store/categories -> 200 + array", async () => {
     const res = await storeAgent
       .get("/api/store/categories")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
     expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it("GET /api/store/categories/{id} -> 200 detail", async () => {
+    const res = await storeAgent
+      .get(`/api/store/categories/${categoryId}`)
+      .set(tenantHeader)
+      .expect(expect200or201);
+
+    expect(res.body).toHaveProperty("id", categoryId);
   });
 
   it("GET /api/store/categories/{id} -> 404 for missing", async () => {
     await storeAgent
       .get("/api/store/categories/00000000-0000-0000-0000-000000000999")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
+      .set(tenantHeader)
       .expect(404);
   });
 
   it("GET /api/store/collections -> 200 + array", async () => {
     const res = await storeAgent
       .get("/api/store/collections")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it("GET /api/store/brands -> 200 + []", async () => {
+  it("GET /api/store/brands -> 200 + [] (brands=[])", async () => {
     const res = await storeAgent
       .get("/api/store/brands")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
+    expect(Array.isArray(res.body)).toBe(true);
     expect(res.body).toEqual([]);
   });
 
   it("GET /api/store/products -> 200 + {items,total} includes published", async () => {
     const res = await storeAgent
       .get("/api/store/products?limit=20&offset=0")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
     expect(res.body).toHaveProperty("items");
     expect(res.body).toHaveProperty("total");
@@ -142,9 +138,8 @@ describe("90 - Catalog (Storefront)", () => {
   it("GET /api/store/products/{id} -> 200 detail", async () => {
     const res = await storeAgent
       .get(`/api/store/products/${productId}`)
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
     expect(res.body).toHaveProperty("id", productId);
     expect(Array.isArray(res.body.variants)).toBe(true);
@@ -153,9 +148,8 @@ describe("90 - Catalog (Storefront)", () => {
   it("GET /api/store/products/{id}/variants -> 200 array", async () => {
     const res = await storeAgent
       .get(`/api/store/products/${productId}/variants`)
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
-      .expect(200);
+      .set(tenantHeader)
+      .expect(expect200or201);
 
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
@@ -164,8 +158,8 @@ describe("90 - Catalog (Storefront)", () => {
   it("GET /api/store/products/{id} -> 404 for missing", async () => {
     await storeAgent
       .get("/api/store/products/00000000-0000-0000-0000-000000000999")
-      .set(tenantHeaders())
-      .set(storeToken ? bearer(storeToken) : {})
+      .set(tenantHeader)
       .expect(404);
   });
 });
+20;

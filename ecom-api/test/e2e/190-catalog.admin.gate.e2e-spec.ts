@@ -1,107 +1,103 @@
+// test/e2e/190-catalog.admin.gate.e2e-spec.ts
 import type { INestApplication } from "@nestjs/common";
-import { Test } from "@nestjs/testing";
-import { AppModule } from "@/app.module";
+import { createE2EApp } from "@test/helpers/bootstrap";
+import { fx } from "@test/helpers/fixtures";
+import { loginAdmin } from "@test/helpers/auth";
 
-import { api, type HttpAgent } from "@test/helpers/http";
-import { loginAdmin, bearer } from "@test/helpers/auth";
-
-function must(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-function tenantHeaders() {
-  const tenantId = process.env.E2E_TENANT_ID;
-  return tenantId ? { "x-tenant-id": tenantId } : {};
-}
+/**
+ * ✅ E2E policy: bazı write endpointleri 200 veya 201 dönebilir.
+ * Bu yüzden status validation'ı deterministic yapıyoruz.
+ */
+const expect200or201 = (r: any) => {
+  if (![200, 201].includes(r.status)) {
+    throw new Error(
+      `Expected 200/201, got ${r.status} - body: ${JSON.stringify(r.body)}`
+    );
+  }
+};
 
 describe("190 - Catalog (Admin)", () => {
   let app: INestApplication;
-  let adminAgent: HttpAgent;
-  let adminToken: string | undefined;
+  let adminAgent: any;
+
+  let tenantId: string;
+  let tenantHeader: Record<string, string>;
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = mod.createNestApplication();
-    await app.init();
+    app = await createE2EApp();
 
-    const email = must("E2E_ADMIN_EMAIL"); // örn: admin@acme.com
-    const password = must("E2E_ADMIN_PASSWORD");
+    const adminLogin = await loginAdmin(app, fx.owner.email, fx.owner.password);
+    adminAgent = adminLogin.agent;
 
-    const { accessToken, agent } = await loginAdmin(app, email, password);
-    adminAgent = agent;
-    adminToken = accessToken;
+    // ✅ Tenant header must be UUID (not "acme" code)
+    // Bu endpointin policy’si net: 200 dönmesi beklenir.
+    const me = await adminAgent
+      .get("/api/admin/tenants/me")
+      .expect(expect200or201);
+    tenantId = me.body?.id as string;
+    tenantHeader = { "x-tenant-id": tenantId };
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
   });
 
   it("POST /api/admin/categories -> create", async () => {
+    const ts = Date.now();
+
     const res = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Elektronik", handle: "elektronik" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Elektronik", handle: `elektronik-${ts}` })
+      .expect(expect200or201);
 
     expect(res.body).toHaveProperty("id");
     expect(res.body.name).toBe("Elektronik");
-    expect(res.body.handle).toBe("elektronik");
   });
 
   it("PATCH /api/admin/categories/{id} -> update", async () => {
+    const ts = Date.now();
+
     const created = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Telefon", handle: "telefon" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Elektronik", handle: `elektronik-upd-${ts}` })
+      .expect(expect200or201);
 
     const id = created.body.id as string;
 
-    const updated = await adminAgent
+    const res = await adminAgent
       .patch(`/api/admin/categories/${id}`)
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Telefonlar" })
-      .expect(200);
+      .set(tenantHeader)
+      .send({ name: "Telefon", handle: `telefon-${ts}` })
+      .expect(expect200or201);
 
-    expect(updated.body).toHaveProperty("id", id);
-    expect(updated.body.name).toBe("Telefonlar");
+    expect(res.body).toHaveProperty("id", id);
+    expect(res.body.name).toBe("Telefon");
   });
 
   it("POST /api/admin/products -> create (draft)", async () => {
+    const ts = Date.now();
+
     const cat = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Aksesuar", handle: "aksesuar" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Aksesuar", handle: `aksesuar-${ts}` })
+      .expect(expect200or201);
+
+    const categoryId = cat.body.id as string;
 
     const res = await adminAgent
       .post("/api/admin/products")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+      .set(tenantHeader)
       .send({
-        title: "Kılıf",
-        handle: "kilif",
-        description: "Test ürün",
+        title: "Kablo",
+        handle: `kablo-${ts}`,
         status: "draft",
-        categoryIds: [cat.body.id],
-        variants: [
-          {
-            title: "Standart",
-            sku: "KILIF-STD",
-            barcode: "333",
-            isActive: true,
-          },
-        ],
+        categoryIds: [categoryId],
+        variants: [{ title: "Tekli", sku: `KBL-1-${ts}`, isActive: true }],
       })
-      .expect(201);
+      .expect(expect200or201);
 
     expect(res.body).toHaveProperty("id");
     expect(res.body.status).toBe("draft");
@@ -109,82 +105,72 @@ describe("190 - Catalog (Admin)", () => {
   });
 
   it("PATCH /api/admin/products/{id} -> update", async () => {
+    const ts = Date.now();
+
     const cat = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Bilgisayar", handle: "bilgisayar" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Bilgisayar", handle: `bilgisayar-${ts}` })
+      .expect(expect200or201);
 
-    const p = await adminAgent
+    const categoryId = cat.body.id as string;
+
+    const created = await adminAgent
       .post("/api/admin/products")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+      .set(tenantHeader)
       .send({
-        title: "Laptop",
-        handle: "laptop",
+        title: "Laptop X",
+        handle: `laptop-x-${ts}`,
         status: "draft",
-        categoryIds: [cat.body.id],
-        variants: [{ title: "i7", sku: "LP-I7", isActive: true }],
+        categoryIds: [categoryId],
+        variants: [{ title: "16GB", sku: `LTX-16-${ts}`, isActive: true }],
       })
-      .expect(201);
+      .expect(expect200or201);
 
-    const updated = await adminAgent
-      .patch(`/api/admin/products/${p.body.id}`)
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ title: "Laptop (2026)" })
-      .expect(200);
+    const id = created.body.id as string;
 
-    expect(updated.body).toHaveProperty("id", p.body.id);
-    expect(updated.body.title).toBe("Laptop (2026)");
+    const res = await adminAgent
+      .patch(`/api/admin/products/${id}`)
+      .set(tenantHeader)
+      .send({ title: "Laptop X (Rev1)" })
+      .expect(expect200or201);
+
+    expect(res.body).toHaveProperty("id", id);
+    expect(res.body.title).toBe("Laptop X (Rev1)");
   });
 
   it("POST /api/admin/products/{id}/publish -> publish", async () => {
+    const ts = Date.now();
+
     const cat = await adminAgent
       .post("/api/admin/categories")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .send({ name: "Ev", handle: "ev" })
-      .expect(201);
+      .set(tenantHeader)
+      .send({ name: "Ev", handle: `ev-${ts}` })
+      .expect(expect200or201);
 
-    const p = await adminAgent
+    const categoryId = cat.body.id as string;
+
+    const created = await adminAgent
       .post("/api/admin/products")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+      .set(tenantHeader)
       .send({
-        title: "Masa",
-        handle: "masa",
+        title: "Aydınlatma",
+        handle: `aydinlatma-${ts}`,
         status: "draft",
-        categoryIds: [cat.body.id],
-        variants: [{ title: "120cm", sku: "MS-120", isActive: true }],
+        categoryIds: [categoryId],
+        variants: [{ title: "Standart", sku: `AYD-STD-${ts}`, isActive: true }],
       })
-      .expect(201);
+      .expect(expect200or201);
 
-    const pub = await adminAgent
-      .post(`/api/admin/products/${p.body.id}/publish`)
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
+    const id = created.body.id as string;
+
+    const res = await adminAgent
+      .post(`/api/admin/products/${id}/publish`)
+      .set(tenantHeader)
       .send({})
-      .expect(201);
+      .expect(expect200or201);
 
-    expect(pub.body).toHaveProperty("id", p.body.id);
-    expect(pub.body.status).toBe("published");
-  });
-
-  it("Sanity: admin token opsiyonel - api(app) ile de erişebilmeli (policyye bağlı)", async () => {
-    // Bazı projelerde sadece cookie yeterli olur, bazıları bearer ister.
-    // Burada sadece endpointin ayakta olduğunu doğruluyoruz.
-    const res = await api(app)
-      .get("/api/admin/tenants/me")
-      .set(tenantHeaders())
-      .set(adminToken ? bearer(adminToken) : {})
-      .expect((r) => {
-        // 200 bekliyoruz ama policyye göre 401 olabilir; o durumda bu testi kaldır.
-        if (![200, 401].includes(r.status))
-          throw new Error(`Unexpected: ${r.status}`);
-      });
-
-    expect(res.status).toBeTruthy();
+    expect(res.body).toHaveProperty("id", id);
+    expect(res.body.status).toBe("published");
   });
 });

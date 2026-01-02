@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from "@nestjs/common";
+import { INestApplication, ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 
@@ -8,26 +8,32 @@ import cors from "@fastify/cors";
 
 import { env } from "@/config/env";
 import { buildCorsOptions } from "@/infrastructure/http/cors";
-// setup-app.ts içinde
 import { HttpExceptionFilter } from "@/infrastructure/http/http-exception.filter";
 
-type SetupOpts = {
-  enableSwagger?: boolean;
-};
+const httpLogger = new Logger("HTTP");
 
 export async function setupApp(
   app: INestApplication,
-  opts: SetupOpts = {}
-): Promise<INestApplication> {
+  opts: { enableSwagger?: boolean } = {}
+) {
   const enableSwagger = opts.enableSwagger ?? false;
 
-  // Route davranışı e2e + prod aynı olsun
   app.setGlobalPrefix("api");
   app.useGlobalFilters(new HttpExceptionFilter());
-  // Fastify plugin’leri (e2e’de de gerçekçi olur)
+
   const fastify = (app as NestFastifyApplication)
     .getHttpAdapter()
     .getInstance();
+
+  // ✅ HOOKLAR: init/listen öncesi
+  fastify.addHook("onRequest", async (req: any) => {
+    req.__startAt = Date.now();
+  });
+
+  fastify.addHook("onResponse", async (req: any, reply: any) => {
+    const ms = Date.now() - (req.__startAt ?? Date.now());
+    httpLogger.log(`${req.method} ${req.url} -> ${reply.statusCode} (${ms}ms)`);
+  });
 
   await (app as NestFastifyApplication).register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024, files: 1 },
@@ -36,7 +42,6 @@ export async function setupApp(
   await (app as NestFastifyApplication).register(cookie, {
     secret: env.COOKIE_SECRET,
   });
-
   await (app as NestFastifyApplication).register(cors, buildCorsOptions());
 
   app.useGlobalPipes(
@@ -56,10 +61,13 @@ export async function setupApp(
       .build();
 
     const document = SwaggerModule.createDocument(app as any, config);
-    SwaggerModule.setup("api/docs", app as any, document);
+
+    // ✅ /api/api/docs olmasın
+    SwaggerModule.setup("docs", app as any, document);
   }
 
   await app.init();
+  // fastify.ready() şart değil; istersen kalsın ama hook zaten önce eklendi.
   await fastify.ready();
 
   return app;

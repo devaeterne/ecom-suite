@@ -157,7 +157,7 @@ export class CatalogRepo {
     data: { name?: string; handle?: string; parentId?: string | null }
   ) {
     return this.prisma.productCategory.update({
-      where: { id },
+      where: { id, tenantId },
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.handle !== undefined ? { handle: data.handle } : {}),
@@ -174,47 +174,57 @@ export class CatalogRepo {
         handle: data.handle,
         description: data.description ?? null,
         status: data.status ?? "draft",
-        // relations:
+
         ...(data.categoryIds?.length
           ? {
               categories: {
-                connect: data.categoryIds.map((id: string) => ({ id })),
+                create: data.categoryIds.map((categoryId: string) => ({
+                  categoryId, // ✅ tenantId yok
+                })),
               },
             }
           : {}),
+
         ...(data.collectionIds?.length
           ? {
               collections: {
-                connect: data.collectionIds.map((id: string) => ({ id })),
+                create: data.collectionIds.map((collectionId: string) => ({
+                  collectionId, // ✅ tenantId yok
+                })),
               },
             }
           : {}),
+
         ...(data.variants?.length
           ? {
               variants: {
                 create: data.variants.map((v: any) => ({
-                  tenantId,
-                  title: v.title,
+                  title: v.title ?? null,
                   sku: v.sku ?? null,
                   barcode: v.barcode ?? null,
                   isActive: v.isActive ?? true,
+                  // ✅ tenantId yok
                 })),
               },
             }
           : {}),
       },
       include: {
-        categories: true,
-        collections: true,
+        categories: { include: { category: true } },
+        collections: { include: { collection: true } },
         variants: true,
       },
     });
   }
 
   async adminUpdateProduct(tenantId: string, id: string, data: any) {
-    // Basit, deterministic update: ana alanlar + relation reset (connect set)
     return this.prisma.catalogProduct.update({
-      where: { id },
+      // ✅ composite var ise bunu kullan (tercih)
+      where: { tenantId_id: { tenantId, id } },
+
+      // composite yoksa şu da olur:
+      // where: { id, tenantId },
+
       data: {
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.handle !== undefined ? { handle: data.handle } : {}),
@@ -222,24 +232,33 @@ export class CatalogRepo {
           ? { description: data.description }
           : {}),
         ...(data.status !== undefined ? { status: data.status } : {}),
+
         ...(data.categoryIds
           ? {
               categories: {
-                set: data.categoryIds.map((cid: string) => ({ id: cid })),
+                deleteMany: {}, // product scope içinde çalışır
+                create: data.categoryIds.map((categoryId: string) => ({
+                  categoryId, // ✅ tenantId YOK
+                })),
               },
             }
           : {}),
+
         ...(data.collectionIds
           ? {
               collections: {
-                set: data.collectionIds.map((cid: string) => ({ id: cid })),
+                deleteMany: {},
+                create: data.collectionIds.map((collectionId: string) => ({
+                  collectionId, // ✅ tenantId YOK
+                })),
               },
             }
           : {}),
       },
+
       include: {
-        categories: true,
-        collections: true,
+        categories: { include: { category: true } },
+        collections: { include: { collection: true } },
         variants: true,
       },
     });
@@ -247,12 +266,21 @@ export class CatalogRepo {
 
   async adminPublishProduct(tenantId: string, id: string) {
     return this.prisma.catalogProduct.update({
-      where: { id },
+      // ikisi de olur; sende hangisi çalışıyorsa onu bırak
+      where: { tenantId_id: { tenantId, id } },
+      // where: { id, tenantId },
+
       data: {
         status: "published",
         publishedAt: new Date(),
       },
-      include: { categories: true, collections: true, variants: true },
+
+      // 🔥 kritik: mapper’ın beklediği nested include
+      include: {
+        categories: { include: { category: true } },
+        collections: { include: { collection: true } },
+        variants: true,
+      },
     });
   }
 }

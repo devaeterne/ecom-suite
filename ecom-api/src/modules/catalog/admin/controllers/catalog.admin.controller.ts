@@ -6,10 +6,11 @@ import {
   Post,
   Req,
   UseGuards,
+  BadRequestException,
 } from "@nestjs/common";
 import { Request } from "express";
 
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { CatalogAdminService } from "@/modules/catalog/admin/service/catalog.admin.service";
 import {
   AdminCreateCategoryDto,
@@ -20,8 +21,27 @@ import {
   AdminUpdateProductDto,
 } from "@/modules/catalog/admin/dto/admin-product.dto";
 
-@Controller("/api/admin")
-@UseGuards(TenantHeaderGuard)
+/**
+ * ✅ Admin controller için tenantId kaynağı:
+ * - Öncelik: AdminAuthGuard -> req.tenant.id (UUID)
+ * - Fallback: TenantHeaderGuard -> req.tenantId (UUID)
+ * - Header util (getTenantHeaderValue) burada KULLANILMAZ (ham "acme" gelebilir)
+ */
+function requireTenantId(req: any): string {
+  const tenantId =
+    req?.tenant?.id ??
+    req?.tenantId ?? // bazı akışlarda bu alan set ediliyor olabilir
+    req?.user?.tenantId; // en son fallback (payload)
+
+  if (!tenantId || typeof tenantId !== "string") {
+    throw new BadRequestException("Tenant context missing");
+  }
+
+  return tenantId;
+}
+
+@Controller("/admin")
+@UseGuards(AdminAuthGuard)
 export class CatalogAdminController {
   constructor(private readonly service: CatalogAdminService) {}
 
@@ -30,7 +50,7 @@ export class CatalogAdminController {
     @Req() req: Request,
     @Body() dto: AdminCreateCategoryDto
   ) {
-    const tenantId = (req as any).tenantId as string;
+    const tenantId = requireTenantId(req as any);
     return this.service.createCategory(tenantId, dto);
   }
 
@@ -40,13 +60,13 @@ export class CatalogAdminController {
     @Param("id") id: string,
     @Body() dto: AdminUpdateCategoryDto
   ) {
-    const tenantId = (req as any).tenantId as string;
+    const tenantId = requireTenantId(req as any);
     return this.service.updateCategory(tenantId, id, dto);
   }
 
   @Post("/products")
   async createProduct(@Req() req: Request, @Body() dto: AdminCreateProductDto) {
-    const tenantId = (req as any).tenantId as string;
+    const tenantId = requireTenantId(req as any);
     return this.service.createProduct(tenantId, dto);
   }
 
@@ -56,13 +76,13 @@ export class CatalogAdminController {
     @Param("id") id: string,
     @Body() dto: AdminUpdateProductDto
   ) {
-    const tenantId = (req as any).tenantId as string;
+    const tenantId = requireTenantId(req as any);
     return this.service.updateProduct(tenantId, id, dto);
   }
 
   @Post("/products/:id/publish")
   async publish(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = (req as any).tenantId as string;
+    const tenantId = requireTenantId(req as any);
     return this.service.publishProduct(tenantId, id);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import {
   AdminRoleScopeDto,
@@ -11,6 +11,8 @@ import { MailService } from "@/infrastructure/mail/mail.service";
 
 @Injectable()
 export class IdentitiesService {
+  private readonly logger = new Logger(IdentitiesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordReset: PasswordResetService,
@@ -131,21 +133,22 @@ export class IdentitiesService {
   }
 
   async invite(tenantId: string, userId: string) {
+    this.logger.log(`invite:start userId=${userId} tenant=${tenantId}`);
+
     const user = await this.prisma.user.findFirst({
       where: { id: userId, tenantId, deletedAt: null },
     });
-    if (!user) return { ok: true };
+    if (!user) throw new NotFoundException("User not found");
 
     const identity = await this.prisma.authIdentity.findFirst({
       where: {
         tenantId,
         userId: user.id,
         provider: "EMAIL_PASSWORD",
-        providerId: { equals: user.email, mode: "insensitive" },
+        providerId: user.email.toLowerCase(),
       },
     });
 
-    // Eğer identity yoksa create et (login için şart)
     const ensuredIdentity =
       identity ??
       (await this.prisma.authIdentity.create({
@@ -160,13 +163,28 @@ export class IdentitiesService {
         },
       }));
 
-    // token üret (DEV’de dönecek)
-    return this.passwordReset.issue({
+    this.logger.log(
+      `invite:loaded userEmail=${user.email} ensuredIdentityId=${ensuredIdentity.id}`
+    );
+
+    const isTest = process.env.NODE_ENV === "test";
+    const echoToken = process.env.INVITE_ECHO_TOKEN === "true";
+    const sendMail = process.env.INVITE_SEND_MAIL === "true"; // default false
+
+    const result = await this.passwordReset.issue({
       tenantId,
       typ: "admin",
       identityId: ensuredIdentity.id,
-      sendMail: true, // istersen false
+      sendMail,
       email: user.email,
     });
+
+    if (result.token) {
+      this.logger.log(`invite:issued tokenLen=${result.token.length}`);
+    } else {
+      this.logger.log(`invite:issued without token`);
+    }
+
+    return { ok: true, ...(echoToken ? { token: result.token } : {}) };
   }
 }

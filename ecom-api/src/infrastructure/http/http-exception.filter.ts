@@ -4,72 +4,52 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from "@nestjs/common";
-import type { FastifyReply, FastifyRequest } from "fastify";
-
-type ErrorKind = "validation" | "auth" | "forbidden" | "business" | "unknown";
-
-function classify(status: number): ErrorKind {
-  if (
-    status === HttpStatus.BAD_REQUEST ||
-    status === HttpStatus.UNPROCESSABLE_ENTITY
-  )
-    return "validation";
-  if (status === HttpStatus.UNAUTHORIZED) return "auth";
-  if (status === HttpStatus.FORBIDDEN) return "forbidden";
-  if (status >= 400 && status < 500) return "business";
-  return "unknown";
-}
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost) {
+  private readonly logger = new Logger("EXC");
+
+  catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const req = ctx.getRequest<FastifyRequest>();
-    const reply = ctx.getResponse<FastifyReply>();
+    const req: any = ctx.getRequest();
+    const res: any = ctx.getResponse();
 
-    const url = (req as any)?.url;
-    const method = (req as any)?.method;
+    const requestId =
+      req.headers["x-request-id"] ??
+      req.id ??
+      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const kind = classify(status);
-      const res = exception.getResponse() as any;
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
 
-      // Nest ValidationPipe genelde { message: string[]; error: string; statusCode: number }
-      const message =
-        typeof res === "string"
-          ? res
-          : res?.message ?? exception.message ?? "Request failed";
+    const message =
+      exception instanceof HttpException
+        ? (exception.getResponse() as any)?.message ?? exception.message
+        : "Internal server error";
 
-      const payload = {
-        statusCode: status,
-        kind,
-        path: url,
-        method,
-        message,
-        // validation ise array message’i olduğu gibi dönelim (debug çok hızlandırıyor)
-        errors: Array.isArray(res?.message)
-          ? res.message
-          : res?.errors ?? undefined,
-      };
+    // ✅ gerçek kök sebep burada
+    this.logger.error(
+      `[${requestId}] ${req.method} ${req.url} -> ${status} :: ${
+        exception?.message ?? exception
+      }`,
+      exception?.stack
+    );
 
-      return reply.status(status).send(payload);
+    // bazı hatalarda cause dolu olur (prisma/mail)
+    if (exception?.cause) {
+      this.logger.error(`[${requestId}] cause: ${String(exception.cause)}`);
     }
 
-    // Unknown / unhandled
-    const status = HttpStatus.INTERNAL_SERVER_ERROR;
-    const payload = {
+    res.status(status).send({
       statusCode: status,
-      kind: "unknown" as const,
-      path: url,
-      method,
-      message: "Internal server error",
-    };
-
-    // burada production’da detay basmayız; e2e’de log görmek istersen console.error bırakabiliriz
-    // console.error(exception);
-
-    return reply.status(status).send(payload);
+      path: req.url,
+      method: req.method,
+      message,
+      requestId,
+    });
   }
 }

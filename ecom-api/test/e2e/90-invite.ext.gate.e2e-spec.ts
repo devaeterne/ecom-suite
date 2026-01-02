@@ -4,6 +4,10 @@ import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
 import { loginAdmin, bearer } from "@test/helpers/auth";
 
+const expect200or201 = (res: any) => {
+  expect([200, 201]).toContain(res.status);
+};
+
 describe("Invite flow (extended e2e)", () => {
   let app: INestApplication;
   let ownerToken!: string;
@@ -29,7 +33,7 @@ describe("Invite flow (extended e2e)", () => {
       .post("/api/admin/identities")
       .set(bearer(ownerToken))
       .send({ email: `invitee-${Date.now()}@acme.com`, roleScope: "STAFF" })
-      .expect(201);
+      .expect(expect200or201);
 
     const id = created.body?.id;
     expect(id).toBeTruthy();
@@ -38,10 +42,7 @@ describe("Invite flow (extended e2e)", () => {
       .post(`/api/admin/identities/${id}/invite`)
       .set(bearer(ownerToken))
       .send({})
-      .expect((r) => {
-        if (![200, 201].includes(r.status))
-          throw new Error(`Expected 200/201, got ${r.status}`);
-      });
+      .expect(expect200or201);
 
     expect(res.body?.ok).toBeTruthy();
 

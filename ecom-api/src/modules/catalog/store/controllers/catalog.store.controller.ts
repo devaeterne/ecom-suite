@@ -5,7 +5,7 @@ import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard"
 import { CatalogStoreService } from "@/modules/catalog/store/services/catalog.store.service";
 import { PaginationQueryDto } from "@/modules/catalog/common/dto/pagination.dto";
 
-@Controller("/api/store")
+@Controller("/store")
 @UseGuards(TenantHeaderGuard)
 export class CatalogStoreController {
   constructor(private readonly service: CatalogStoreService) {}

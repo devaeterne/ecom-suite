@@ -51,8 +51,8 @@ export class IdentitiesAdminController {
 
   // Şimdilik create ile koru (seed’de invite yok)
   @Post(":id/invite")
-  @RequirePermission("admin:identities:create")
-  async invite(@Req() req: any, @Param("id") id: string) {
-    return this.svc.invite(req.tenant.id, id);
+  @RequirePermission("admin:identities:write")
+  async invite(@Req() req: any, @Param("id") userId: string) {
+    return this.svc.invite(req.tenant.id, userId);
   }
 }

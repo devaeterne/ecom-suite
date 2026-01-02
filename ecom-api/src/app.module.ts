@@ -13,7 +13,7 @@ import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit.m
 import { AdminModule } from "@/modules/admin/admin.module";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { redisConfig } from "@/config/redis.config";
-import { CatalogModule } from "./modules/catalog/catalog.module";
+import { CatalogModule } from "@/modules/catalog/catalog.module";
 
 @Module({
   imports: [
