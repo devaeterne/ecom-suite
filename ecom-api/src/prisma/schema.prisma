@@ -156,6 +156,7 @@ enum PaymentProvider {
   PAYPAL
   VERIFONE
   MANUAL
+  PAYTR
 }
 
 enum RefundStatus {
@@ -331,6 +332,7 @@ enum NotificationStatus {
 
 enum WebhookProvider {
   STRIPE
+  PAYTR
   PAYPAL
   VERIFONE
   SHIPPO
@@ -1864,6 +1866,44 @@ model CartShippingMethod {
   @@map("cart_shipping_method")
 }
 
+model CartDiscountApplication {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  cartId     String @db.Uuid
+  discountId String @db.Uuid
+
+  // kullanıcı hangi kodu girdi? (AUTOMATIC’te null olabilir)
+  codeSnapshot String?
+
+  // hesaplama snapshot (audit/debug için)
+  methodSnapshot       DiscountMethod
+  valueBpSnapshot      Int?
+  valueSnapshot        Int?
+  currencyCodeSnapshot String?
+
+  // discount bu cart’a ne kadar etki etti? (minor units)
+  discountTotal Int @default(0)
+
+  metadata Json @default("{}")
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  cart     Cart     @relation(fields: [tenantId, cartId], references: [tenantId, id], onDelete: Cascade)
+  discount Discount @relation(fields: [tenantId, discountId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, cartId, discountId], map: "uniq_cart_discount_application")
+  @@index([tenantId])
+  @@index([tenantId, cartId], map: "idx_cart_discount_application_tenant_cart")
+  @@index([tenantId, discountId], map: "idx_cart_discount_application_tenant_discount")
+  @@index([tenantId, deletedAt], map: "idx_cart_discount_application_tenant_deleted_at")
+  @@map("cart_discount_application")
+}
+
 /**
  * =========================
  * 5) CHECKOUT + ORDER (mevcut + snapshot address/shipping)
@@ -2124,14 +2164,14 @@ model OrderPayment {
   orderId    String? @db.Uuid
   checkoutId String? @db.Uuid
 
-  provider String // "stripe", "paypal", "verifone", "manual"
-  status   PaymentStatus @default(PENDING)
+  provider PaymentProvider
+  status   PaymentStatus   @default(PENDING)
 
   amount       Int
   totalAmount  Int
   currencyCode String @default("EUR")
 
-  externalRef String? // provider intent/charge/payment id
+  externalRef String?
   metadata    Json    @default("{}")
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
@@ -2144,11 +2184,12 @@ model OrderPayment {
   bankTransferInstructionId String?                  @db.Uuid
   bankTransferInstruction   BankTransferInstruction? @relation(fields: [tenantId, bankTransferInstructionId], references: [tenantId, id], onDelete: Restrict)
 
+  @@unique([tenantId, provider, externalRef], map: "uniq_order_payment_tenant_provider_external_ref")
   @@unique([tenantId, id])
+  @@index([tenantId, externalRef], map: "idx_order_payment_tenant_external_ref")
   @@index([tenantId])
   @@index([tenantId, provider], map: "idx_order_payment_tenant_provider")
   @@index([tenantId, status], map: "idx_order_payment_tenant_status")
-  @@index([tenantId, externalRef], map: "idx_order_payment_tenant_external_ref")
   @@index([tenantId, deletedAt], map: "idx_order_payment_tenant_deleted_at")
   @@map("order_payment")
 }
@@ -2330,8 +2371,8 @@ model Payment {
 
   collectionId String @db.Uuid
 
-  provider String // "stripe", "paypal", "verifone", "manual"
-  status   PaymentStatus @default(PENDING)
+  provider PaymentProvider
+  status   PaymentStatus   @default(PENDING)
 
   amount       Int
   currencyCode String @default("EUR")
@@ -2349,6 +2390,7 @@ model Payment {
   collection PaymentCollection @relation(fields: [tenantId, collectionId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
+  @@unique([tenantId, provider, externalRef], map: "uniq_payment_tenant_provider_external_ref")
   @@index([tenantId])
   @@index([tenantId, collectionId], map: "idx_payment_tenant_collection")
   @@index([tenantId, provider], map: "idx_payment_tenant_provider")
@@ -3520,44 +3562,6 @@ model DiscountRedemption {
   @@index([tenantId, customerId, redeemedAt(sort: Desc)], map: "idx_discount_redemption_tenant_customer_time")
   @@index([tenantId, deletedAt], map: "idx_discount_redemption_tenant_deleted_at")
   @@map("discount_redemption")
-}
-
-model CartDiscountApplication {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  cartId     String @db.Uuid
-  discountId String @db.Uuid
-
-  // kullanıcı hangi kodu girdi? (AUTOMATIC’te null olabilir)
-  codeSnapshot String?
-
-  // hesaplama snapshot (audit/debug için)
-  methodSnapshot       DiscountMethod
-  valueBpSnapshot      Int?
-  valueSnapshot        Int?
-  currencyCodeSnapshot String?
-
-  // discount bu cart’a ne kadar etki etti? (minor units)
-  discountTotal Int @default(0)
-
-  metadata Json @default("{}")
-
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
-  deletedAt DateTime? @db.Timestamptz(6)
-
-  cart     Cart     @relation(fields: [tenantId, cartId], references: [tenantId, id], onDelete: Cascade)
-  discount Discount @relation(fields: [tenantId, discountId], references: [tenantId, id], onDelete: Restrict)
-
-  @@unique([tenantId, id])
-  @@unique([tenantId, cartId, discountId], map: "uniq_cart_discount_application")
-  @@index([tenantId])
-  @@index([tenantId, cartId], map: "idx_cart_discount_application_tenant_cart")
-  @@index([tenantId, discountId], map: "idx_cart_discount_application_tenant_discount")
-  @@index([tenantId, deletedAt], map: "idx_cart_discount_application_tenant_deleted_at")
-  @@map("cart_discount_application")
 }
 
 model OrderDiscountApplication {

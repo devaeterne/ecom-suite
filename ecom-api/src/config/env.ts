@@ -52,6 +52,7 @@ export type Env = {
   EXTRA_ORIGINS: string;
 
   JWT_ACCESS_SECRET: string;
+  JWT_REFRESH_SECRET: string;
   ACCESS_TOKEN_TTL_SECONDS: number;
   REFRESH_TTL_DAYS: number;
 
@@ -102,6 +103,7 @@ export const env: Env = {
   EXTRA_ORIGINS: process.env.EXTRA_ORIGINS ?? "",
 
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET ?? "dev-change-me",
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ?? "dev-change-me",
   ACCESS_TOKEN_TTL_SECONDS: num("ACCESS_TOKEN_TTL_SECONDS", "900"),
   REFRESH_TTL_DAYS: num("REFRESH_TTL_DAYS", "14"),
 

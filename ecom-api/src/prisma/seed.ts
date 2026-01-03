@@ -1,8 +1,16 @@
-// src/prisma/seed.ts
 import { PrismaClient, AuthProviderType, RoleScope } from "@prisma/client";
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 import * as bcrypt from "bcrypt";
 
-const prisma = new PrismaClient();
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL missing");
+}
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function upsertRole(params: {
   tenantId: string;
@@ -95,6 +103,18 @@ async function ensureUserRoleLink(params: {
 }
 
 async function main() {
+  await prisma.country.createMany({
+    data: [
+      { iso2: "TR", iso3: "TUR", name: "Türkiye" },
+      { iso2: "US", iso3: "USA", name: "United States" },
+      { iso2: "GB", iso3: "GBR", name: "United Kingdom" },
+      { iso2: "ME", iso3: "MNE", name: "Montenegro" },
+      { iso2: "DE", iso3: "DEU", name: "Germany" },
+      { iso2: "FR", iso3: "FRA", name: "France" },
+    ],
+    skipDuplicates: true,
+  });
+
   const tenantCode = "gate";
   const ownerEmail = "admin@acme.com";
   const supportEmail = "support@acme.com";
@@ -102,7 +122,6 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Tenant unique: code
   const tenant = await prisma.tenant.upsert({
     where: { code: tenantCode },
     update: {},
@@ -112,7 +131,16 @@ async function main() {
     },
   });
 
-  // Roles unique: (tenantId, name)
+  await prisma.currency.createMany({
+    data: [
+      { tenantId: tenant.id, code: "EUR", symbol: "€" },
+      { tenantId: tenant.id, code: "TRY", symbol: "₺" },
+      { tenantId: tenant.id, code: "USD", symbol: "$" },
+      { tenantId: tenant.id, code: "GBP", symbol: "£" },
+    ],
+    skipDuplicates: true,
+  });
+
   const ownerRole = await upsertRole({
     tenantId: tenant.id,
     name: "Owner",
@@ -124,7 +152,6 @@ async function main() {
     scope: RoleScope.STAFF,
   });
 
-  // Users + Password AuthIdentity
   const ownerUser = await upsertUserWithPassword({
     tenantId: tenant.id,
     email: ownerEmail,
@@ -139,7 +166,6 @@ async function main() {
     isActive: true,
   });
 
-  // Role links
   await ensureUserRoleLink({
     tenantId: tenant.id,
     userId: ownerUser.id,
@@ -155,6 +181,8 @@ async function main() {
     tenant: tenant.code,
     ownerEmail,
     supportEmail,
+    countries: ["TR", "US", "GB", "ME", "DE", "FR"],
+    currencies: ["EUR", "TRY", "USD", "GBP"],
   });
 }
 
@@ -165,4 +193,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

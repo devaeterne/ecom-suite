@@ -53,7 +53,7 @@ CREATE TYPE "ShipmentStatus" AS ENUM ('CREATED', 'LABEL_CREATED', 'IN_TRANSIT', 
 CREATE TYPE "TrackingEventType" AS ENUM ('STATUS_UPDATE', 'LOCATION_UPDATE', 'EXCEPTION', 'DELIVERY_ATTEMPT', 'INFO');
 
 -- CreateEnum
-CREATE TYPE "PaymentProvider" AS ENUM ('STRIPE', 'PAYPAL', 'VERIFONE', 'MANUAL');
+CREATE TYPE "PaymentProvider" AS ENUM ('STRIPE', 'PAYPAL', 'VERIFONE', 'MANUAL', 'PAYTR');
 
 -- CreateEnum
 CREATE TYPE "RefundStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'CANCELED');
@@ -128,7 +128,7 @@ CREATE TYPE "NotificationType" AS ENUM ('SUBSCRIPTION_TRIAL_ENDING', 'SUBSCRIPTI
 CREATE TYPE "NotificationStatus" AS ENUM ('PENDING', 'PROCESSING', 'SENT', 'FAILED', 'CANCELED');
 
 -- CreateEnum
-CREATE TYPE "WebhookProvider" AS ENUM ('STRIPE', 'PAYPAL', 'VERIFONE', 'SHIPPO', 'EASYPOST', 'MANUAL');
+CREATE TYPE "WebhookProvider" AS ENUM ('STRIPE', 'PAYTR', 'PAYPAL', 'VERIFONE', 'SHIPPO', 'EASYPOST', 'MANUAL');
 
 -- CreateEnum
 CREATE TYPE "WebhookEventStatus" AS ENUM ('RECEIVED', 'PROCESSING', 'PROCESSED', 'FAILED', 'IGNORED');
@@ -947,6 +947,26 @@ CREATE TABLE "cart_shipping_method" (
 );
 
 -- CreateTable
+CREATE TABLE "cart_discount_application" (
+    "id" UUID NOT NULL,
+    "tenantId" UUID NOT NULL,
+    "cartId" UUID NOT NULL,
+    "discountId" UUID NOT NULL,
+    "codeSnapshot" TEXT,
+    "methodSnapshot" "DiscountMethod" NOT NULL,
+    "valueBpSnapshot" INTEGER,
+    "valueSnapshot" INTEGER,
+    "currencyCodeSnapshot" TEXT,
+    "discountTotal" INTEGER NOT NULL DEFAULT 0,
+    "metadata" JSONB NOT NULL DEFAULT '{}',
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL,
+    "deletedAt" TIMESTAMPTZ(6),
+
+    CONSTRAINT "cart_discount_application_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "checkout" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
@@ -1089,7 +1109,7 @@ CREATE TABLE "order_payment" (
     "tenantId" UUID NOT NULL,
     "orderId" UUID,
     "checkoutId" UUID,
-    "provider" TEXT NOT NULL,
+    "provider" "PaymentProvider" NOT NULL,
     "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "amount" INTEGER NOT NULL,
     "totalAmount" INTEGER NOT NULL,
@@ -1207,7 +1227,7 @@ CREATE TABLE "payment" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "collectionId" UUID NOT NULL,
-    "provider" TEXT NOT NULL,
+    "provider" "PaymentProvider" NOT NULL,
     "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
     "amount" INTEGER NOT NULL,
     "currencyCode" TEXT NOT NULL DEFAULT 'EUR',
@@ -1405,6 +1425,22 @@ CREATE TABLE "user_role_link" (
 );
 
 -- CreateTable
+CREATE TABLE "password_reset_token" (
+    "id" UUID NOT NULL,
+    "tenantId" UUID NOT NULL,
+    "identityId" UUID NOT NULL,
+    "typ" TEXT NOT NULL DEFAULT 'store',
+    "tokenHash" TEXT NOT NULL,
+    "expiresAt" TIMESTAMPTZ(6) NOT NULL,
+    "usedAt" TIMESTAMPTZ(6),
+    "ip" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "password_reset_token_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "auth_identity" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
@@ -1412,6 +1448,9 @@ CREATE TABLE "auth_identity" (
     "providerId" TEXT NOT NULL,
     "userId" UUID,
     "customerId" UUID,
+    "passwordHash" TEXT,
+    "passwordAlgo" TEXT,
+    "passwordUpdatedAt" TIMESTAMPTZ(6),
     "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(6) NOT NULL,
 
@@ -1423,8 +1462,19 @@ CREATE TABLE "session" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
     "identityId" UUID NOT NULL,
-    "token" TEXT NOT NULL,
+    "token_hash" TEXT NOT NULL,
+    "typ" TEXT NOT NULL DEFAULT 'admin',
+    "familyId" UUID NOT NULL,
     "expiresAt" TIMESTAMPTZ(6) NOT NULL,
+    "revokedAt" TIMESTAMPTZ(6),
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) NOT NULL,
+    "ip" TEXT,
+    "userAgent" TEXT,
+    "rotated_from_hash" TEXT,
+    "lastUsedAt" TIMESTAMPTZ(6),
+    "rotated_to_hash" TEXT,
+    "reuse_detected_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "session_pkey" PRIMARY KEY ("id")
 );
@@ -1647,10 +1697,10 @@ CREATE TABLE "product_tag_translation" (
 CREATE TABLE "audit_log" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
-    "action" "AuditAction" NOT NULL,
     "actorUserId" UUID,
     "actorType" TEXT NOT NULL DEFAULT 'user',
     "actorLabel" TEXT,
+    "action" "AuditAction" NOT NULL,
     "entityType" TEXT NOT NULL,
     "entityId" UUID,
     "entityLabel" TEXT,
@@ -1665,6 +1715,25 @@ CREATE TABLE "audit_log" (
     "deletedAt" TIMESTAMPTZ(6),
 
     CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "auth_audit_log" (
+    "id" UUID NOT NULL,
+    "tenantId" UUID NOT NULL,
+    "actorIdentityId" UUID,
+    "actorUserId" UUID,
+    "actorCustomerId" UUID,
+    "action" TEXT NOT NULL,
+    "targetIdentityId" UUID,
+    "targetUserId" UUID,
+    "targetCustomerId" UUID,
+    "ip" TEXT,
+    "userAgent" TEXT,
+    "meta" JSONB NOT NULL DEFAULT '{}',
+    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "auth_audit_log_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1807,26 +1876,6 @@ CREATE TABLE "discount_redemption" (
     "deletedAt" TIMESTAMPTZ(6),
 
     CONSTRAINT "discount_redemption_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "cart_discount_application" (
-    "id" UUID NOT NULL,
-    "tenantId" UUID NOT NULL,
-    "cartId" UUID NOT NULL,
-    "discountId" UUID NOT NULL,
-    "codeSnapshot" TEXT,
-    "methodSnapshot" "DiscountMethod" NOT NULL,
-    "valueBpSnapshot" INTEGER,
-    "valueSnapshot" INTEGER,
-    "currencyCodeSnapshot" TEXT,
-    "discountTotal" INTEGER NOT NULL DEFAULT 0,
-    "metadata" JSONB NOT NULL DEFAULT '{}',
-    "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMPTZ(6) NOT NULL,
-    "deletedAt" TIMESTAMPTZ(6),
-
-    CONSTRAINT "cart_discount_application_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -2705,6 +2754,24 @@ CREATE UNIQUE INDEX "cart_shipping_method_tenantId_id_key" ON "cart_shipping_met
 CREATE UNIQUE INDEX "uniq_cart_shipping_method_cart_option" ON "cart_shipping_method"("tenantId", "cartId", "shippingOptionId");
 
 -- CreateIndex
+CREATE INDEX "cart_discount_application_tenantId_idx" ON "cart_discount_application"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "idx_cart_discount_application_tenant_cart" ON "cart_discount_application"("tenantId", "cartId");
+
+-- CreateIndex
+CREATE INDEX "idx_cart_discount_application_tenant_discount" ON "cart_discount_application"("tenantId", "discountId");
+
+-- CreateIndex
+CREATE INDEX "idx_cart_discount_application_tenant_deleted_at" ON "cart_discount_application"("tenantId", "deletedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cart_discount_application_tenantId_id_key" ON "cart_discount_application"("tenantId", "id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uniq_cart_discount_application" ON "cart_discount_application"("tenantId", "cartId", "discountId");
+
+-- CreateIndex
 CREATE INDEX "checkout_tenantId_idx" ON "checkout"("tenantId");
 
 -- CreateIndex
@@ -2804,6 +2871,9 @@ CREATE INDEX "idx_order_line_item_tenant_deleted_at" ON "order_line_item"("tenan
 CREATE UNIQUE INDEX "order_line_item_tenantId_id_key" ON "order_line_item"("tenantId", "id");
 
 -- CreateIndex
+CREATE INDEX "idx_order_payment_tenant_external_ref" ON "order_payment"("tenantId", "externalRef");
+
+-- CreateIndex
 CREATE INDEX "order_payment_tenantId_idx" ON "order_payment"("tenantId");
 
 -- CreateIndex
@@ -2813,10 +2883,10 @@ CREATE INDEX "idx_order_payment_tenant_provider" ON "order_payment"("tenantId", 
 CREATE INDEX "idx_order_payment_tenant_status" ON "order_payment"("tenantId", "status");
 
 -- CreateIndex
-CREATE INDEX "idx_order_payment_tenant_external_ref" ON "order_payment"("tenantId", "externalRef");
+CREATE INDEX "idx_order_payment_tenant_deleted_at" ON "order_payment"("tenantId", "deletedAt");
 
 -- CreateIndex
-CREATE INDEX "idx_order_payment_tenant_deleted_at" ON "order_payment"("tenantId", "deletedAt");
+CREATE UNIQUE INDEX "uniq_order_payment_tenant_provider_external_ref" ON "order_payment"("tenantId", "provider", "externalRef");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "order_payment_tenantId_id_key" ON "order_payment"("tenantId", "id");
@@ -2904,6 +2974,9 @@ CREATE INDEX "idx_payment_tenant_deleted_at" ON "payment"("tenantId", "deletedAt
 
 -- CreateIndex
 CREATE UNIQUE INDEX "payment_tenantId_id_key" ON "payment"("tenantId", "id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uniq_payment_tenant_provider_external_ref" ON "payment"("tenantId", "provider", "externalRef");
 
 -- CreateIndex
 CREATE INDEX "idx_tax_rate_country" ON "tax_rate"("countryIso2");
@@ -3038,19 +3111,43 @@ CREATE UNIQUE INDEX "user_role_link_tenantId_id_key" ON "user_role_link"("tenant
 CREATE UNIQUE INDEX "uniq_user_role" ON "user_role_link"("tenantId", "userId", "roleId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "password_reset_token_tokenHash_key" ON "password_reset_token"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "password_reset_token_tenantId_idx" ON "password_reset_token"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "password_reset_token_identityId_idx" ON "password_reset_token"("identityId");
+
+-- CreateIndex
+CREATE INDEX "password_reset_token_expiresAt_idx" ON "password_reset_token"("expiresAt");
+
+-- CreateIndex
 CREATE INDEX "idx_auth_identity_provider" ON "auth_identity"("provider", "providerId");
 
 -- CreateIndex
 CREATE INDEX "auth_identity_tenantId_idx" ON "auth_identity"("tenantId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
+CREATE UNIQUE INDEX "uniq_auth_identity_tenant_provider" ON "auth_identity"("tenantId", "provider", "providerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "session_token_hash_key" ON "session"("token_hash");
+
+-- CreateIndex
+CREATE INDEX "idx_session_identity_revoked" ON "session"("identityId", "revokedAt");
 
 -- CreateIndex
 CREATE INDEX "idx_session_expires" ON "session"("expiresAt");
 
 -- CreateIndex
 CREATE INDEX "session_tenantId_idx" ON "session"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "session_identityId_idx" ON "session"("identityId");
+
+-- CreateIndex
+CREATE INDEX "session_familyId_idx" ON "session"("familyId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tenant_code_key" ON "tenant"("code");
@@ -3254,6 +3351,15 @@ CREATE INDEX "idx_audit_log_tenant_deleted_at" ON "audit_log"("tenantId", "delet
 CREATE UNIQUE INDEX "audit_log_tenantId_id_key" ON "audit_log"("tenantId", "id");
 
 -- CreateIndex
+CREATE INDEX "auth_audit_log_tenantId_idx" ON "auth_audit_log"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "auth_audit_log_action_idx" ON "auth_audit_log"("action");
+
+-- CreateIndex
+CREATE INDEX "auth_audit_log_createdAt_idx" ON "auth_audit_log"("createdAt");
+
+-- CreateIndex
 CREATE INDEX "file_object_tenantId_idx" ON "file_object"("tenantId");
 
 -- CreateIndex
@@ -3381,24 +3487,6 @@ CREATE INDEX "idx_discount_redemption_tenant_deleted_at" ON "discount_redemption
 
 -- CreateIndex
 CREATE UNIQUE INDEX "discount_redemption_tenantId_id_key" ON "discount_redemption"("tenantId", "id");
-
--- CreateIndex
-CREATE INDEX "cart_discount_application_tenantId_idx" ON "cart_discount_application"("tenantId");
-
--- CreateIndex
-CREATE INDEX "idx_cart_discount_application_tenant_cart" ON "cart_discount_application"("tenantId", "cartId");
-
--- CreateIndex
-CREATE INDEX "idx_cart_discount_application_tenant_discount" ON "cart_discount_application"("tenantId", "discountId");
-
--- CreateIndex
-CREATE INDEX "idx_cart_discount_application_tenant_deleted_at" ON "cart_discount_application"("tenantId", "deletedAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "cart_discount_application_tenantId_id_key" ON "cart_discount_application"("tenantId", "id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "uniq_cart_discount_application" ON "cart_discount_application"("tenantId", "cartId", "discountId");
 
 -- CreateIndex
 CREATE INDEX "order_discount_application_tenantId_idx" ON "order_discount_application"("tenantId");
@@ -3941,6 +4029,15 @@ ALTER TABLE "cart_shipping_method" ADD CONSTRAINT "cart_shipping_method_tenantId
 ALTER TABLE "cart_shipping_method" ADD CONSTRAINT "cart_shipping_method_tenantId_shippingOptionId_fkey" FOREIGN KEY ("tenantId", "shippingOptionId") REFERENCES "shipping_option"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_cartId_fkey" FOREIGN KEY ("tenantId", "cartId") REFERENCES "cart"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_discountId_fkey" FOREIGN KEY ("tenantId", "discountId") REFERENCES "discount"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "checkout" ADD CONSTRAINT "checkout_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -4112,6 +4209,12 @@ ALTER TABLE "user_role_link" ADD CONSTRAINT "user_role_link_tenantId_userId_fkey
 ALTER TABLE "user_role_link" ADD CONSTRAINT "user_role_link_tenantId_roleId_fkey" FOREIGN KEY ("tenantId", "roleId") REFERENCES "role"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "password_reset_token" ADD CONSTRAINT "password_reset_token_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "password_reset_token" ADD CONSTRAINT "password_reset_token_identityId_fkey" FOREIGN KEY ("identityId") REFERENCES "auth_identity"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "auth_identity" ADD CONSTRAINT "auth_identity_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -4205,6 +4308,9 @@ ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_tenantId_fkey" FOREIGN KEY ("t
 ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_tenantId_actorUserId_fkey" FOREIGN KEY ("tenantId", "actorUserId") REFERENCES "user"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "auth_audit_log" ADD CONSTRAINT "auth_audit_log_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "file_object" ADD CONSTRAINT "file_object_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -4251,15 +4357,6 @@ ALTER TABLE "discount_redemption" ADD CONSTRAINT "discount_redemption_tenantId_o
 
 -- AddForeignKey
 ALTER TABLE "discount_redemption" ADD CONSTRAINT "discount_redemption_tenantId_checkoutId_fkey" FOREIGN KEY ("tenantId", "checkoutId") REFERENCES "checkout"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_cartId_fkey" FOREIGN KEY ("tenantId", "cartId") REFERENCES "cart"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cart_discount_application" ADD CONSTRAINT "cart_discount_application_tenantId_discountId_fkey" FOREIGN KEY ("tenantId", "discountId") REFERENCES "discount"("tenantId", "id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "order_discount_application" ADD CONSTRAINT "order_discount_application_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

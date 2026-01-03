@@ -122,7 +122,7 @@ export class StoreAuthService {
 
     const accessToken = this.tokenService.signAccessToken(
       {
-        sub: created.identity.id,
+        sub: created.customer.id,
         tenantId: created.identity.tenantId,
         typ: "store",
       },
@@ -208,7 +208,7 @@ export class StoreAuthService {
     await this.enforceSessionLimit(identity.tenantId, identity.id);
 
     const accessToken = this.tokenService.signAccessToken(
-      { sub: identity.id, tenantId: identity.tenantId, typ: "store" },
+      { sub: identity.customerId, tenantId: identity.tenantId, typ: "store" },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
 
@@ -263,6 +263,16 @@ export class StoreAuthService {
       throw new UnauthorizedException("Session expired");
     }
 
+    // ✅ Fetch the customerId from the identity
+    const identity = await this.prisma.authIdentity.findUnique({
+      where: { id: session.identityId },
+      select: { customerId: true },
+    });
+
+    if (!identity?.customerId) {
+      throw new UnauthorizedException("Invalid session - no customer");
+    }
+
     const newExpiresAt = new Date(
       Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
     );
@@ -280,8 +290,9 @@ export class StoreAuthService {
         userAgent: meta.userAgent ?? null,
       });
 
+    // ✅ Use customerId instead of familyId
     const accessToken = this.tokenService.signAccessToken(
-      { sub: session.identityId, tenantId: session.tenantId, typ: "store" },
+      { sub: identity.customerId, tenantId: session.tenantId, typ: "store" },
       env.ACCESS_TOKEN_TTL_SECONDS
     );
 
@@ -339,9 +350,9 @@ export class StoreAuthService {
     return { ok: true };
   }
 
-  async me(identityId: string, tenantId: string) {
+  async me(customerId: string, tenantId: string) {
     const identity = await this.prisma.authIdentity.findFirst({
-      where: { id: identityId, tenantId },
+      where: { customerId, tenantId }, // ← customerId ile ara
       include: { customer: true },
     });
     if (!identity) throw new UnauthorizedException("Invalid identity");

@@ -279,8 +279,11 @@ export class StoreAuthController {
   @Get("me")
   @UseGuards(StoreAccessGuard)
   @ApiBearerAuth()
+  @Get("me")
+  @UseGuards(StoreAccessGuard)
+  @ApiBearerAuth()
   async me(@Req() req: any) {
-    const { sub, tenantId } = req.user;
+    const { sub, tenantId } = req.user; // sub artık customerId
     return this.service.me(sub, tenantId);
   }
 }

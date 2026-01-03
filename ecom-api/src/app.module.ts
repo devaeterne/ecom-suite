@@ -14,6 +14,8 @@ import { AdminModule } from "@/modules/admin/admin.module";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { redisConfig } from "@/config/redis.config";
 import { CatalogModule } from "@/modules/catalog/catalog.module";
+import { StoreCartModule } from "@/modules/store/cart/cart.module";
+import { CustomersStoreModule } from "@/modules/store/customers/customers.store.module";
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { CatalogModule } from "@/modules/catalog/catalog.module";
     AdminModule,
     RedisModule.forRoot(redisConfig),
     CatalogModule,
+    StoreCartModule,
+    CustomersStoreModule,
   ],
 })
 export class AppModule {}

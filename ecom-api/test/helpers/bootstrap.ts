@@ -15,6 +15,8 @@ export async function createE2EApp(): Promise<INestApplication> {
   const app = moduleRef.createNestApplication<NestFastifyApplication>(
     new FastifyAdapter({ trustProxy: false })
   );
+  const fastify = app.getHttpAdapter().getInstance();
+  fastify.printRoutes?.();
 
   await setupApp(app, { enableSwagger: false });
   return app;
