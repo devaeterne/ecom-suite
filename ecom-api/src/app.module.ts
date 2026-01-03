@@ -16,9 +16,12 @@ import { redisConfig } from "@/config/redis.config";
 import { CatalogModule } from "@/modules/catalog/catalog.module";
 import { StoreCartModule } from "@/modules/store/cart/cart.module";
 import { CustomersStoreModule } from "@/modules/store/customers/customers.store.module";
+import { CheckoutModule } from "@/modules/checkout/checkout.module";
+import { SecurityModule } from "./infrastructure/security/security.module";
 
 @Module({
   imports: [
+    SecurityModule,
     PrismaModule,
     CacheModule,
     StorageModule,
@@ -35,6 +38,7 @@ import { CustomersStoreModule } from "@/modules/store/customers/customers.store.
     CatalogModule,
     StoreCartModule,
     CustomersStoreModule,
+    CheckoutModule,
   ],
 })
 export class AppModule {}

@@ -22,5 +22,6 @@ import { AuthRateLimitModule } from "@/modules/auth/rate-limit/auth-rate-limit.m
   ],
   controllers: [StoreAuthController],
   providers: [StoreAuthService, StoreAccessGuard],
+  exports: [StoreAccessGuard], // <-- ADD THIS LINE
 })
 export class StoreAuthModule {}

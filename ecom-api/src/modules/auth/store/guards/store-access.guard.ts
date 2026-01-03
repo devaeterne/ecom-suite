@@ -40,6 +40,7 @@ export class StoreAccessGuard implements CanActivate {
       throw new UnauthorizedException("Invalid token type");
 
     req.user = payload;
+    req.customerId = payload.sub;
     req.auth = { source };
     return true;
   }

@@ -105,6 +105,34 @@ upd_body="$(jq -n '{firstName:"Buyer", lastName:"One"}')"
 req PATCH /api/store/customers/me "$token" "$upd_body" | head -n 60
 
 echo
+echo "8) Checkout Create (auto cart)"
+co_body="$(jq -n --arg email "$EMAIL" '{email:$email, currencyCode:"EUR"}')"
+co_resp="$(req POST /api/store/checkouts "$token" "$co_body")"
+co_json="$(printf '%s' "$co_resp" | json_body)"
+checkout_id="$(printf '%s' "$co_json" | jq -r '.checkout.id // empty')"
+cart_id="$(printf '%s' "$co_json" | jq -r '.checkout.cartId // empty')"
+echo "checkout_id=$checkout_id cart_id=$cart_id"
+[[ -n "$checkout_id" ]] || { echo "$co_resp"; exit 1; }
+
+echo
+echo "9) Checkout Address Upsert"
+co_addr_body="$(jq -n '{
+  type:"SHIPPING",
+  fullName:"Buyer One",
+  phone:"0000000",
+  line1:"Street 1",
+  city:"Podgorica",
+  postalCode:"81000",
+  countryIso2:"ME"
+}')"
+req PATCH "/api/store/checkouts/${checkout_id}/address" "$token" "$co_addr_body" | head -n 120
+
+echo
+echo "10) Payment Providers"
+req GET "/api/store/checkouts/${checkout_id}/payment-providers" "$token" | head -n 160
+
+
+echo
 echo "7) Address Create/List/Delete"
 addr_body="$(jq -n '{
   label:"Home",

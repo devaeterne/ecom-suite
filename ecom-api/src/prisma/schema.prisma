@@ -1987,6 +1987,7 @@ model CheckoutAddress {
   checkout Checkout @relation(fields: [tenantId, checkoutId], references: [tenantId, id], onDelete: Cascade)
   country  Country  @relation(fields: [countryIso2], references: [iso2], onDelete: Restrict)
 
+  @@unique([tenantId, checkoutId, type], map: "uniq_checkout_address_tenant_checkout_type")
   @@unique([tenantId, id])
   @@index([tenantId])
   @@index([tenantId, checkoutId, type], map: "idx_checkout_address_tenant_checkout_type")
