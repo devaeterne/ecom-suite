@@ -1,28 +1,40 @@
+// src/infrastructure/security/hash.service.ts
+
 import { Injectable } from "@nestjs/common";
 import * as bcrypt from "bcrypt";
-import { createHash, timingSafeEqual } from "crypto";
+import { env } from "@/config/env";
+
+function resolveBcryptRounds(): number {
+  const anyEnv = env as any;
+  const v =
+    anyEnv.BCRYPT_ROUNDS ??
+    anyEnv.BCRYPT_COST ??
+    anyEnv.BCRYPT_SALT_ROUNDS ??
+    10;
+
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 8 && n <= 15 ? n : 10;
+}
 
 @Injectable()
 export class HashService {
-  private readonly SALT_ROUNDS = 12;
-
-  sha256(raw: string) {
-    return createHash("sha256").update(raw).digest("hex");
+  async hash(value: string): Promise<string> {
+    return bcrypt.hash(value, resolveBcryptRounds());
   }
 
-  async hashPassword(raw: string): Promise<string> {
-    return bcrypt.hash(raw, this.SALT_ROUNDS);
+  async verify(value: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(value, hash);
   }
 
-  async verifyPassword(raw: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(raw, hash);
+  // legacy
+  async hashPassword(password: string): Promise<string> {
+    return this.hash(password);
   }
 
-  // opsiyonel: hex karşılaştırma (timing-safe)
-  safeEqualHex(a: string, b: string) {
-    const ab = Buffer.from(a, "hex");
-    const bb = Buffer.from(b, "hex");
-    if (ab.length !== bb.length) return false;
-    return timingSafeEqual(ab, bb);
+  async verifyPassword(
+    password: string,
+    passwordHash: string
+  ): Promise<boolean> {
+    return this.verify(password, passwordHash);
   }
 }

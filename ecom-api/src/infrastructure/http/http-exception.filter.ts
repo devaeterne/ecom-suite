@@ -1,55 +1,47 @@
+// infrastructure/http/http-exception.filter.ts
+
 import {
-  ArgumentsHost,
-  Catch,
   ExceptionFilter,
+  Catch,
+  ArgumentsHost,
   HttpException,
   HttpStatus,
-  Logger,
 } from "@nestjs/common";
+import type { Response } from "express";
+import { HttpErrorPayload, RequestWithMeta } from "./types";
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger("EXC");
-
-  catch(exception: any, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const req: any = ctx.getRequest();
-    const res: any = ctx.getResponse();
+    const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest<RequestWithMeta>();
 
-    const requestId =
-      req.headers["x-request-id"] ??
-      req.id ??
-      `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const requestId = req.requestId;
 
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let payload: HttpErrorPayload = {
+      code: "internal_error",
+      message: "Unexpected error",
+      requestId,
+    };
 
-    const message =
-      exception instanceof HttpException
-        ? (exception.getResponse() as any)?.message ?? exception.message
-        : "Internal server error";
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const response = exception.getResponse();
 
-    // ✅ gerçek kök sebep burada
-    this.logger.error(
-      `[${requestId}] ${req.method} ${req.url} -> ${status} :: ${
-        exception?.message ?? exception
-      }`,
-      exception?.stack
-    );
-
-    // bazı hatalarda cause dolu olur (prisma/mail)
-    if (exception?.cause) {
-      this.logger.error(`[${requestId}] cause: ${String(exception.cause)}`);
+      if (typeof response === "string") {
+        payload.message = response;
+      } else if (typeof response === "object" && response !== null) {
+        payload = {
+          code: (response as any).code ?? "http_error",
+          message: (response as any).message ?? "Request failed",
+          details: (response as any).details,
+          requestId,
+        };
+      }
     }
 
-    res.status(status).send({
-      statusCode: status,
-      path: req.url,
-      method: req.method,
-      message,
-      requestId,
-    });
+    res.status(status).json(payload);
   }
 }

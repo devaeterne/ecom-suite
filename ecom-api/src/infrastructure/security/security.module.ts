@@ -1,12 +1,10 @@
 import { Global, Module } from "@nestjs/common";
-import { HashService } from "@/infrastructure/security/hash.service";
-import { TokenService } from "@/infrastructure/security/token.service";
-import { PrismaService } from "@/prisma";
-import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
+import { TokenService } from "./token.service";
+import { HashService } from "./hash.service";
 
 @Global()
 @Module({
-  providers: [HashService, TokenService, PrismaService, AdminAuthGuard],
-  exports: [HashService, TokenService, PrismaService, AdminAuthGuard],
+  providers: [TokenService, HashService],
+  exports: [TokenService, HashService],
 })
 export class SecurityModule {}

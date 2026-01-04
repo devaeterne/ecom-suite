@@ -51,7 +51,8 @@ export class StoreAccessGuard implements CanActivate {
     if (!token) throw new UnauthorizedException("Missing access token");
 
     const payload = this.tokenService.verifyAccessToken(
-      token
+      token,
+      "store"
     ) as StoreTokenPayload;
 
     if (!payload?.sub) throw new UnauthorizedException("Invalid token payload");

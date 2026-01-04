@@ -5,6 +5,6 @@ import { TenantBootstrapService } from "@/infrastructure/tenant-bootstrap/tenant
 
 @Module({
   providers: [ActiveTenantService, TenantConfigService, TenantBootstrapService],
-  exports: [ActiveTenantService, TenantConfigService],
+  exports: [ActiveTenantService, TenantConfigService, TenantBootstrapService],
 })
 export class TenantBootstrapModule {}

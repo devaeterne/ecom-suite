@@ -9,6 +9,14 @@ import { PrismaService } from "@/prisma/prisma.service";
 import { REQUIRE_PERMISSION_KEY } from "@/infrastructure/auth/decorators/permission.decorator";
 import { RoleScope } from "@prisma/client";
 
+type RequiredPerm = string | string[];
+
+function normalizePermissions(v: unknown): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean).map(String);
+  return [String(v)];
+}
+
 @Injectable()
 export class PermissionGuard implements CanActivate {
   constructor(
@@ -17,31 +25,38 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermission = this.reflector.get<string>(
+    // ✅ class + handler metadata (handler override wins)
+    const meta = this.reflector.getAllAndOverride<RequiredPerm>(
       REQUIRE_PERMISSION_KEY,
-      context.getHandler()
+      [context.getHandler(), context.getClass()]
     );
 
-    if (!requiredPermission) return true;
+    const requiredPermissions = normalizePermissions(meta);
+    if (requiredPermissions.length === 0) return true;
 
     const req: any = context.switchToHttp().getRequest();
 
-    // Tenant context (AdminAuthGuard / AdminAccessGuard zaten set ediyor ama safe fallback)
+    // Bu guard tipik olarak admin tarafı için.
+    // Store request’te yanlışlıkla kullanıldıysa güvenli tarafta kalalım.
+    if (req?.user?.typ === "store") {
+      throw new ForbiddenException(
+        "Permission checks are not available for store context"
+      );
+    }
+
+    // Tenant context (AuthGuard/AdminAuthGuard set ediyor ama safe fallback)
     const tenantId =
       req?.tenant?.id ?? req?.user?.tenantId ?? req?.user?.tenant?.id ?? null;
 
-    // User context: Permission sistemi userId ile çalışıyor (identityId değil)
+    // Permission sistemi userId ile çalışıyor (identityId değil)
     const rawUser = req?.user ?? {};
     const userId = rawUser.id ?? rawUser.userId ?? null;
-
-    // Debug için gerekirse (payload.sub çoğu yerde identityId)
-    const identityId = rawUser.identityId ?? rawUser.sub ?? null;
 
     if (!tenantId || !userId) {
       throw new ForbiddenException("Tenant or user context missing");
     }
 
-    // 1) ADMIN scope role varsa permission check bypass
+    // 1) ADMIN scope role varsa bypass
     const isAdminScoped = await this.prisma.userRoleLink.findFirst({
       where: {
         tenantId,
@@ -59,12 +74,17 @@ export class PermissionGuard implements CanActivate {
 
     if (isAdminScoped) return true;
 
-    // 2) Permission kontrolü (rolePermissionLink -> role -> users join)
+    // 2) Permission kontrolü:
+    // requiredPermissions içinde EN AZ BİRİ varsa allow (OR semantics).
+    // İstersen AND semantics’e çevirmek kolay.
     const link = await this.prisma.rolePermissionLink.findFirst({
       where: {
         tenantId,
         deletedAt: null,
-        permission: { key: requiredPermission, deletedAt: null },
+        permission: {
+          key: { in: requiredPermissions },
+          deletedAt: null,
+        },
         role: {
           tenantId,
           deletedAt: null,
@@ -78,14 +98,16 @@ export class PermissionGuard implements CanActivate {
           },
         },
       },
-      select: { id: true },
+      select: { id: true, permission: { select: { key: true } } },
     });
 
     if (!link) {
-      // istersen burada debug meta ekleyebilirsin (identityId vb.)
-      throw new ForbiddenException(`Missing permission: ${requiredPermission}`);
+      throw new ForbiddenException(
+        `Missing permission: ${requiredPermissions.join(" | ")}`
+      );
     }
 
+    // İstersen req.authz = { matchedPermission: link.permission.key } gibi meta ekleyebiliriz.
     return true;
   }
 }

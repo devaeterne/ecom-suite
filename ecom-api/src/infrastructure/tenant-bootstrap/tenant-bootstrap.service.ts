@@ -5,6 +5,10 @@ import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-te
 import { TenantConfigService } from "@/infrastructure/tenant-bootstrap/tenant-config.service";
 import { Prisma } from "@prisma/client";
 
+function normEmail(v: string) {
+  return v.trim().toLowerCase();
+}
+
 @Injectable()
 export class TenantBootstrapService implements OnModuleInit {
   private readonly logger = new Logger(TenantBootstrapService.name);
@@ -16,7 +20,25 @@ export class TenantBootstrapService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // ops toggle (CI / prod kontrollü)
+    if (String(process.env.TENANT_BOOTSTRAP_DISABLED ?? "false") === "true") {
+      this.logger.warn(
+        "Tenant bootstrap is disabled (TENANT_BOOTSTRAP_DISABLED=true)."
+      );
+      return;
+    }
+
     const cfg = this.tenantConfig.getConfig();
+
+    // prod safety: default şifre ile prod’a çıkmayalım
+    if (
+      process.env.NODE_ENV === "production" &&
+      /changeme|password|12345678/i.test(cfg.bootstrapAdmin.password)
+    ) {
+      throw new Error(
+        "Unsafe bootstrap admin password detected for production. Please set a strong password in tenant.json."
+      );
+    }
 
     const tenant = await this.prisma.tenant.upsert({
       where: { code: cfg.code },
@@ -31,15 +53,15 @@ export class TenantBootstrapService implements OnModuleInit {
         isActive: cfg.isActive,
         metadata: (cfg.metadata ?? {}) as Prisma.JsonObject,
       },
+      select: { id: true, code: true },
     });
 
-    this.activeTenant.setTenantId(tenant.id);
+    this.activeTenant.setTenant({ id: tenant.id, code: tenant.code });
     this.logger.log(`Active tenant set: ${tenant.code} (${tenant.id})`);
 
+    // Admin role idempotent
     const adminRole = await this.prisma.role.upsert({
-      where: {
-        tenantId_name: { tenantId: tenant.id, name: "Admin" },
-      },
+      where: { tenantId_name: { tenantId: tenant.id, name: "Admin" } },
       create: {
         tenantId: tenant.id,
         name: "Admin",
@@ -47,13 +69,11 @@ export class TenantBootstrapService implements OnModuleInit {
         description: "System administrator role",
         isActive: true,
       },
-      update: {
-        scope: "ADMIN",
-        isActive: true,
-      },
+      update: { scope: "ADMIN", isActive: true },
+      select: { id: true },
     });
 
-    const adminEmail = cfg.bootstrapAdmin.email.trim().toLowerCase();
+    const adminEmail = normEmail(cfg.bootstrapAdmin.email);
 
     const existingUser = await this.prisma.user.findFirst({
       where: { tenantId: tenant.id, email: adminEmail, deletedAt: null },
@@ -65,7 +85,8 @@ export class TenantBootstrapService implements OnModuleInit {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(cfg.bootstrapAdmin.password, 12);
+    const rounds = Number(process.env.BCRYPT_ROUNDS ?? 12);
+    const passwordHash = await bcrypt.hash(cfg.bootstrapAdmin.password, rounds);
 
     await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -75,6 +96,7 @@ export class TenantBootstrapService implements OnModuleInit {
           name: cfg.bootstrapAdmin.name ?? "Admin",
           isActive: true,
         },
+        select: { id: true },
       });
 
       await tx.userRoleLink.create({

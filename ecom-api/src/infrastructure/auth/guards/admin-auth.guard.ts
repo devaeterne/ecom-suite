@@ -4,9 +4,9 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
+import { PrismaService } from "@/prisma/prisma.service";
 import { TokenService } from "@/infrastructure/security/token.service";
 import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
-import { PrismaService } from "@/prisma/prisma.service";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -23,8 +23,9 @@ export class AdminAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<any>();
-    const auth = req.headers?.authorization as string | undefined;
 
+    // 1) Authorization header
+    const auth = req.headers?.authorization as string | undefined;
     let token: string | undefined;
     let source: "header" | "cookie" | undefined;
 
@@ -33,40 +34,36 @@ export class AdminAuthGuard implements CanActivate {
       source = "header";
     }
 
+    // 2) Cookie fallback
     if (!token) {
-      const cookieToken = (req.cookies as any)?.[COOKIE_NAMES.adminAccess];
-      if (cookieToken) {
-        token = cookieToken;
-        source = "cookie";
-      }
+      const cookies = (req.cookies as any) ?? {};
+      token = cookies[COOKIE_NAMES.adminAccess];
+      if (token) source = "cookie";
     }
 
-    if (!token) throw new UnauthorizedException("Missing access token");
+    if (!token) throw new UnauthorizedException("Missing admin access token");
 
-    const payload = this.tokenService.verifyAccessToken(token);
-    if (payload?.typ !== "admin") {
-      throw new UnauthorizedException("Invalid token type");
-    }
+    const payload = this.tokenService.verifyAccessToken(token, "admin");
 
-    const identityId = payload.sub as string | undefined;
-    const rawTenant = payload.tenantId as string | undefined;
+    const identityId = payload?.sub as string | undefined;
+    const rawTenant = payload?.tenantId as string | undefined;
 
     if (!identityId || !rawTenant) {
       throw new UnauthorizedException("Invalid token payload");
     }
 
-    // ✅ tenantId normalize: UUID değilse slug/handle → UUID resolve
+    // tenant normalize: uuid değilse tenant.code üzerinden id resolve
     let tenantId = rawTenant;
     if (!isUuid(tenantId)) {
       const t = await this.prisma.tenant.findFirst({
-        where: { code: tenantId }, // sende alan adı farklıysa: slug / code / key
+        where: { code: tenantId },
         select: { id: true },
       });
       if (!t?.id) throw new UnauthorizedException("Unknown tenant");
       tenantId = t.id;
     }
 
-    // identity resolve (artık tenantId UUID)
+    // identity -> user resolve
     const ident = await this.prisma.authIdentity.findFirst({
       where: { id: identityId, tenantId },
       select: { id: true, userId: true, tenantId: true },
@@ -76,9 +73,10 @@ export class AdminAuthGuard implements CanActivate {
       throw new UnauthorizedException("Identity has no user");
     }
 
+    // ✅ standard request context
     req.user = {
       ...payload,
-      // ✅ downstream için tenantId'yi UUID yap
+      typ: "admin",
       tenantId,
       id: ident.userId,
       userId: ident.userId,
@@ -86,7 +84,7 @@ export class AdminAuthGuard implements CanActivate {
     };
 
     req.tenant = { id: tenantId };
-    req.auth = { source };
+    req.auth = { source, panel: "admin" };
 
     return true;
   }

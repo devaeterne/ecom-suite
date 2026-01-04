@@ -1,16 +1,16 @@
 import { Module } from "@nestjs/common";
-import { Mailer } from "@/infrastructure/mail/mailer";
-import { SmtpMailService } from "@/infrastructure/mail/smtp.mailer";
+import { PrismaModule } from "@/prisma/prisma.module";
+import { TenantBootstrapModule } from "@/infrastructure/tenant-bootstrap/tenant-bootstrap.module";
+
 import { MailService } from "@/infrastructure/mail/mail.service";
+import { SmtpMailService } from "@/infrastructure/mail/smtp.mailer";
 
 @Module({
+  imports: [PrismaModule, TenantBootstrapModule],
   providers: [
-    // Asıl injection token: MailService
-    { provide: MailService, useClass: SmtpMailService },
-
-    // Geriye dönük uyumluluk: Mailer isteyen yerler bozulmasın
-    { provide: Mailer, useExisting: MailService },
+    SmtpMailService,
+    { provide: MailService, useExisting: SmtpMailService },
   ],
-  exports: [MailService, Mailer],
+  exports: [MailService],
 })
 export class MailModule {}

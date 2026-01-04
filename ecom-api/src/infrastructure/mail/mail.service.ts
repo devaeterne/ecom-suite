@@ -1,9 +1,4 @@
-export type MailMessage = {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-};
+import { MailMessage } from "@/infrastructure/mail/mailer";
 
 export abstract class MailService {
   abstract send(msg: MailMessage): Promise<void>;

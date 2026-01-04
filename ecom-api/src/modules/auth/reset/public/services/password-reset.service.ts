@@ -9,6 +9,9 @@ import { createHash } from "crypto";
 function sha256(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
 }
+function buildResetLink(appUrl: string, raw: string) {
+  return `${appUrl}/reset-password?token=${encodeURIComponent(raw)}`;
+}
 
 @Injectable()
 export class PasswordResetService {
@@ -44,7 +47,7 @@ export class PasswordResetService {
 
     if (!identity) return; // sessiz
 
-    const raw = this.tokenService.newRefreshToken(); // zaten secure random üretin var
+    const raw = this.tokenService.newResetToken(); // zaten secure random üretin var
     const tokenHash = sha256(raw);
     const expiresAt = new Date(
       Date.now() + env.RESET_TOKEN_TTL_MINUTES * 60 * 1000
@@ -62,9 +65,7 @@ export class PasswordResetService {
       },
     });
 
-    const link = `${this.appUrl(
-      params.typ
-    )}/reset-password?token=${encodeURIComponent(raw)}`;
+    const link = buildResetLink(this.appUrl(params.typ), raw);
 
     await this.mailer.send({
       to: params.email,
@@ -163,7 +164,7 @@ export class PasswordResetService {
     // security: her durumda ok gibi davranmak istiyorsan null dön, yoksa hata fırlat
     if (!identity) return { ok: false as const };
 
-    const raw = this.tokenService.newRefreshToken();
+    const raw = this.tokenService.newResetToken();
     const tokenHash = sha256(raw);
     const expiresAt = new Date(
       Date.now() + env.RESET_TOKEN_TTL_MINUTES * 60 * 1000
@@ -181,9 +182,7 @@ export class PasswordResetService {
       },
     });
 
-    const link = `${this.appUrl(
-      params.typ
-    )}/reset-password?token=${encodeURIComponent(raw)}`;
+    const link = buildResetLink(this.appUrl(params.typ), raw);
 
     if (params.sendMail && params.email) {
       await this.mailer.send({

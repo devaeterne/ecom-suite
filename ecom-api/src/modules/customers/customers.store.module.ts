@@ -3,9 +3,10 @@ import { Module } from "@nestjs/common";
 import { CustomersStoreController } from "@/modules/customers/store/controllers/customers.store.controller";
 import { CustomersStoreService } from "@/modules/customers/store/services/customers.store.service";
 import { CustomersCommonModule } from "./common/customers-common.module";
+import { SecurityModule } from "@/infrastructure";
 
 @Module({
-  imports: [CustomersCommonModule],
+  imports: [SecurityModule, CustomersCommonModule],
   controllers: [CustomersStoreController],
   providers: [CustomersStoreService],
 })

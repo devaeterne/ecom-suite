@@ -1,122 +1,87 @@
+// src/infrastructure/http/cookies.ts
+
 import { env } from "@/config/env";
 
+type SameSite = "lax" | "strict" | "none";
+
+// Fastify cookie options tipi zorlamayalım; Nest/Fastify tarafı zaten uyumluyor
+export type CookieOptions = {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: SameSite;
+  path: "/";
+  domain?: string;
+};
+
+function resolveCookieDomain(): string | undefined {
+  const anyEnv = env as any;
+
+  if (typeof anyEnv.COOKIE_DOMAIN === "string" && anyEnv.COOKIE_DOMAIN.length) {
+    return anyEnv.COOKIE_DOMAIN; // örn: ".domain.com"
+  }
+  if (typeof anyEnv.ROOT_DOMAIN === "string" && anyEnv.ROOT_DOMAIN.length) {
+    return `.${anyEnv.ROOT_DOMAIN}`;
+  }
+
+  return undefined;
+}
+
+function baseCookieOptions(): CookieOptions {
+  const isProd = env.NODE_ENV === "production";
+  const sameSite: SameSite = isProd ? "none" : "lax";
+
+  const domain = isProd ? resolveCookieDomain() : undefined;
+
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite,
+    path: "/",
+    ...(domain ? { domain } : {}),
+  };
+}
+
+/**
+ * Backward compatible cookie names:
+ * Kod tabanı COOKIE_NAMES.adminAccess vb bekliyor.
+ */
 export const COOKIE_NAMES = {
-  adminRefresh: "admin_refresh",
-  storeRefresh: "store_refresh",
-  adminAccess: "admin_at",
-  storeAccess: "store_at",
+  // legacy keys
+  adminAccess: "admin_access_token",
+  adminRefresh: "admin_refresh_token",
+  storeAccess: "store_access_token",
+  storeRefresh: "store_refresh_token",
+
+  // yeni sabitler (ileride geçiş)
+  ADMIN_ACCESS: "admin_access_token",
+  ADMIN_REFRESH: "admin_refresh_token",
+  STORE_ACCESS: "store_access_token",
+  STORE_REFRESH: "store_refresh_token",
 } as const;
 
-const isProd = () => env.NODE_ENV === "production";
-const isTest = () => env.NODE_ENV === "test";
-
-function isSecure() {
-  if (isTest()) return false; // e2e http
-  if (isProd()) return true; // prod https
-  return !!env.COOKIE_SECURE; // dev
+// ✅ Legacy factory exports (controllers CALL these)
+export function adminAccessCookieOptions(): CookieOptions {
+  return baseCookieOptions();
+}
+export function adminRefreshCookieOptions(): CookieOptions {
+  return baseCookieOptions();
+}
+export function storeAccessCookieOptions(): CookieOptions {
+  return baseCookieOptions();
+}
+export function storeRefreshCookieOptions(): CookieOptions {
+  return baseCookieOptions();
 }
 
-function sameSite() {
-  if (isTest()) return "lax" as const;
-  return isProd() ? ("none" as const) : ("lax" as const);
+export function clearAdminAccessCookieOptions(): CookieOptions {
+  return baseCookieOptions();
 }
-
-function cookieDomain() {
-  // ✅ testte domain verme: supertest agent en stabil
-  if (isTest()) return undefined;
-  return isProd() ? env.COOKIE_DOMAIN || undefined : undefined;
+export function clearAdminRefreshCookieOptions(): CookieOptions {
+  return baseCookieOptions();
 }
-
-function accessMaxAgeSeconds() {
-  const s = Number(env.ACCESS_TOKEN_TTL_SECONDS);
-  return Number.isFinite(s) && s > 0 ? s : 15 * 60;
+export function clearStoreAccessCookieOptions(): CookieOptions {
+  return baseCookieOptions();
 }
-
-function refreshMaxAgeSeconds() {
-  const d = Number(env.REFRESH_TTL_DAYS);
-  const days = Number.isFinite(d) && d > 0 ? d : 30;
-  return days * 24 * 60 * 60;
-}
-
-/**
- * ✅ ADMIN: tek scope, tek davranış
- * /api/admin altında her endpoint cookie’leri görür.
- */
-const ADMIN_PATH = "/api/admin";
-
-export function adminAccessCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isSecure(),
-    sameSite: sameSite(),
-    domain: cookieDomain(),
-    path: ADMIN_PATH,
-    maxAge: accessMaxAgeSeconds(),
-  };
-}
-
-export function adminRefreshCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isSecure(),
-    sameSite: sameSite(),
-    domain: cookieDomain(),
-    path: ADMIN_PATH,
-    maxAge: refreshMaxAgeSeconds(),
-  };
-}
-
-export function clearAdminAccessCookieOptions() {
-  return {
-    domain: cookieDomain(),
-    path: ADMIN_PATH,
-  };
-}
-
-export function clearAdminRefreshCookieOptions() {
-  return {
-    domain: cookieDomain(),
-    path: ADMIN_PATH,
-  };
-}
-
-/**
- * ✅ STORE: tek scope
- */
-const STORE_PATH = "/api/store";
-
-export function storeAccessCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isSecure(),
-    sameSite: sameSite(),
-    domain: cookieDomain(),
-    path: STORE_PATH,
-    maxAge: accessMaxAgeSeconds(),
-  };
-}
-
-export function storeRefreshCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isSecure(),
-    sameSite: sameSite(),
-    domain: cookieDomain(),
-    path: STORE_PATH,
-    maxAge: refreshMaxAgeSeconds(),
-  };
-}
-
-export function clearStoreAccessCookieOptions() {
-  return {
-    domain: cookieDomain(),
-    path: STORE_PATH,
-  };
-}
-
-export function clearStoreRefreshCookieOptions() {
-  return {
-    domain: cookieDomain(),
-    path: STORE_PATH,
-  };
+export function clearStoreRefreshCookieOptions(): CookieOptions {
+  return baseCookieOptions();
 }

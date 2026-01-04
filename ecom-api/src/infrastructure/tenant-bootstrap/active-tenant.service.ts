@@ -1,17 +1,33 @@
 import { Injectable } from "@nestjs/common";
 
+export type ActiveTenant = {
+  id: string;
+  code?: string;
+};
+
 @Injectable()
 export class ActiveTenantService {
-  private tenantId: string | null = null;
+  private tenant: ActiveTenant | null = null;
 
   setTenantId(id: string) {
-    this.tenantId = id;
+    this.tenant = { ...(this.tenant ?? {}), id } as ActiveTenant;
+  }
+
+  setTenant(tenant: ActiveTenant) {
+    this.tenant = tenant;
   }
 
   getTenantId(): string {
-    if (!this.tenantId) {
+    if (!this.tenant?.id) {
       throw new Error("Active tenant not initialized yet.");
     }
-    return this.tenantId;
+    return this.tenant.id;
+  }
+
+  getTenant(): ActiveTenant {
+    if (!this.tenant?.id) {
+      throw new Error("Active tenant not initialized yet.");
+    }
+    return this.tenant;
   }
 }
