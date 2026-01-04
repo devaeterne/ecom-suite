@@ -3,7 +3,7 @@ import { ForbiddenException, Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import { PaymentProvider, CartStatus } from "@prisma/client";
 
-import type { StoreAuthContext } from "@/modules/auth/store/store-request";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { CreateCheckoutDto } from "@/modules/checkout/store/dto/create-checkout.dto";
 import { UpsertCheckoutAddressDto } from "@/modules/checkout/store/dto/upsert-checkout-address.dto";
 import { StartPaymentDto } from "@/modules/checkout/store/dto/start-payment.dto";

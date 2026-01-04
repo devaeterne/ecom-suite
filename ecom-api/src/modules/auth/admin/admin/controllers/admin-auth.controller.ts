@@ -19,9 +19,9 @@ import {
 } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { AdminAuthService } from "@/modules/auth/admin/services/admin-auth.service";
-import { AdminLoginDto } from "@/modules/auth/admin/dto/admin-login.dto";
-import { AdminAuthResponseDto } from "@/modules/auth/admin/dto/admin-auth-response.dto";
+import { AdminAuthService } from "@/modules/auth/admin/admin/services/admin-auth.service";
+import { AdminLoginDto } from "@/modules/auth/admin/common/dto/admin-login.dto";
+import { AdminAuthResponseDto } from "@/modules/auth/admin/common/dto/admin-auth-response.dto";
 
 import {
   COOKIE_NAMES,
@@ -31,7 +31,7 @@ import {
   clearAdminRefreshCookieOptions,
 } from "@/infrastructure/http/cookies";
 
-import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard";
+import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";

@@ -1,6 +1,6 @@
 // src/modules/customers/common/policies/customer.auth.ts
 import { UnauthorizedException } from "@nestjs/common";
-import type { StoreAuthContext } from "@/modules/auth/store/store-request";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { CUSTOMER_ERRORS } from "@/modules/customers/common/constants/customer.constants";
 
 /**

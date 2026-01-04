@@ -8,7 +8,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
 import { OrdersStoreService } from "@/modules/orders/store/services/orders.store.service";
 import { CreateOrderFromCheckoutDto } from "@/modules/orders/store/dto/create-order-from-checkout.dto";
 import { ListOrdersQueryDto } from "@/modules/orders/store/dto/list-orders.query.dto";

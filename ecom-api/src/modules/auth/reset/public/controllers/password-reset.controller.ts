@@ -9,9 +9,9 @@ import {
 import { ApiTags } from "@nestjs/swagger";
 import type { FastifyRequest } from "fastify";
 
-import { PasswordResetService } from "@/modules/auth/reset/password-reset.service";
-import { ResetRequestDto } from "@/modules/auth/reset/dto/reset-request.dto";
-import { ResetConfirmDto } from "@/modules/auth/reset/dto/reset-confirm.dto";
+import { PasswordResetService } from "@/modules/auth/reset/public/services/password-reset.service";
+import { ResetRequestDto } from "@/modules/auth/reset/common/dto/reset-request.dto";
+import { ResetConfirmDto } from "@/modules/auth/reset/common/dto/reset-confirm.dto";
 
 import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.service";
 import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-tenant.service";

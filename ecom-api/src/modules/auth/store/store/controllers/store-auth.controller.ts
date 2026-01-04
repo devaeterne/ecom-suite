@@ -19,12 +19,12 @@ import {
 } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import { StoreAuthService } from "@/modules/auth/store/store-auth.service";
-import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
+import { StoreAuthService } from "@/modules/auth/store/store/services/store-auth.service";
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
 
-import { StoreRegisterDto } from "@/modules/auth/store/dto/store-register.dto";
-import { StoreLoginDto } from "@/modules/auth/store/dto/store-login.dto";
-import { StoreAuthResponseDto } from "@/modules/auth/store/dto/store-response.dto";
+import { StoreRegisterDto } from "@/modules/auth/store/common/dto/store-register.dto";
+import { StoreLoginDto } from "@/modules/auth/store/common/dto/store-login.dto";
+import { StoreAuthResponseDto } from "@/modules/auth/store/common/dto/store-response.dto";
 
 import {
   COOKIE_NAMES,

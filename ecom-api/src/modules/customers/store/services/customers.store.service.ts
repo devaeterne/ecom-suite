@@ -2,7 +2,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 
-import type { StoreAuthContext } from "@/modules/auth/store/store-request";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { UpdateCustomerDto } from "@/modules/customers/store/dto/update-customer.dto";
 import { UpsertAddressDto } from "@/modules/customers/store/dto/upsert-address.dto";
 

@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
-import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard";
+import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
 

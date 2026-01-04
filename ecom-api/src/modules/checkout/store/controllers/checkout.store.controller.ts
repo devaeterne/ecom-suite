@@ -10,8 +10,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 
-import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
-import type { StoreRequest } from "@/modules/auth/store/store-request";
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
+import type { StoreRequest } from "@/modules/auth/store/common/types/store-request";
 
 import { CheckoutService } from "@/modules/checkout/store/services/checkout.service";
 import { CreateCheckoutDto } from "@/modules/checkout/store/dto/create-checkout.dto";

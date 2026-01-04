@@ -15,8 +15,8 @@ import { CustomersStoreService } from "@/modules/customers/store/services/custom
 import { UpdateCustomerDto } from "@/modules/customers/store/dto/update-customer.dto";
 import { UpsertAddressDto } from "@/modules/customers/store/dto/upsert-address.dto";
 
-import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
-import type { StoreAuthContext } from "@/modules/auth/store/store-request";
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 
 @UseGuards(StoreAccessGuard)
 @Controller("store/customers")

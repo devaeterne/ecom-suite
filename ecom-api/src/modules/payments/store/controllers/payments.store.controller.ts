@@ -7,7 +7,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { StoreAccessGuard } from "@/modules/auth/store/guards/store-access.guard";
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
 import { PaymentsStoreService } from "@/modules/payments/store/services/payment.store.service";
 import { StartPaymentDto } from "@/modules/payments/store/dto/start-payment.dto";
 import { StorePaymentDto } from "@/modules/payments/store/dto/store-payment.dto";

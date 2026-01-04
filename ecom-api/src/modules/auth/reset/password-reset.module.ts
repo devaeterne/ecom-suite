@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
-import { PasswordResetController } from "@/modules/auth/reset/password-reset.controller";
-import { PasswordResetService } from "@/modules/auth/reset/password-reset.service";
+import { PasswordResetController } from "@/modules/auth/reset/public/controllers/password-reset.controller";
+import { PasswordResetService } from "@/modules/auth/reset/public/services/password-reset.service";
 
 import { PrismaModule } from "@/prisma/prisma.module";
 import { CryptoModule } from "@/modules/crypto/crypto.module";

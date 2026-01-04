@@ -15,7 +15,7 @@ import * as bcrypt from "bcrypt";
 
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
-import { StoreRegisterDto } from "@/modules/auth/store/dto/store-register.dto";
+import { StoreRegisterDto } from "@/modules/auth/store/common/dto/store-register.dto";
 
 export type ReqMeta = { ip?: string | null; userAgent?: string | null };
 

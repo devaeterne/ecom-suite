@@ -6,7 +6,7 @@ import {
 } from "@/modules/admin/identities/common/dto/identity-create.dto";
 import { IdentityPatchDto } from "@/modules/admin/identities/common/dto/identity-patch.dto";
 import { RoleScope } from "@prisma/client";
-import { PasswordResetService } from "@/modules/auth/reset/password-reset.service";
+import { PasswordResetService } from "@/modules/auth/reset/public/services/password-reset.service";
 import { MailService } from "@/infrastructure/mail/mail.service";
 
 @Injectable()

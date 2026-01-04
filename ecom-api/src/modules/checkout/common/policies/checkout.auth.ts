@@ -1,6 +1,6 @@
 // src/modules/checkout/common/policies/checkout.auth.ts
 import { UnauthorizedException } from "@nestjs/common";
-import type { StoreAuthContext } from "@/modules/auth/store/store-request";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { CHECKOUT_ERRORS } from "@/modules/checkout/common/constants/checkout.constants";
 
 export function requireStoreAuth(req: StoreAuthContext): StoreAuthContext {

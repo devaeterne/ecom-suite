@@ -11,7 +11,7 @@ import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
 import type {
   StoreAuthContext,
   StoreTokenPayload,
-} from "@/modules/auth/store/store-request";
+} from "@/modules/auth/store/common/types/store-request";
 
 /**
  * StoreAccessGuard
