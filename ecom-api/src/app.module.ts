@@ -14,12 +14,12 @@ import { AdminModule } from "@/modules/admin/admin.module";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { redisConfig } from "@/config/redis.config";
 import { CatalogModule } from "@/modules/catalog/catalog.module";
-import { StoreCartModule } from "@/modules/store/cart/cart.module";
-import { CustomersStoreModule } from "@/modules/store/customers/customers.store.module";
+import { StoreCartModule } from "@/modules/cart/cart.module";
+import { CustomersStoreModule } from "@/modules/customers/customers.store.module";
 import { CheckoutModule } from "@/modules/checkout/checkout.module";
-import { SecurityModule } from "./infrastructure/security/security.module";
-import { OrdersModule } from "./modules/orders/order.module";
-import { PaymentsModule } from "./modules/payments/payment.module";
+import { SecurityModule } from "@/infrastructure/security/security.module";
+import { OrdersModule } from "@/modules/orders/order.module";
+import { PaymentsModule } from "@/modules/payments/payment.module";
 
 @Module({
   imports: [

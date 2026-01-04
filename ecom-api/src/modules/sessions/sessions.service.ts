@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import {
   SessionsRepository,
   SessionTyp,
-} from "@/modules/sessions/sessions.repository";
+} from "@/modules/sessions/common/prisma/sessions.repo";
 
 @Injectable()
 export class SessionsService {

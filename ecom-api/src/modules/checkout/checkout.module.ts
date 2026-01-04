@@ -1,14 +1,14 @@
+// src/modules/checkout/checkout.module.ts
 import { Module } from "@nestjs/common";
-import { CheckoutController } from "./checkout.controller";
-import { CheckoutService } from "./checkout.service";
 import { PrismaModule } from "@/prisma/prisma.module";
-import { StoreAuthModule } from "@/modules/auth/store/store-auth.module"; // <-- ADD THIS
-import { PaymentsModule } from "../payments/payment.module";
+import { CheckoutRepo } from "@/modules/checkout/common/prisma/checkout.repo";
+import { CheckoutService } from "@/modules/checkout/store/services/checkout.service";
+import { CheckoutStoreController } from "@/modules/checkout/store/controllers/checkout.store.controller";
 
 @Module({
-  imports: [PrismaModule, StoreAuthModule, PaymentsModule], // <-- ADD StoreAuthModule
-  controllers: [CheckoutController],
-  providers: [CheckoutService],
-  exports: [CheckoutService],
+  imports: [PrismaModule],
+  controllers: [CheckoutStoreController],
+  providers: [CheckoutRepo, CheckoutService],
+  exports: [CheckoutRepo, CheckoutService],
 })
 export class CheckoutModule {}

@@ -1,8 +1,8 @@
 import { Module } from "@nestjs/common";
-import { TokenService } from "@/modules/crypto/token.service-old";
+import { SecurityModule } from "@/infrastructure/security/security.module";
 
 @Module({
-  providers: [TokenService],
-  exports: [TokenService],
+  imports: [SecurityModule],
+  exports: [SecurityModule],
 })
 export class CryptoModule {}

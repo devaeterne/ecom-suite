@@ -9,7 +9,7 @@ import { TokenService } from "@/infrastructure/security/token.service";
 import {
   SessionsRepository,
   SessionTyp,
-} from "@/modules/sessions/sessions.repository";
+} from "@/modules/sessions/common/prisma/sessions.repo";
 import { randomUUID, createHash } from "crypto";
 import * as bcrypt from "bcrypt";
 
