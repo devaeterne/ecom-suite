@@ -185,6 +185,17 @@ enum ShippingProfileType {
   BULKY
 }
 
+enum ShippingType {
+  DELIVERY
+  PICKUP_STORE
+  PICKUP_POINT
+}
+
+enum ManualPaymentMethod {
+  PAY_AT_STORE
+  BANK_TRANSFER
+}
+
 enum PickupPointType {
   PARTNER_POINT
   STORE_LOCATION
@@ -1931,19 +1942,26 @@ model Checkout {
   notes    String?
   metadata Json    @default("{}")
 
+  // ✅ FK: checkout -> payment_collection
+  paymentCollectionId String?            @db.Uuid
+  paymentCollection   PaymentCollection? @relation(fields: [tenantId, paymentCollectionId], references: [tenantId, id], onDelete: SetNull)
+
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
   cart                     Cart                      @relation(fields: [tenantId, cartId], references: [tenantId, id], onDelete: Cascade)
   addresses                CheckoutAddress[]
-  payments                 OrderPayment[]            @relation("CheckoutPayments")
+  payments                 OrderPayment[]            @relation("CheckoutPayments") // legacy, şimdilik dokunmuyoruz
   inventoryReservations    InventoryReservation[]
   discountRedemptions      DiscountRedemption[]
   bankTransferInstructions BankTransferInstruction[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, cartId], map: "uniq_checkout_tenant_cart")
+  // ✅ 1 checkout -> 1 paymentCollection (pratikte 1-1)
+  @@unique([tenantId, paymentCollectionId], map: "uniq_checkout_tenant_payment_collection")
+  @@index([tenantId, paymentCollectionId], map: "idx_checkout_tenant_payment_collection")
   @@index([tenantId])
   @@index([tenantId, deletedAt], map: "idx_checkout_tenant_deleted_at")
   @@index([tenantId, status, updatedAt(sort: Desc)], map: "idx_checkout_tenant_status_updated")
@@ -2004,8 +2022,8 @@ model Order {
   orderNo    String
   checkoutId String? @db.Uuid
   cartId     String? @db.Uuid
-  customerId String?
-  email      String?
+  customerId String  @db.Uuid
+  email      String
 
   status OrderStatus @default(PENDING)
 
@@ -2023,6 +2041,9 @@ model Order {
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
+
+  placedAt DateTime? @db.Timestamptz(6)
+  paidAt   DateTime? @db.Timestamptz(6)
 
   lineItems                 OrderLineItem[]
   payments                  OrderPayment[]             @relation("OrderPayments")
@@ -2342,11 +2363,15 @@ model PaymentCollection {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   orderId String? @db.Uuid
+  order   Order?  @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
 
   status PaymentCollectionStatus @default(ACTIVE)
 
   amount       Int
   currencyCode String @default("EUR")
+
+  // ✅ idempotency collection seviyesinde
+  idempotencyKey String?
 
   metadata Json @default("{}")
 
@@ -2354,11 +2379,15 @@ model PaymentCollection {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  order    Order?    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Restrict)
   payments Payment[]
   refunds  Refund[]
 
+  // ✅ backrelation (FK Checkout tarafında)
+  checkouts Checkout[]
+
   @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey], map: "uniq_payment_collection_tenant_idempotency")
+  @@index([tenantId, idempotencyKey], map: "idx_payment_collection_tenant_idempotency")
   @@index([tenantId])
   @@index([tenantId, status], map: "idx_payment_collection_tenant_status")
   @@index([tenantId, deletedAt], map: "idx_payment_collection_tenant_deleted_at")
@@ -2392,6 +2421,7 @@ model Payment {
 
   @@unique([tenantId, id])
   @@unique([tenantId, provider, externalRef], map: "uniq_payment_tenant_provider_external_ref")
+  @@unique([tenantId, collectionId], map: "uniq_payment_tenant_collection_single_payment")
   @@index([tenantId])
   @@index([tenantId, collectionId], map: "idx_payment_tenant_collection")
   @@index([tenantId, provider], map: "idx_payment_tenant_provider")

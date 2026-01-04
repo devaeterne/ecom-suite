@@ -18,6 +18,16 @@ export class StartPaymentDto {
   @IsEnum(StartPaymentProvider)
   provider!: StartPaymentProvider;
 
+  // ✅ idempotency: aynı isteğin tekrarı aynı sonucu üretir (özellikle ödeme başlatmada kritik)
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
+
+  // ✅ locale: ödeme ekranı / provider tarafı dil/ülke kırılımı için
+  @IsOptional()
+  @IsString()
+  locale?: string;
+
   @IsOptional()
   @IsString()
   returnUrl?: string;
@@ -25,16 +35,6 @@ export class StartPaymentDto {
   @IsOptional()
   @IsString()
   cancelUrl?: string;
-
-  // ✅ burası TS hatalarını kapatır + idempotency stratejine uyar
-  @IsOptional()
-  @IsString()
-  idempotencyKey?: string;
-
-  // ✅ ödeme provider'ları için pratik
-  @IsOptional()
-  @IsString()
-  locale?: string;
 
   @ValidateIf((x) => x.provider === StartPaymentProvider.MANUAL)
   @IsEnum(ManualPaymentMethodDto)

@@ -31,6 +31,15 @@ services:
 
       # ts-node / tools için (seed vb.)
       TS_NODE_PROJECT: "tsconfig.json"
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${MINIO_BUCKET:-ecom}
+      S3_REGION: us-east-1
+      S3_FORCE_PATH_STYLE: "true"
+
+      # AWS SDK credential (kritik)
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minio_password_123}
+      AWS_REGION: us-east-1
 
       # ❗️ÖNEMLİ: NODE_OPTIONS burada YOK.
       # Çünkü preload (tsconfig-paths/register) pnpm install'dan önce çalışırsa container exit 0 döngüsüne girer.

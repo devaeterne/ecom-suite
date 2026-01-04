@@ -18,6 +18,8 @@ import { StoreCartModule } from "@/modules/store/cart/cart.module";
 import { CustomersStoreModule } from "@/modules/store/customers/customers.store.module";
 import { CheckoutModule } from "@/modules/checkout/checkout.module";
 import { SecurityModule } from "./infrastructure/security/security.module";
+import { OrdersModule } from "./modules/orders/order.module";
+import { PaymentsModule } from "./modules/payments/payment.module";
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { SecurityModule } from "./infrastructure/security/security.module";
     StoreCartModule,
     CustomersStoreModule,
     CheckoutModule,
+    OrdersModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}
