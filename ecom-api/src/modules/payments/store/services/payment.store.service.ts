@@ -4,14 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+
 import { PrismaService } from "@/prisma/prisma.service";
-import { StartPaymentDto } from "@/modules/payments/store/dto/start-payment.dto";
+import { PaymentsRepo } from "@/modules/payments/common/prisma/payments.repo";
+import { StorePaymentDto } from "@/modules/payments/store/dto/store-payment.dto";
+
+import { CheckoutStatus, PaymentProvider } from "@prisma/client";
+
 import {
-  CheckoutStatus,
-  PaymentCollectionStatus,
-  PaymentProvider,
-  PaymentStatus,
-} from "@prisma/client";
+  toCollectionAndLatestPayment,
+  toPaymentCollectionResponse,
+  toPaymentStatusResponse,
+} from "@/modules/payments/common/mappers/payments.mapper";
 
 function requireString(v: any, name: string) {
   if (!v || typeof v !== "string")
@@ -21,7 +25,10 @@ function requireString(v: any, name: string) {
 
 @Injectable()
 export class PaymentsStoreService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly repo: PaymentsRepo
+  ) {}
 
   private getTenantIdFromReq(req: any): string {
     return requireString(
@@ -37,9 +44,6 @@ export class PaymentsStoreService {
     );
   }
 
-  /**
-   * Checkout’tan ülke bazlı provider listesi (senin checkout.service ile aynı mantık)
-   */
   private async getAvailableProviders(tenantId: string, checkoutId: string) {
     const checkout = await this.prisma.checkout.findFirst({
       where: { tenantId, id: checkoutId, deletedAt: null },
@@ -82,16 +86,13 @@ export class PaymentsStoreService {
     return { providers, countryIso2 };
   }
 
-  async startPayment(req: any, checkoutId: string, dto: StartPaymentDto) {
+  async startPayment(req: any, dto: StorePaymentDto) {
     const tenantId = this.getTenantIdFromReq(req);
     const customerId = this.getCustomerIdFromReq(req);
 
-    const idempotencyKey = dto?.idempotencyKey;
-    if (!idempotencyKey)
-      throw new BadRequestException("idempotencyKey missing");
-
-    const provider = dto?.provider;
-    if (!provider) throw new BadRequestException("provider missing");
+    const checkoutId = dto.checkoutId;
+    const provider = dto.provider;
+    const idempotencyKey = dto.idempotencyKey;
 
     const checkout = await this.prisma.checkout.findFirst({
       where: { tenantId, id: checkoutId, deletedAt: null },
@@ -113,78 +114,122 @@ export class PaymentsStoreService {
       throw new ForbiddenException("payment provider not available");
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const collection = await tx.paymentCollection.upsert({
-        where: {
-          tenantId_idempotencyKey: {
-            tenantId,
-            idempotencyKey, // ✅ artık string
-          },
-        },
-        update: {},
-        create: {
-          tenantId,
-          status: PaymentCollectionStatus.ACTIVE,
-          amount: checkout.grandTotal,
-          currencyCode: checkout.currencyCode,
-          idempotencyKey, // ✅ artık string
-          metadata: {
-            checkoutId,
-            returnUrl: dto.returnUrl ?? null,
-            cancelUrl: dto.cancelUrl ?? null,
-            locale: dto.locale ?? null,
-            customerId,
-          },
+    const { collection, payment } = await this.repo.transaction(async (tx) => {
+      const collection = await this.repo.upsertPaymentCollection(tx, {
+        tenantId,
+        idempotencyKey,
+        amount: checkout.grandTotal,
+        currencyCode: checkout.currencyCode,
+        metadata: {
+          checkoutId,
+          returnUrl: dto.returnUrl ?? null,
+          cancelUrl: dto.cancelUrl ?? null,
+          locale: dto.locale ?? null,
+          customerId,
         },
       });
 
-      // ⚠️ burada paymentCollectionId alanı Checkout modelinde yoksa TS zaten patlar.
-      await tx.checkout.update({
-        where: { tenantId_id: { tenantId, id: checkoutId } },
-        data: { paymentCollectionId: collection.id },
+      await this.repo.attachCollectionToCheckout(tx, {
+        tenantId,
+        checkoutId,
+        collectionId: collection.id,
       });
 
-      const payment = await tx.payment.create({
-        data: {
-          tenantId,
-          collectionId: collection.id,
-          provider, // ✅ PaymentProvider ile uyumluysa
-          status: PaymentStatus.PENDING,
-          amount: checkout.grandTotal,
-          currencyCode: checkout.currencyCode,
-          metadata: { checkoutId, customerId },
-        },
+      const payment = await this.repo.createPayment(tx, {
+        tenantId,
+        collectionId: collection.id,
+        provider,
+        amount: checkout.grandTotal,
+        currencyCode: checkout.currencyCode,
+        metadata: { checkoutId, customerId },
       });
 
       return { collection, payment };
     });
 
-    return result;
+    return { collection: toPaymentCollectionResponse({ collection, payment }) };
   }
 
   async getCheckoutPaymentCollection(req: any, checkoutId: string) {
     const tenantId = this.getTenantIdFromReq(req);
     const customerId = this.getCustomerIdFromReq(req);
 
-    const checkout = await this.prisma.checkout.findFirst({
-      where: { tenantId, id: checkoutId, deletedAt: null },
-      select: { id: true, customerId: true, paymentCollectionId: true },
+    return this.repo.transaction(async (tx) => {
+      const ref = await this.repo.getCheckoutPaymentCollectionRef(tx, {
+        tenantId,
+        checkoutId,
+      });
+
+      if (!ref) throw new NotFoundException("checkout not found");
+      if (ref.customerId && ref.customerId !== customerId) {
+        throw new ForbiddenException("not your checkout");
+      }
+
+      if (!ref.paymentCollectionId) {
+        return { collection: null };
+      }
+
+      const collection = await this.repo.getPaymentCollectionWithPayments(tx, {
+        tenantId,
+        collectionId: ref.paymentCollectionId,
+      });
+
+      if (!collection) return { collection: null };
+
+      const { latest } = toCollectionAndLatestPayment({ collection });
+      return {
+        collection: toPaymentCollectionResponse({
+          collection,
+          payment: latest,
+        }),
+      };
     });
-    if (!checkout) throw new NotFoundException("checkout not found");
-    if (checkout.customerId && checkout.customerId !== customerId) {
-      throw new ForbiddenException("not your checkout");
-    }
+  }
 
-    if (!checkout.paymentCollectionId) {
-      return { collection: null, payments: [] };
-    }
+  // İstersen controller'a ekleriz: /checkouts/:id/status
+  async getCheckoutPaymentStatus(req: any, checkoutId: string) {
+    const tenantId = this.getTenantIdFromReq(req);
+    const customerId = this.getCustomerIdFromReq(req);
 
-    const collection = await this.prisma.paymentCollection.findFirst({
-      where: { tenantId, id: checkout.paymentCollectionId, deletedAt: null },
-      include: { payments: true },
+    return this.repo.transaction(async (tx) => {
+      const ref = await this.repo.getCheckoutPaymentCollectionRef(tx, {
+        tenantId,
+        checkoutId,
+      });
+
+      if (!ref) throw new NotFoundException("checkout not found");
+      if (ref.customerId && ref.customerId !== customerId) {
+        throw new ForbiddenException("not your checkout");
+      }
+      if (!ref.paymentCollectionId) {
+        return {
+          status: toPaymentStatusResponse({
+            collectionId: "none",
+            payment: null,
+          }),
+        };
+      }
+
+      const collection = await this.repo.getPaymentCollectionWithPayments(tx, {
+        tenantId,
+        collectionId: ref.paymentCollectionId,
+      });
+      if (!collection) {
+        return {
+          status: toPaymentStatusResponse({
+            collectionId: ref.paymentCollectionId,
+            payment: null,
+          }),
+        };
+      }
+
+      const { latest } = toCollectionAndLatestPayment({ collection });
+      return {
+        status: toPaymentStatusResponse({
+          collectionId: collection.id,
+          payment: latest,
+        }),
+      };
     });
-    if (!collection) return { collection: null, payments: [] };
-
-    return { collection, payments: collection.payments };
   }
 }

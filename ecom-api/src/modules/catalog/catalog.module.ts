@@ -7,7 +7,7 @@ import { CatalogStoreController } from "@/modules/catalog/store/controllers/cata
 import { CatalogStoreService } from "@/modules/catalog/store/services/catalog.store.service";
 
 import { CatalogAdminController } from "@/modules/catalog/admin/controllers/catalog.admin.controller";
-import { CatalogAdminService } from "@/modules/catalog/admin/service/catalog.admin.service";
+import { CatalogAdminService } from "@/modules/catalog/admin/services/catalog.admin.service";
 
 import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 

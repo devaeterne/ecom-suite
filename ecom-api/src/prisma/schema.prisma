@@ -2357,6 +2357,27 @@ model OrderStatusHistory {
   @@map("order_status_history")
 }
 
+model PaymentWebhookEvent {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+
+  provider    PaymentProvider
+  eventId     String
+  externalRef String?
+  status      PaymentStatus?
+
+  signature   String?
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  ok          Boolean   @default(false)
+  error       String?
+
+  @@unique([tenantId, provider, eventId])
+  @@index([tenantId, provider, externalRef])
+  @@map("payment_webhook_event")
+}
+
 model PaymentCollection {
   id       String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid

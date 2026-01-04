@@ -25,7 +25,7 @@ export async function setupApp(
     .getHttpAdapter()
     .getInstance();
 
-  // ✅ HOOKLAR: init/listen öncesi
+  // ✅ HOOKLAR
   fastify.addHook("onRequest", async (req: any) => {
     req.__startAt = Date.now();
   });
@@ -42,6 +42,7 @@ export async function setupApp(
   await (app as NestFastifyApplication).register(cookie, {
     secret: env.COOKIE_SECRET,
   });
+
   await (app as NestFastifyApplication).register(cors, buildCorsOptions());
 
   app.useGlobalPipes(
@@ -61,13 +62,10 @@ export async function setupApp(
       .build();
 
     const document = SwaggerModule.createDocument(app as any, config);
-
-    // ✅ /api/api/docs olmasın
     SwaggerModule.setup("docs", app as any, document);
   }
 
   await app.init();
-  // fastify.ready() şart değil; istersen kalsın ama hook zaten önce eklendi.
   await fastify.ready();
 
   return app;

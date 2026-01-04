@@ -8,8 +8,8 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
+
 import { PaymentsStoreService } from "@/modules/payments/store/services/payment.store.service";
-import { StartPaymentDto } from "@/modules/payments/store/dto/start-payment.dto";
 import { StorePaymentDto } from "@/modules/payments/store/dto/store-payment.dto";
 
 @Controller("/store/payments")
@@ -19,12 +19,17 @@ export class PaymentsStoreController {
 
   @Post()
   async start(@Req() req: any, @Body() dto: StorePaymentDto) {
-    // PaymentsStoreService.startPayment(req, checkoutId, dto) bekliyor:
-    return this.svc.startPayment(req, dto.checkoutId, dto as any);
+    return this.svc.startPayment(req, dto);
   }
 
   @Get("checkouts/:checkoutId")
   async byCheckout(@Req() req: any, @Param("checkoutId") checkoutId: string) {
     return this.svc.getCheckoutPaymentCollection(req, checkoutId);
   }
+
+  // İstersen açarız:
+  // @Get("checkouts/:checkoutId/status")
+  // async status(@Req() req: any, @Param("checkoutId") checkoutId: string) {
+  //   return this.svc.getCheckoutPaymentStatus(req, checkoutId);
+  // }
 }

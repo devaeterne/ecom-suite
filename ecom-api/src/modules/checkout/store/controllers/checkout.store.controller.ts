@@ -1,4 +1,4 @@
-// src/modules/checkout/store/controllers/checkout.controller.ts
+// src/modules/checkout/store/controllers/checkout.store.controller.ts
 import {
   Body,
   Controller,
@@ -31,7 +31,6 @@ export class CheckoutStoreController {
   /**
    * Address upsert:
    * - dto.type: "SHIPPING" | "BILLING"
-   * - checkoutId: :id
    */
   @Patch(":id/addresses")
   upsertAddress(

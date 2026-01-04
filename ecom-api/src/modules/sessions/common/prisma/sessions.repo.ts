@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 
 export type SessionTyp = "admin" | "store";
+type Tx = Prisma.TransactionClient;
 
 /**
  * Prisma P2002 unique violation bazen meta.target ile gelir, bazen gelmez.
@@ -23,7 +24,6 @@ function isUniqueTokenHashError(e: unknown) {
       return true;
   }
 
-  // meta yoksa message fallback
   const msg = String((e as any)?.message ?? "");
   return msg.includes("token_hash") || msg.includes("tokenHash");
 }
@@ -34,13 +34,17 @@ function newRefreshTokenRaw() {
 }
 
 /** DB'ye raw token yazmayız, hash saklarız */
-function sha256Hex(input: string) {
+export function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex"); // 64 char
 }
 
 @Injectable()
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  transaction<T>(fn: (tx: Tx) => Promise<T>) {
+    return this.prisma.$transaction(fn);
+  }
 
   findAnyByTokenHash(params: { tokenHash: string; typ: SessionTyp }) {
     const { tokenHash, typ } = params;
@@ -171,7 +175,6 @@ export class SessionsRepository {
         return { rawToken, session };
       } catch (e) {
         if (!isUniqueTokenHashError(e)) throw e;
-        // collision -> retry
       }
     }
 
@@ -179,12 +182,11 @@ export class SessionsRepository {
   }
 
   /**
-   * Rotate refresh:
-   * - mevcut session revoke edilir ve rotatedToHash set edilir
-   * - yeni session create edilir (rotatedFromHash set edilir)
+   * Rotate refresh (SAFE):
+   * - mevcut session sadece "hala valid + doğru tokenHash" ise revoke edilir
+   * - yeni session create edilir
    *
-   * Create collision olursa retry: yeni token üret, transaction'ı tekrar dene.
-   * DÖNÜŞ: rawToken + new session
+   * Not: aynı refresh token ile paralel istek gelirse, sadece 1 tanesi başarılı olur.
    */
   async rotateWithGeneratedToken(params: {
     sessionId: string;
@@ -210,20 +212,38 @@ export class SessionsRepository {
     } = params;
 
     for (let attempt = 0; attempt < 10; attempt++) {
-      const now = new Date(); // her denemede güncel timestamp istersen burada
+      const now = new Date();
       const rawToken = newRefreshTokenRaw();
       const newTokenHash = sha256Hex(rawToken);
 
       try {
-        const [, created] = await this.prisma.$transaction([
-          this.prisma.session.update({
-            where: { id: sessionId },
+        const created = await this.prisma.$transaction(async (tx) => {
+          // 1) conditional revoke (race-safe)
+          const res = await tx.session.updateMany({
+            where: {
+              id: sessionId,
+              tenantId,
+              identityId,
+              typ,
+              tokenHash: oldTokenHash,
+              revokedAt: null,
+              expiresAt: { gt: now },
+            },
             data: {
               revokedAt: now,
               rotatedToHash: newTokenHash,
             },
-          }),
-          this.prisma.session.create({
+          });
+
+          if (res.count !== 1) {
+            // stale token / already rotated / expired / revoked
+            throw new ForbiddenException(
+              "invalid or already-used refresh token"
+            );
+          }
+
+          // 2) create new session
+          return tx.session.create({
             data: {
               tenantId,
               identityId,
@@ -236,13 +256,12 @@ export class SessionsRepository {
               userAgent: userAgent ?? null,
               lastUsedAt: now,
             },
-          }),
-        ]);
+          });
+        });
 
         return { rawToken, session: created };
       } catch (e) {
         if (!isUniqueTokenHashError(e)) throw e;
-        // collision -> retry
       }
     }
 

@@ -11,7 +11,7 @@ import {
 import { Request } from "express";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { CatalogAdminService } from "@/modules/catalog/admin/service/catalog.admin.service";
+import { CatalogAdminService } from "@/modules/catalog/admin/services/catalog.admin.service";
 import {
   AdminCreateCategoryDto,
   AdminUpdateCategoryDto,

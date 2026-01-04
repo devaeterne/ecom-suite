@@ -1,5 +1,5 @@
+// src/modules/orders/store/controllers/orders.store.controller.ts
 import {
-  Body,
   Controller,
   Get,
   Param,
@@ -8,40 +8,34 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
-import { OrdersStoreService } from "@/modules/orders/store/services/orders.store.service";
-import { CreateOrderFromCheckoutDto } from "@/modules/orders/store/dto/create-order-from-checkout.dto";
-import { ListOrdersQueryDto } from "@/modules/orders/store/dto/list-orders.query.dto";
 
-@Controller("/store/orders")
+import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
+import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
+
+import { OrdersStoreService } from "@/modules/orders/store/services/orders.store.service";
+import { ListOrdersQueryDto } from "@/modules/orders/store/dto/list-orders.query.dto";
+import { CreateOrderFromCheckoutDto } from "@/modules/orders/store/dto/create-order-from-checkout.dto";
+
 @UseGuards(StoreAccessGuard)
+@Controller("store/orders")
 export class OrdersStoreController {
   constructor(private readonly svc: OrdersStoreService) {}
 
-  /**
-   * checkout -> order
-   */
-  @Post("/from-checkout")
-  async createFromCheckout(
-    @Req() req: any,
-    @Body() dto: CreateOrderFromCheckoutDto
+  @Get()
+  list(@Req() req: StoreAuthContext, @Query() query: ListOrdersQueryDto) {
+    return this.svc.list(req, query);
+  }
+
+  @Get(":id")
+  detail(@Req() req: StoreAuthContext, @Param("id") id: string) {
+    return this.svc.detail(req, id);
+  }
+
+  @Post("from-checkout")
+  createFromCheckout(
+    @Req() req: StoreAuthContext,
+    @Query() dto: CreateOrderFromCheckoutDto
   ) {
     return this.svc.createFromCheckout(req, dto);
-  }
-
-  /**
-   * my orders list (pagination)
-   */
-  @Get()
-  async list(@Req() req: any, @Query() q: ListOrdersQueryDto) {
-    return this.svc.listMyOrders(req, q);
-  }
-
-  /**
-   * my order detail
-   */
-  @Get(":id")
-  async detail(@Req() req: any, @Param("id") orderId: string) {
-    return this.svc.getMyOrderDetail(req, orderId);
   }
 }

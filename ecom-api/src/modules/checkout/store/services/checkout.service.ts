@@ -4,6 +4,7 @@ import { PrismaService } from "@/prisma/prisma.service";
 import { PaymentProvider, CartStatus } from "@prisma/client";
 
 import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
+
 import { CreateCheckoutDto } from "@/modules/checkout/store/dto/create-checkout.dto";
 import { UpsertCheckoutAddressDto } from "@/modules/checkout/store/dto/upsert-checkout-address.dto";
 import { StartPaymentDto } from "@/modules/checkout/store/dto/start-payment.dto";
@@ -12,7 +13,9 @@ import { CHECKOUT_DEFAULT_CURRENCY } from "@/modules/checkout/common/constants/c
 import { getTenantIdOrThrow } from "@/modules/checkout/common/policies/checkout.tenancy";
 import { getCustomerIdOrThrow } from "@/modules/checkout/common/policies/checkout.auth";
 import { assertCheckoutOwnedByCustomer } from "@/modules/checkout/common/policies/checkout.ownership";
+
 import { CheckoutRepo } from "@/modules/checkout/common/prisma/checkout.repo";
+import { CheckoutMapper } from "@/modules/checkout/common/mappers/checkout.mapper";
 
 @Injectable()
 export class CheckoutService {
@@ -24,7 +27,6 @@ export class CheckoutService {
   async createCheckout(ctx: StoreAuthContext, dto: CreateCheckoutDto) {
     const tenantId = getTenantIdOrThrow(ctx);
     const customerId = getCustomerIdOrThrow(ctx);
-
     const currencyCode = dto.currencyCode ?? CHECKOUT_DEFAULT_CURRENCY;
 
     const cart = await this.repo.resolveOrCreateCart({
@@ -36,7 +38,7 @@ export class CheckoutService {
 
     // aktif cart garantisi (opsiyonel)
     if (cart.status !== CartStatus.ACTIVE) {
-      // gelecekte farklı akış: burada yeni cart açabilirsin
+      // ileride: yeni cart açma / hata
     }
 
     const checkout = await this.repo.upsertCheckout({
@@ -47,7 +49,9 @@ export class CheckoutService {
       currencyCode,
     });
 
-    return { checkout };
+    return {
+      checkout: CheckoutMapper.toDetailedResponse(checkout),
+    };
   }
 
   async upsertAddress(
@@ -98,14 +102,15 @@ export class CheckoutService {
       tenantId,
       checkoutId,
     });
+
     if (checkout.customerId && checkout.customerId !== customerId) {
       throw new ForbiddenException("not your checkout");
     }
 
     const shipping =
-      checkout.addresses.find((a) => (a as any).type === "SHIPPING") ?? null;
+      checkout.addresses.find((a: any) => a.type === "SHIPPING") ?? null;
 
-    const countryIso2 = (shipping as any)?.countryIso2 ?? null;
+    const countryIso2 = shipping?.countryIso2 ?? null;
 
     const base: Array<{ provider: PaymentProvider; reason: string }> = [
       { provider: PaymentProvider.MANUAL, reason: "bank transfer" },
@@ -126,13 +131,16 @@ export class CheckoutService {
       where: { tenantId },
       select: { provider: true },
     });
-    const enabledSet = new Set<PaymentProvider>(enabled.map((x) => x.provider));
+    const enabledSet = new Set(enabled.map((x) => x.provider));
 
     const usable = base.filter(
       (x) => x.provider === PaymentProvider.MANUAL || enabledSet.has(x.provider)
     );
 
-    return { providers: usable, countryIso2 };
+    return {
+      providers: usable,
+      countryIso2,
+    };
   }
 
   async startPayment(
@@ -147,6 +155,7 @@ export class CheckoutService {
       tenantId,
       checkoutId,
     });
+
     if (checkout.customerId && checkout.customerId !== customerId) {
       throw new ForbiddenException("not your checkout");
     }
@@ -155,6 +164,7 @@ export class CheckoutService {
       ctx,
       checkoutId
     );
+
     if (!providers.find((p) => p.provider === dto.provider)) {
       throw new ForbiddenException("payment provider not available");
     }

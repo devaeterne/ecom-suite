@@ -13,6 +13,10 @@ import {
 import { getCustomerIdOrThrow } from "@/modules/customers/common/policies/customer.auth";
 import { getTenantIdOrThrow } from "@/modules/customers/common/policies/customer.tenancy";
 import { mapUpsertAddressDtoToPrisma } from "@/modules/customers/common/policies/customer.addresses";
+import {
+  toCustomerMe,
+  toCustomerAddressDTO,
+} from "@/modules/customers/common/mappers/customer.mapper";
 
 @Injectable()
 export class CustomersStoreService {
@@ -40,7 +44,9 @@ export class CustomersStoreService {
 
     if (!customer)
       throw new NotFoundException(CUSTOMER_ERRORS.CUSTOMER_NOT_FOUND);
-    return { customer };
+    return {
+      customer: toCustomerMe(customer),
+    };
   }
 
   async updateMe(req: StoreAuthContext, dto: UpdateCustomerDto) {
@@ -65,7 +71,9 @@ export class CustomersStoreService {
       },
     });
 
-    return { customer };
+    return {
+      customer: toCustomerMe(customer),
+    };
   }
 
   /* ------------------------------------------------------------------
@@ -81,7 +89,9 @@ export class CustomersStoreService {
       orderBy: CUSTOMER_ADDRESS_DEFAULT_ORDER,
     });
 
-    return { addresses: items };
+    return {
+      addresses: items.map(toCustomerAddressDTO),
+    };
   }
 
   async createAddress(req: StoreAuthContext, dto: UpsertAddressDto) {
@@ -106,7 +116,9 @@ export class CustomersStoreService {
         },
       });
 
-      return { address };
+      return {
+        address: toCustomerAddressDTO(address),
+      };
     });
   }
 
@@ -139,7 +151,9 @@ export class CustomersStoreService {
         data,
       });
 
-      return { address };
+      return {
+        address: toCustomerAddressDTO(address),
+      };
     });
   }
 

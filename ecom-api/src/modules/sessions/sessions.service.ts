@@ -12,6 +12,7 @@ export class SessionsService {
     await this.repo.revokeAllByIdentity({ tenantId, identityId, typ });
     return { ok: true };
   }
+
   /**
    * Basit session limiti: aktif session sayısı max’i aşarsa en eskileri revoke.
    */
@@ -22,6 +23,7 @@ export class SessionsService {
     max: number;
   }) {
     const { tenantId, identityId, typ, max } = params;
+
     const active = await this.repo.listActiveByIdentity({
       tenantId,
       identityId,
@@ -29,8 +31,10 @@ export class SessionsService {
       take: max + 50,
       orderBy: "asc", // en eskiler başta
     });
+
     if (active.length <= max) return;
-    const overflow = active.slice(0, active.length - max).map((s) => s.id);
-    await this.repo.revokeMany(overflow);
+
+    const overflowIds = active.slice(0, active.length - max).map((s) => s.id);
+    await this.repo.revokeMany(overflowIds);
   }
 }
