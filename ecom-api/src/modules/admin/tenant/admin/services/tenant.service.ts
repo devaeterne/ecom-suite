@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { TenantMePatchDto } from "@/modules/admin/tenant/dto/tenant-me.patch.dto";
+import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
 
 type JsonObj = Record<string, any>;
 

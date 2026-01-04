@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { SEED_PERMISSIONS } from "@/modules/admin/rbac/permissions.seed";
+import { SEED_PERMISSIONS } from "@/modules/admin/rbac/common/seeds/permissions.seed";
 
 @Injectable()
 export class PermissionsService implements OnModuleInit {

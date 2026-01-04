@@ -12,9 +12,9 @@ import { AdminAccessGuard } from "@/modules/auth/admin/guards/admin-access.guard
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
 
-import { TenantService } from "@/modules/admin/tenant/tenant.service";
-import { TenantMePatchDto } from "@/modules/admin/tenant/dto/tenant-me.patch.dto";
-import { presentTenant } from "@/modules/admin/tenant/mappers/tenant.presenter";
+import { TenantService } from "@/modules/admin/tenant/admin/services/tenant.service";
+import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
+import { presentTenant } from "@/modules/admin/tenant/common/mappers/tenant.presenter";
 
 function getTenantId(req: any) {
   const tenantId = req.user?.tenantId ?? req.tenant?.id ?? null;

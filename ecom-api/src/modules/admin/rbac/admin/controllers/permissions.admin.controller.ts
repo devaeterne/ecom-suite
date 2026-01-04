@@ -1,6 +1,6 @@
 import { Controller, Get, UseGuards } from "@nestjs/common";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { PermissionsService } from "@/modules/admin/rbac/permissions.service";
+import { PermissionsService } from "@/modules/admin/rbac/admin/services/permissions.service";
 
 @Controller("admin/permissions")
 @UseGuards(AdminAuthGuard)

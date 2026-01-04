@@ -4,9 +4,9 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { RolePermissionsDto } from "@/modules/admin/rbac/dto/role-permissions.dto";
-import { RoleCreateDto } from "@/modules/admin/rbac/dto/role-create.dto";
-import { RolePatchDto } from "@/modules/admin/rbac/dto/role-patch.dto";
+import { RolePermissionsDto } from "@/modules/admin/rbac/common/dto/role-permissions.dto";
+import { RoleCreateDto } from "@/modules/admin/rbac/common/dto/role-create.dto";
+import { RolePatchDto } from "@/modules/admin/rbac/common/dto/role-patch.dto";
 
 @Injectable()
 export class RolesService {

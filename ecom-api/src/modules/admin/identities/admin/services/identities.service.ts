@@ -3,8 +3,8 @@ import { PrismaService } from "@/prisma/prisma.service";
 import {
   AdminRoleScopeDto,
   IdentityCreateDto,
-} from "@/modules/admin/dto/identity-create.dto";
-import { IdentityPatchDto } from "@/modules/admin/dto/identity-patch.dto";
+} from "@/modules/admin/identities/common/dto/identity-create.dto";
+import { IdentityPatchDto } from "@/modules/admin/identities/common/dto/identity-patch.dto";
 import { RoleScope } from "@prisma/client";
 import { PasswordResetService } from "@/modules/auth/reset/password-reset.service";
 import { MailService } from "@/infrastructure/mail/mail.service";

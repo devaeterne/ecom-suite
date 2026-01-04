@@ -12,10 +12,10 @@ import {
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
-import { IdentitiesService } from "@/modules/admin/identities/identities.service";
-import { IdentityCreateDto } from "@/modules/admin/dto/identity-create.dto";
-import { IdentityPatchDto } from "@/modules/admin/dto/identity-patch.dto";
-import { presentIdentity } from "@/modules/admin/mappers/identity.presenter";
+import { IdentitiesService } from "@/modules/admin/identities/admin/services/identities.service";
+import { IdentityCreateDto } from "@/modules/admin/identities/common/dto/identity-create.dto";
+import { IdentityPatchDto } from "@/modules/admin/identities/common/dto/identity-patch.dto";
+import { presentIdentity } from "@/modules/admin/identities/common/mappers/identity.presenter";
 
 @Controller("admin/identities")
 @UseGuards(AdminAuthGuard, PermissionGuard)
