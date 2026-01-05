@@ -143,7 +143,7 @@ async function main() {
 
   const ownerRole = await upsertRole({
     tenantId: tenant.id,
-    name: "Owner",
+    name: "owner",
     scope: RoleScope.STAFF,
   });
   const supportRole = await upsertRole({

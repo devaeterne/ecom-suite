@@ -92,3 +92,30 @@ test "$OK" = "true" || { echo "❌ invite failed"; exit 1; }
 echo
 echo "🎉 ADMIN SMOKE OK"
 echo "tenant=$TENANT_ID identity=$IDENTITY_ID"
+
+# 7) admin sessions list
+echo "🪪 sessions list"
+SESSIONS_JSON="$(curl -sS "${AUTH[@]}" \
+  "$BASE/api/admin/sessions")"
+
+echo "$SESSIONS_JSON" | jq .
+SESSION_ID="$(echo "$SESSIONS_JSON" | jq -r '.items[0].id // empty')"
+
+if [[ -z "$SESSION_ID" ]]; then
+  echo "ℹ️ aktif session yok, revoke test atlanıyor"
+else
+  echo "SESSION_ID=$SESSION_ID"
+  echo
+
+  # 7a) revoke single session
+  echo "🧨 revoke single session"
+  curl -sS -X POST "${AUTH[@]}" \
+    "$BASE/api/admin/sessions/$SESSION_ID/revoke" | jq .
+  echo
+fi
+
+# 7b) revoke all sessions for identity
+echo "🔥 revoke all sessions"
+curl -sS -X POST "${AUTH[@]}" \
+  "$BASE/api/admin/sessions/revoke-all" | jq .
+echo

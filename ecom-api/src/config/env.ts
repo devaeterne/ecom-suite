@@ -69,7 +69,7 @@ export type Env = {
 export const env: Env = {
   // Core
   NODE_ENV: process.env.NODE_ENV ?? "development",
-  API_PORT: num("API_PORT", "3000"),
+  API_PORT: num("API_PORT", "3001"),
 
   // DB
   DATABASE_URL: req("DATABASE_URL"),

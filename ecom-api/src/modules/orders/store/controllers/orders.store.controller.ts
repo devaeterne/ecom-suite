@@ -7,6 +7,7 @@ import {
   Query,
   Req,
   UseGuards,
+  Body,
 } from "@nestjs/common";
 
 import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
@@ -34,7 +35,7 @@ export class OrdersStoreController {
   @Post("from-checkout")
   createFromCheckout(
     @Req() req: StoreAuthContext,
-    @Query() dto: CreateOrderFromCheckoutDto
+    @Body() dto: CreateOrderFromCheckoutDto
   ) {
     return this.svc.createFromCheckout(req, dto);
   }

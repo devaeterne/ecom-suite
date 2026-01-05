@@ -5,11 +5,12 @@ import { PrismaService } from "@/prisma/prisma.service";
 import { TenantContextMiddleware } from "@/infrastructure/tenant/tenant-context.middleware";
 import { AdminAuthModule } from "@/modules/auth/admin/admin-auth.module";
 import { SecurityModule } from "@/infrastructure/security/security.module";
+import { AdminTenantContextGuard } from "@/infrastructure/tenant/guards/admin-tenant-context.guard";
 
 @Module({
   imports: [AdminAuthModule, SecurityModule],
   controllers: [TenantAdminController],
-  providers: [TenantService, PrismaService],
+  providers: [TenantService, PrismaService, AdminTenantContextGuard],
 })
 export class AdminTenantModule {
   configure(consumer: MiddlewareConsumer) {

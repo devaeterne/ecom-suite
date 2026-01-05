@@ -122,7 +122,7 @@ async function main() {
     create: {
       tenantId: tenant.id,
       email: fx.owner.email,
-      name: "Admin Owner",
+      name: "Admin owner",
       isActive: true,
     },
     update: {},
@@ -268,7 +268,7 @@ async function main() {
     ownerRole: ownerRole.id,
     supportRole: supportRole.id,
   });
-  console.log("✅ Owner:", fx.owner.email);
+  console.log("✅ owner:", fx.owner.email);
   console.log("✅ Support:", fx.support.email);
   console.log("✅ Store:", fx.storeUser.email);
   console.log("✨ E2E seed completed successfully!");

@@ -1,72 +1,70 @@
-import { INestApplication, ValidationPipe, Logger } from "@nestjs/common";
-import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
-import type { NestFastifyApplication } from "@nestjs/platform-fastify";
-
-import multipart from "@fastify/multipart";
-import cookie from "@fastify/cookie";
-import cors from "@fastify/cors";
-
+// ecom-api/src/bootstrap/setup-app.ts
+import { NestFastifyApplication } from "@nestjs/platform-fastify";
+import { ValidationPipe } from "@nestjs/common";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import fastifyCookie from "@fastify/cookie";
 import { env } from "@/config/env";
-import { buildCorsOptions } from "@/infrastructure/http/cors";
-import { HttpExceptionFilter } from "@/infrastructure/http/http-exception.filter";
-
-const httpLogger = new Logger("HTTP");
 
 export async function setupApp(
-  app: INestApplication,
-  opts: { enableSwagger?: boolean } = {}
+  app: NestFastifyApplication,
+  options?: { enableSwagger?: boolean }
 ) {
-  const enableSwagger = opts.enableSwagger ?? false;
+  // 1. CORS
+  app.enableCors({
+    origin: ["http://localhost:3000", "http://localhost:3001"],
+    credentials: true,
+  });
 
+  // 2. Cookie parser (raw body'den ÖNCE)
+  await app.register(fastifyCookie, {
+    secret: env.COOKIE_SECRET || "dev-secret-change-in-prod",
+  });
+
+  // 3. Raw body for webhooks (specific routes only)
+  app.use("/api/payments/webhooks", (req: any, res: any, next: any) => {
+    let data = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => {
+      data += chunk;
+    });
+    req.on("end", () => {
+      req.body = Buffer.from(data, "utf8");
+      next();
+    });
+  });
+
+  // 4. Global prefix
   app.setGlobalPrefix("api");
-  app.useGlobalFilters(new HttpExceptionFilter());
 
-  const fastify = (app as NestFastifyApplication)
-    .getHttpAdapter()
-    .getInstance();
-
-  // ✅ HOOKLAR
-  fastify.addHook("onRequest", async (req: any) => {
-    req.__startAt = Date.now();
-  });
-
-  fastify.addHook("onResponse", async (req: any, reply: any) => {
-    const ms = Date.now() - (req.__startAt ?? Date.now());
-    httpLogger.log(`${req.method} ${req.url} -> ${reply.statusCode} (${ms}ms)`);
-  });
-
-  await (app as NestFastifyApplication).register(multipart, {
-    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
-  });
-
-  await (app as NestFastifyApplication).register(cookie, {
-    secret: env.COOKIE_SECRET,
-  });
-
-  await (app as NestFastifyApplication).register(cors, buildCorsOptions());
-
+  // 5. Validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted: false, // flexible for now
       transform: true,
-      forbidNonWhitelisted: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     })
   );
 
-  if (enableSwagger) {
+  // 6. Swagger (optional)
+  if (options?.enableSwagger) {
     const config = new DocumentBuilder()
-      .setTitle("ecom-suite API")
-      .setDescription("Admin + Storefront API")
+      .setTitle("E-commerce API")
+      .setDescription("Multi-tenant e-commerce backend")
       .setVersion("1.0")
       .addBearerAuth()
       .build();
 
-    const document = SwaggerModule.createDocument(app as any, config);
-    SwaggerModule.setup("docs", app as any, document);
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup("api/docs", app, document);
   }
 
-  await app.init();
-  await fastify.ready();
+  // 7. Health check
+  app.use("/health", (req: any, res: any) => {
+    res.status(200).send({ ok: true, timestamp: new Date().toISOString() });
+  });
 
   return app;
 }

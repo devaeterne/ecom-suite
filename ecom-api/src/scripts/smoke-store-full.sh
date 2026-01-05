@@ -14,13 +14,11 @@ EP_STORE_ME="/api/store/auth/me"
 EP_CUSTOMER_ME="/api/store/customers/me"
 EP_CUSTOMER_ADDR="/api/store/customers/me/addresses"
 
-EP_CHECKOUTS="/api/store/checkouts"
+EP_CHECKOUTS="/api/store/checkout"
 
 # New endpoints (store scope)
-EP_STORE_PAYMENTS="/api/store/payments"       # optional
+EP_STORE_PAYMENTS="/api/store/payments"
 EP_STORE_ORDERS="/api/store/orders"
-
-hdr_common=(-H "content-type: application/json" -H "x-tenant: ${TENANT}")
 
 wait_for_api() {
   echo "⏳ Waiting for API..."
@@ -44,13 +42,16 @@ retry() {
   done
 }
 
+# NOTE:
+# - content-type sadece body varsa set ediliyor (GET/DELETE gibi body’siz çağrılarda yok)
+# - x-tenant her request’te var
 req() {
   local method="$1" path="$2" token="${3:-}" body="${4:-}"
 
-  local hdr=()
-  # DELETE ve body yoksa Content-Type ekleme
-  if [[ "$method" != "DELETE" || -n "${body}" ]]; then
-    hdr=("${hdr_common[@]}")
+  local hdr=(-H "x-tenant: ${TENANT}")
+
+  if [[ -n "${body}" ]]; then
+    hdr+=(-H "content-type: application/json")
   fi
 
   if [[ -n "${token}" ]]; then
@@ -163,7 +164,8 @@ co_addr_body="$(jq -n '{
   postalCode:"81000",
   countryIso2:"ME"
 }')"
-req PATCH "${EP_CHECKOUTS}/${checkout_id}/address" "$token" "$co_addr_body" | head_http 160
+# ✅ correct path: /addresses
+req PATCH "${EP_CHECKOUTS}/${checkout_id}/addresses" "$token" "$co_addr_body" | head_http 160
 
 print_step "10) Payment Providers"
 req GET "${EP_CHECKOUTS}/${checkout_id}/payment-providers" "$token" | head_http 200
@@ -186,7 +188,8 @@ pay_body="$(jq -n --arg provider "MANUAL" \
                     locale: null
                   }')"
 
-pay_resp="$(req POST "${EP_CHECKOUTS}/${checkout_id}/payments" "$token" "$pay_body" || true)"
+# ✅ correct path: /start-payment
+pay_resp="$(req POST "${EP_CHECKOUTS}/${checkout_id}/start-payment" "$token" "$pay_body" || true)"
 pay_code="$(printf '%s' "$pay_resp" | status_code)"
 echo "payment_start_status=$pay_code"
 if [[ "$pay_code" != "200" && "$pay_code" != "201" ]]; then
@@ -197,14 +200,15 @@ fi
 echo
 echo "11b) Start Payment (NEW: /store/payments) (optional)"
 idem2="smoke-$(date +%s)-$RANDOM"
-# NOTE: burada DTO manualMethod kabul etmiyorsa göndermiyoruz.
+
+# ✅ FIX: idempotencyKey arg is idem2 (not accidental reuse)
 pay2_body="$(jq -n \
   --arg checkoutId "$checkout_id" \
-  --arg idem "$idem2" \
+  --arg idem2 "$idem2" \
   '{
     checkoutId: $checkoutId,
     provider:"MANUAL",
-    idempotencyKey: $idem,
+    idempotencyKey: $idem2,
     returnUrl:"https://example.com/return",
     cancelUrl:"https://example.com/cancel",
     locale:"en"
@@ -222,12 +226,20 @@ else
   fi
 fi
 
+# ──────────────────────────────────────────────────────────────
+# Checkout Payment Collection (optional)
+# ──────────────────────────────────────────────────────────────
 echo
-echo "12) Get Checkout Payment Collection (NEW)"
-pc_resp="$(req GET "${EP_CHECKOUTS}/${checkout_id}/payment-collection" "$token" || true)"
+echo "12) Get Checkout Payment Collection (via /store/payments/checkouts/:checkoutId)"
+pc_resp="$(req GET "${EP_STORE_PAYMENTS}/checkouts/${checkout_id}" "$token" || true)"
 pc_code="$(printf '%s' "$pc_resp" | status_code)"
 echo "payment_collection_status=$pc_code"
 printf '%s' "$pc_resp" | head -n 160
+
+if [[ "$pc_code" != "200" ]]; then
+  echo "❌ payment-collection not available (expected 200)"
+  exit 1
+fi
 
 # ──────────────────────────────────────────────────────────────
 # Orders
@@ -250,7 +262,6 @@ echo "order_id=$order_id"
 [[ -n "$order_id" ]] || { echo "$order_resp" | head -n 240; exit 1; }
 
 print_step "14) Orders List (NEW)"
-# NOT: backend query dto strict ise params göndermeyelim; boş çağrı her zaman çalışmalı.
 req GET "${EP_STORE_ORDERS}" "$token" | head_http 200
 
 print_step "15) Order Detail (NEW)"

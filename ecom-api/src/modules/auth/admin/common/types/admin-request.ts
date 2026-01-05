@@ -1,3 +1,4 @@
+// src/module/auth/admin/common/types/admin-request.ts
 import type { Request } from "express";
 
 export type AdminTokenPayload = {

@@ -94,7 +94,14 @@ export class SessionsRepository {
       data: { revokedAt: now },
     });
   }
+  async findByIdForTenant(params: { tenantId: string; sessionId: string }) {
+    const { tenantId, sessionId } = params;
 
+    return this.prisma.session.findFirst({
+      where: { id: sessionId, tenantId },
+      select: { id: true, identityId: true, revokedAt: true },
+    });
+  }
   async listActiveByIdentity(params: {
     tenantId: string;
     identityId: string;

@@ -1,7 +1,5 @@
 import { Injectable, NestMiddleware } from "@nestjs/common";
-import type { Request, Response, NextFunction } from "express";
 import { PrismaService } from "@/prisma/prisma.service";
-import { env } from "@/config/env";
 
 function isUuid(v?: string) {
   return (
@@ -12,69 +10,118 @@ function isUuid(v?: string) {
   );
 }
 
+function isLocalHost(clean: string) {
+  return (
+    clean === "localhost" ||
+    clean === "127.0.0.1" ||
+    clean === "0.0.0.0" ||
+    clean === "::1"
+  );
+}
+
 function parseTenantFromHost(host?: string): string | undefined {
   if (!host) return undefined;
-  const clean = host.split(":")[0];
+
+  const clean = host.split(":")[0].toLowerCase();
+
+  // ✅ LOCAL HOST BYPASS (dev ortamında health/docs kilitlemesin)
+  if (isLocalHost(clean)) return undefined;
+
+  // ✅ IP address ise de parse etme
+  const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(clean) || clean.includes(":"); // ipv4 / kaba ipv6
+  if (isIp) return undefined;
+
   const parts = clean.split(".");
-  // api.<tenant>.domain.com OR <tenant>.domain.com
+
+  // api.<tenant>.domain.com
   if (parts.length >= 3 && parts[0] === "api") return parts[1];
+
+  // <tenant>.domain.com
   if (parts.length >= 2) return parts[0];
+
   return undefined;
+}
+
+function shouldBypassTenant(url?: string) {
+  if (!url) return false;
+  return (
+    url.startsWith("/api/health") ||
+    url.startsWith("/health") ||
+    url.startsWith("/api/docs") ||
+    url.startsWith("/docs") ||
+    url.startsWith("/api/docs-json") ||
+    url.startsWith("/docs-json")
+  );
+}
+
+function withTimeout<T>(p: Promise<T>, ms = 1500): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("Tenant resolve timeout")), ms);
+    p.then((v) => {
+      clearTimeout(t);
+      resolve(v);
+    }).catch((e) => {
+      clearTimeout(t);
+      reject(e);
+    });
+  });
 }
 
 @Injectable()
 export class TenantContextMiddleware implements NestMiddleware {
   constructor(private readonly prisma: PrismaService) {}
 
-  async use(req: Request & any, _res: Response, next: NextFunction) {
-    // 1) Header önceliği
-    const headerTenantId =
-      (req.headers["x-tenant-id"] as string | undefined) ??
-      (req.headers["X-Tenant-Id"] as string | undefined);
+  async use(req: any, _res: any, next: (err?: any) => void) {
+    try {
+      if (shouldBypassTenant(req.url)) return next();
 
-    const headerTenantCode =
-      (req.headers["x-tenant-code"] as string | undefined) ??
-      (req.headers["X-Tenant-Code"] as string | undefined);
+      // 1) Header önceliği
+      const headerTenantId = req.headers?.["x-tenant-id"] as string | undefined;
+      const headerTenantCode = req.headers?.["x-tenant-code"] as
+        | string
+        | undefined;
 
-    let resolvedTenant: { id: string; code?: string } | undefined;
+      let resolvedTenant: { id: string; code?: string } | undefined;
 
-    if (headerTenantId || headerTenantCode) {
-      resolvedTenant = await this.resolveTenant(
-        headerTenantId,
-        headerTenantCode
-      );
-    }
-
-    // 2) Host fallback
-    if (!resolvedTenant) {
-      const fromHost = parseTenantFromHost(req.headers?.host);
-      if (fromHost) {
-        resolvedTenant = await this.resolveTenant(undefined, fromHost);
-      }
-    }
-
-    // 3) Token payload fallback (admin)
-    // AuthGuard/AdminAuthGuard req.user set eder; burada sadece uyum kontrolü yaparız
-    const tokenTenantId =
-      req?.user?.tenantId ?? req?.user?.tenant?.id ?? undefined;
-
-    if (tokenTenantId) {
-      if (!resolvedTenant) {
-        // header/host yoksa token’dan al
-        resolvedTenant = await this.resolveTenant(tokenTenantId, undefined);
-      } else if (resolvedTenant.id !== tokenTenantId) {
-        // header/host ile token çelişiyorsa güvenli tarafta kal
-        return next(
-          Object.assign(new Error("Tenant mismatch"), { status: 403 })
+      if (headerTenantId || headerTenantCode) {
+        resolvedTenant = await withTimeout(
+          this.resolveTenant(headerTenantId, headerTenantCode)
         );
       }
-    }
 
-    if (resolvedTenant) {
-      req.tenant = resolvedTenant;
-    }
+      // 2) Host fallback
+      if (!resolvedTenant) {
+        const fromHost = parseTenantFromHost(req.headers?.host);
+        if (fromHost) {
+          resolvedTenant = await withTimeout(
+            this.resolveTenant(undefined, fromHost)
+          );
+        }
+      }
 
-    next();
+      // 3) Token payload fallback (admin/store)
+      const tokenTenantId = req?.user?.tenantId ?? req?.user?.tenant?.id;
+
+      if (tokenTenantId) {
+        if (!resolvedTenant) {
+          resolvedTenant = await withTimeout(
+            this.resolveTenant(tokenTenantId, undefined)
+          );
+        } else if (resolvedTenant.id !== tokenTenantId) {
+          const err = Object.assign(new Error("Tenant mismatch"), {
+            status: 403,
+          });
+          return next(err);
+        }
+      }
+
+      if (resolvedTenant) req.tenant = resolvedTenant;
+
+      return next();
+    } catch (err) {
+      // burada düşerse request pending yerine kontrollü 500/403'e gider
+      return next(err);
+    }
   }
 
   private async resolveTenant(

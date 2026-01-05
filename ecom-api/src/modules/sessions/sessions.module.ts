@@ -1,12 +1,15 @@
+// src/modules/sessions/sessions.module.ts
 import { Module } from "@nestjs/common";
-import { SessionsRepository } from "@/modules/sessions/common/prisma/sessions.repo";
 import { PrismaModule } from "@/prisma/prisma.module";
-import { AuthAuditLogModule } from "@/modules/auth/audit/auth-audit-log.module";
-import { SessionsService } from "@/modules/sessions/sessions.service";
+
+import { SessionsRepository } from "./common/prisma/sessions.repo";
+import { SessionsAdminService } from "./admin/services/sessions.admin.service";
+import { SessionsAdminController } from "./admin/controllers/sessions.admin.controller";
 
 @Module({
-  imports: [PrismaModule, AuthAuditLogModule],
-  providers: [SessionsRepository, SessionsService],
-  exports: [SessionsRepository, SessionsService],
+  imports: [PrismaModule],
+  providers: [SessionsRepository, SessionsAdminService],
+  controllers: [SessionsAdminController],
+  exports: [SessionsRepository],
 })
 export class SessionsModule {}

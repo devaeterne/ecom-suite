@@ -45,14 +45,14 @@ export class RbacBootstrapAdminController {
 
     // 1) Ensure Owner role
     let owner = await this.prisma.role.findFirst({
-      where: { tenantId, name: "Owner", deletedAt: null },
+      where: { tenantId, name: "owner", deletedAt: null },
     });
 
     if (!owner) {
       owner = await this.prisma.role.create({
         data: {
           tenantId,
-          name: "Owner",
+          name: "owner",
           scope: RoleScope.ADMIN,
           description: "Bootstrap owner role",
           isActive: true,

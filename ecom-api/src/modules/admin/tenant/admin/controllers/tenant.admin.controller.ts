@@ -1,14 +1,14 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
   Patch,
   Req,
   UseGuards,
+  ForbiddenException,
 } from "@nestjs/common";
 
-import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
+import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
 
@@ -16,14 +16,31 @@ import { TenantService } from "@/modules/admin/tenant/admin/services/tenant.serv
 import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
 import { presentTenant } from "@/modules/admin/tenant/common/mappers/tenant.presenter";
 
-function getTenantId(req: any) {
-  const tenantId = req.user?.tenantId ?? req.tenant?.id ?? null;
-  if (!tenantId) throw new BadRequestException("Tenant context missing");
-  return tenantId;
+export function getTenantId(req: any): string {
+  // AdminAuthGuard sonrası bunlar dolu olur:
+  const fromToken = req?.user?.tenantId;
+  if (fromToken) return fromToken;
+
+  const fromCtx = req?.tenant?.id ?? req?.tenantId;
+  if (fromCtx) return fromCtx;
+
+  const h = req?.headers ?? {};
+  const fromHeader =
+    h["x-tenant-id"] ??
+    h["x-tenantid"] ??
+    h["x-tenant"] ??
+    h["X-Tenant-Id"] ??
+    h["X-Tenant"] ??
+    null;
+
+  if (fromHeader) return String(fromHeader);
+
+  throw new ForbiddenException("Tenant or user context missing");
 }
 
 @Controller("admin/tenants")
-@UseGuards(AdminAccessGuard, PermissionGuard)
+// ✅ RBAC isteyen admin endpoint’lerde AdminAuthGuard kullan
+@UseGuards(AdminAuthGuard, PermissionGuard)
 export class TenantAdminController {
   constructor(private readonly svc: TenantService) {}
 
