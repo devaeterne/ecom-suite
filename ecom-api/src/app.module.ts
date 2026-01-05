@@ -20,7 +20,8 @@ import { CheckoutModule } from "@/modules/checkout/checkout.module";
 import { SecurityModule } from "@/infrastructure/security/security.module";
 import { OrdersModule } from "@/modules/orders/order.module";
 import { PaymentsModule } from "@/modules/payments/payment.module";
-import { SessionsModule } from "./modules/sessions/sessions.module";
+import { SessionsModule } from "@/modules/sessions/sessions.module";
+import { InventoryModule } from "@/modules/inventory/inventory.module";
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { SessionsModule } from "./modules/sessions/sessions.module";
     OrdersModule,
     PaymentsModule,
     SessionsModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

@@ -11,6 +11,7 @@ import type {
  */
 type CheckoutLike = {
   id: string;
+  cartId: string | null;
   status: string;
   currencyCode: string;
   subtotal: number;
@@ -42,6 +43,7 @@ export class CheckoutMapper {
   static toResponse(checkout: CheckoutLike) {
     return {
       id: checkout.id,
+      cartId: checkout.cartId ?? null, // 🔴 şart
       status: checkout.status,
       currencyCode: checkout.currencyCode,
       subtotal: checkout.subtotal,

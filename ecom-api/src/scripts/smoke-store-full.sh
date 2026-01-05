@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+LOG_FILE="${LOG_FILE:-/tmp/smoke-store-$(date +%Y%m%d_%H%M%S).log}"
+
+
 BASE_URL="${BASE_URL:-http://localhost:3001}"
 TENANT="${TENANT:-acme}"
 EMAIL="${EMAIL:-buyer1+$(date +%s)@acme.com}"
@@ -82,6 +85,43 @@ need_ok() {
   local code="$1" ok1="$2" ok2="${3:-}" ok3="${4:-}"
   [[ "$code" == "$ok1" || ( -n "$ok2" && "$code" == "$ok2" ) || ( -n "$ok3" && "$code" == "$ok3" ) ]]
 }
+
+ok()  { echo "✅ $*"; }
+bad() { echo "❌ $*"; }
+
+run_step() {
+  # usage: run_step "label" "200|201" req POST "/path" "$token" "{}"
+  local label="$1"; shift
+  local expected="$1"; shift
+
+  local out code body
+  out="$("$@" 2>&1 || true)"
+  code="$(printf '%s' "$out" | status_code)"
+  body="$(printf '%s' "$out" | json_body)"
+
+  {
+    echo
+    echo "== $label =="
+    echo "$out"
+  } >>"$LOG_FILE"
+
+  local e1="" e2="" e3=""
+  IFS='|' read -r e1 e2 e3 <<<"$expected"
+  if need_ok "$code" "$e1" "$e2" "$e3"; then
+    ok "$label ($code)"
+    return 0
+  fi
+
+  bad "$label ($code)  (ℹ️ details: $LOG_FILE)"
+  if [[ -n "$body" ]]; then
+    echo "$body" | head -c 600; echo
+  fi
+  echo "---- tail (log) ----"
+  tail -n 30 "$LOG_FILE" || true
+  echo "--------------------"
+  return 1
+}
+
 
 echo "BASE_URL=$BASE_URL TENANT=$TENANT EMAIL=$EMAIL"
 
@@ -169,6 +209,16 @@ req PATCH "${EP_CHECKOUTS}/${checkout_id}/addresses" "$token" "$co_addr_body" | 
 
 print_step "10) Payment Providers"
 req GET "${EP_CHECKOUTS}/${checkout_id}/payment-providers" "$token" | head_http 200
+
+# ──────────────────────────────────────────────────────────────
+# Inventory (NEW)
+# ──────────────────────────────────────────────────────────────
+echo
+echo "10.5) Inventory Reserve/Status/Release (NEW)"
+
+run_step "inventory.reserve" "200|201" req POST "/api/store/checkouts/${checkout_id}/reserve-stock" "$token" '{}'
+run_step "inventory.status"  "200"     req GET  "/api/store/checkouts/${checkout_id}/stock-status" "$token"
+run_step "inventory.release" "200|201" req POST "/api/store/checkouts/${checkout_id}/release-stock" "$token" '{}'
 
 # ──────────────────────────────────────────────────────────────
 # Payments
@@ -269,3 +319,5 @@ req GET "${EP_STORE_ORDERS}/${order_id}" "$token" | head_http 240
 
 echo
 echo "✅ Store smoke OK (including payments + orders)"
+echo "SMOKE_SUMMARY auth=ok customer=ok checkout=ok inventory=ok payments=ok orders=ok"
+

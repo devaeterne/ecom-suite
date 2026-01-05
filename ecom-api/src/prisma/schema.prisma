@@ -438,6 +438,7 @@ enum BankTransferStatus {
   CANCELED
 }
 
+// Models
 model TenantBankAccount {
   id       String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid
@@ -846,7 +847,7 @@ model EmailTemplate {
 
 /**
  * =========================
- * 3) REFUNDS / INVOICES
+ * 3) REFUNDS
  * =========================
  */
 model Refund {
@@ -1748,6 +1749,7 @@ model InventoryReservation {
   cartLineItemId String?       @db.Uuid
 
   @@unique([tenantId, id])
+  @@unique([tenantId, checkoutId, cartLineItemId, locationId], map: "uniq_inv_res_checkout_line_loc")
   @@index([tenantId])
   @@index([tenantId, variantId], map: "idx_inventory_reservation_tenant_variant")
   @@index([tenantId, locationId], map: "idx_inventory_reservation_tenant_location")
@@ -4092,13 +4094,3 @@ model TenantCompany {
   @@index([tenantId, deletedAt], map: "idx_tenant_company_tenant_deleted_at")
   @@map("tenant_company")
 }
-
-//fulfillment provider: SHIPPO, EASYPOST, MANUAL, Verifone(Balkans). ++++
-
-//payment provider: STRIPE, PAYPAL, MANUAL, etc. 
-
-//role scope: ADMIN, STAFF, CUSTOMER, etc.
-
-//pickup point type: PARTNER_POINT, STORE_LOCATION, LOCKER, etc.
-
-//auditlog v2 action: CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.

@@ -131,6 +131,34 @@ async function main() {
     },
   });
 
+  /**
+   * Inventory bootstrap
+   * - resolveDefaultInventoryLocationId() "default" code'lu location bekliyor
+   * - Smoke test TENANT=acme ile çalıştığı için sadece "gate" değil, DB'deki tüm tenant'lara basalım.
+   * - deletedAt null olacak şekilde upsert.
+   */
+  const tenants = await prisma.tenant.findMany({
+    select: { id: true, code: true },
+  });
+
+  for (const t of tenants) {
+    await prisma.inventoryLocation.upsert({
+      // Prisma unique: @@unique([tenantId, code]) -> tenantId_code
+      where: { tenantId_code: { tenantId: t.id, code: "default" } },
+      update: {
+        name: "Default Warehouse",
+        deletedAt: null,
+      },
+      create: {
+        tenantId: t.id,
+        name: "Default Warehouse",
+        code: "default",
+        address: {},
+        metadata: {},
+      },
+    });
+  }
+
   await prisma.currency.createMany({
     data: [
       { tenantId: tenant.id, code: "EUR", symbol: "€" },
