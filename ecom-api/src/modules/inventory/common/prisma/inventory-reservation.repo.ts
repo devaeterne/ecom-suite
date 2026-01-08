@@ -89,4 +89,42 @@ export class InventoryReservationRepo {
 
     return res.count;
   }
+  async adminList(params: {
+    tenantId: string;
+    locationId?: string;
+    variantId?: string;
+    checkoutId?: string;
+    status?: "ACTIVE" | "COMPLETED" | "CANCELED" | "EXPIRED";
+    take?: number;
+    skip?: number;
+  }) {
+    return this.prisma.inventoryReservation.findMany({
+      where: {
+        tenantId: params.tenantId,
+        deletedAt: null,
+        ...(params.locationId ? { locationId: params.locationId } : {}),
+        ...(params.variantId ? { variantId: params.variantId } : {}),
+        ...(params.checkoutId ? { checkoutId: params.checkoutId } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: params.take ?? 50,
+      skip: params.skip ?? 0,
+      select: {
+        id: true,
+        tenantId: true,
+        locationId: true,
+        variantId: true,
+        cartId: true,
+        checkoutId: true,
+        orderId: true,
+        cartLineItemId: true,
+        quantity: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
 }

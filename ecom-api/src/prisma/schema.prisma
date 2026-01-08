@@ -1676,10 +1676,11 @@ model InventoryLocation {
   tenantId String @db.Uuid
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  name     String
-  code     String?
-  address  Json? // opsiyonel: street/city/postcode/lat/lng
-  metadata Json    @default("{}")
+  name      String
+  code      String?
+  address   Json? // opsiyonel: street/city/postcode/lat/lng
+  metadata  Json    @default("{}")
+  isDefault Boolean @default(false)
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
@@ -1692,6 +1693,7 @@ model InventoryLocation {
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, deletedAt], map: "idx_inventory_location_tenant_deleted_at")
+  @@index([tenantId, isDefault], map: "idx_inventory_location_tenant_default")
   @@map("inventory_location")
 }
 

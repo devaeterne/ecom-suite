@@ -5,11 +5,6 @@ import { PrismaService } from "@/prisma/prisma.service";
 export class InventoryLocationsPolicy {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * MVP kuralı:
-   * - locationId verilmişse validate et
-   * - verilmemişse tenant’ın ilk aktif location’ını seç
-   */
   async resolveLocationId(
     tenantId: string,
     locationId?: string
@@ -23,6 +18,14 @@ export class InventoryLocationsPolicy {
       return loc.id;
     }
 
+    // önce default
+    const def = await this.prisma.inventoryLocation.findFirst({
+      where: { tenantId, deletedAt: null, isDefault: true },
+      select: { id: true },
+    });
+    if (def) return def.id;
+
+    // fallback: ilk location
     const first = await this.prisma.inventoryLocation.findFirst({
       where: { tenantId, deletedAt: null },
       orderBy: { createdAt: "asc" },

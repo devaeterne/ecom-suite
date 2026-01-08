@@ -1,10 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { PrismaService } from "@/prisma/prisma.service";
 
 export type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class InventoryLevelRepo {
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ===== Store tarafı: aynen kalsın
   async lockInventoryLevel(
     tx: Tx,
     tenantId: string,
@@ -34,7 +38,6 @@ export class InventoryLevelRepo {
       };
     }
 
-    // yoksa oluştur, sonra tekrar lock al
     await tx.inventoryLevel.create({
       data: {
         tenantId,
@@ -65,5 +68,74 @@ export class InventoryLevelRepo {
       stockedQuantity: anyRow.stockedQuantity ?? anyRow.stockedquantity,
       reservedQuantity: anyRow.reservedQuantity ?? anyRow.reservedquantity,
     };
+  }
+
+  // ===== Admin: list
+  async list(params: {
+    tenantId: string;
+    locationId?: string;
+    variantId?: string;
+    take?: number;
+    skip?: number;
+  }) {
+    return this.prisma.inventoryLevel.findMany({
+      where: {
+        tenantId: params.tenantId,
+        deletedAt: null,
+        ...(params.locationId ? { locationId: params.locationId } : {}),
+        ...(params.variantId ? { variantId: params.variantId } : {}),
+      },
+      orderBy: [{ updatedAt: "desc" }],
+      take: params.take ?? 50,
+      skip: params.skip ?? 0,
+      select: {
+        id: true,
+        tenantId: true,
+        locationId: true,
+        variantId: true,
+        stockedQuantity: true,
+        reservedQuantity: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  // ===== Admin: upsert stockedQuantity (absolute)
+  async upsertStockedQuantity(params: {
+    tenantId: string;
+    locationId: string;
+    variantId: string;
+    stockedQuantity: number;
+  }) {
+    return this.prisma.inventoryLevel.upsert({
+      where: {
+        tenantId_locationId_variantId: {
+          tenantId: params.tenantId,
+          locationId: params.locationId,
+          variantId: params.variantId,
+        },
+      },
+      create: {
+        tenantId: params.tenantId,
+        locationId: params.locationId,
+        variantId: params.variantId,
+        stockedQuantity: params.stockedQuantity,
+        reservedQuantity: 0,
+      },
+      update: {
+        stockedQuantity: params.stockedQuantity,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        locationId: true,
+        variantId: true,
+        stockedQuantity: true,
+        reservedQuantity: true,
+        updatedAt: true,
+      },
+    });
   }
 }

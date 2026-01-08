@@ -1,20 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE="${BASE:-http://localhost:3001}"
-EMAIL="${OWNER_EMAIL:-admin@acme.com}"
-PASS="${OWNER_PASS:-ChangeMe123!}"
-
-API_BASE="${API_BASE:-$BASE}"
-API="$API_BASE/api"   # ✅ tek yerden /api prefix
-
+############################################
+# Helpers
+############################################
 need() { command -v "$1" >/dev/null 2>&1 || { echo "❌ missing dependency: $1"; exit 1; }; }
+
+require_env () {
+  local k="$1"
+  if [ -z "${!k:-}" ]; then
+    echo "❌ Missing env: $k"
+    exit 1
+  fi
+}
+
 need curl
 need jq
 need date
 need wc
 need tr
 
+############################################
+# Env / Config
+############################################
+# Backward-compatible token aliases (optional pre-set)
+if [ -z "${ADMIN_ACCESS_TOKEN:-}" ] && [ -n "${ADMIN_TOKEN:-}" ]; then
+  export ADMIN_ACCESS_TOKEN="$ADMIN_TOKEN"
+fi
+if [ -z "${ADMIN_ACCESS_TOKEN:-}" ] && [ -n "${ADMIN_JWT:-}" ]; then
+  export ADMIN_ACCESS_TOKEN="$ADMIN_JWT"
+fi
+
+BASE="${BASE:-http://localhost:3001}"
+API_BASE="${API_BASE:-$BASE}"
+API="$API_BASE/api"   # ✅ tek yerden /api prefix
+
+EMAIL="${OWNER_EMAIL:-admin@acme.com}"
+PASS="${OWNER_PASS:-ChangeMe123!}"
+
+############################################
+# Login
+############################################
 echo "🔐 Login…"
 
 TOKEN="$(curl -sS \
@@ -25,19 +51,26 @@ TOKEN="$(curl -sS \
 echo "TOKEN_LEN=${#TOKEN}"
 test "${#TOKEN}" -gt 50 || { echo "❌ token alınamadı"; exit 1; }
 
+# ✅ Opsiyon A: canonical token export (Commit C bunu kullanacak)
+export ADMIN_ACCESS_TOKEN="$TOKEN"
+
 AUTH=(-H "Authorization: Bearer $TOKEN")
 JSON=(-H "Content-Type: application/json")
 
 echo "✅ login ok"
 echo
 
+############################################
 # 1) RBAC bootstrap
+############################################
 echo "🧱 RBAC bootstrap"
 curl -sS -X POST "${AUTH[@]}" \
   "$API/admin/rbac/bootstrap" | jq .
 echo
 
+############################################
 # 2) tenants/me
+############################################
 echo "🏢 tenant resolve"
 TENANT_JSON="$(curl -sS "${AUTH[@]}" \
   "$API/admin/tenants/me")"
@@ -51,19 +84,25 @@ echo
 
 TENANT=(-H "x-tenant-id: $TENANT_ID")
 
+############################################
 # 3) roles list
+############################################
 echo "🧑‍⚖️ roles list"
 curl -sS "${AUTH[@]}" "${TENANT[@]}" \
   "$API/admin/roles" | jq .
 echo
 
+############################################
 # 4) identities list
+############################################
 echo "👤 identities list"
 curl -sS "${AUTH[@]}" "${TENANT[@]}" \
   "$API/admin/identities" | jq .
 echo
 
+############################################
 # 5) identity create
+############################################
 INV_EMAIL="invitee-$(date +%s)@acme.com"
 echo "📨 create identity ($INV_EMAIL)"
 
@@ -80,7 +119,9 @@ test -n "$IDENTITY_ID" || { echo "❌ identity create failed"; exit 1; }
 echo "IDENTITY_ID=$IDENTITY_ID"
 echo
 
+############################################
 # 6) invite
+############################################
 echo "✉️ invite identity"
 INVITE_RES="$(curl -sS \
   "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
@@ -97,7 +138,9 @@ echo "🎉 ADMIN SMOKE OK"
 echo "tenant=$TENANT_ID identity=$IDENTITY_ID"
 echo
 
-# 7) admin sessions list
+############################################
+# 7) admin sessions list + revoke tests
+############################################
 echo "🪪 sessions list"
 SESSIONS_JSON="$(curl -sS "${AUTH[@]}" \
   "$API/admin/sessions")"
@@ -121,7 +164,9 @@ curl -sS -X POST "${AUTH[@]}" \
   "$API/admin/sessions/revoke-all" | jq .
 echo
 
+############################################
 # 8) Commit A — Catalog Admin READ sanity
+############################################
 echo "📦 Commit A sanity: catalog admin read"
 
 echo "📂 categories (flat)"
@@ -145,7 +190,9 @@ echo
 echo "✅ COMMIT A SMOKE OK"
 echo
 
+############################################
 # 9) Commit B — Catalog Admin WRITE sanity
+############################################
 echo "🧪 Commit B sanity: create category + product + option + value + variant"
 
 TS="$(date +%s)"
@@ -238,6 +285,112 @@ else
 fi
 echo
 
+############################################
+# Files test BEFORE deleting product/category (link sanity için)
+############################################
+echo
+echo "🧾 files: presigned put/get + complete + link sanity"
+
+TMP_FILE="/tmp/smoke.png"
+printf "\x89PNG\r\n\x1a\nsmoke-%s" "$(date +%s)" > "$TMP_FILE"
+SIZE="$(wc -c < "$TMP_FILE" | tr -d ' ')"
+test -n "$SIZE" || { echo "❌ SIZE hesaplanamadı"; exit 1; }
+echo "📦 payload size=$SIZE bytes"
+
+PRESIGN_RES="$(curl -sS -X POST \
+  "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+  "$API/admin/files/presign-put" \
+  -d "{\"filename\":\"smoke.png\",\"contentType\":\"image/png\",\"size\":$SIZE,\"folder\":\"uploads\"}")"
+
+echo "$PRESIGN_RES" | jq .
+
+FILE_ID="$(echo "$PRESIGN_RES" | jq -r '.fileId // empty')"
+PUT_URL="$(echo "$PRESIGN_RES" | jq -r '.putUrl // empty')"
+
+test -n "$FILE_ID" || { echo "❌ presign-put failed (fileId yok)"; exit 1; }
+test -n "$PUT_URL" || { echo "❌ presign-put failed (putUrl yok)"; exit 1; }
+
+echo "FILE_ID=$FILE_ID"
+echo
+
+echo "⬆️ upload put"
+PUT_CODE="$(curl -sS -o /tmp/put_body.txt -w "%{http_code}" \
+  -X PUT "$PUT_URL" \
+  -H "Content-Type: image/png" \
+  --data-binary @"$TMP_FILE")"
+
+if [[ "$PUT_CODE" != "200" && "$PUT_CODE" != "204" ]]; then
+  echo "❌ PUT failed (HTTP $PUT_CODE)"
+  cat /tmp/put_body.txt || true
+  exit 1
+fi
+echo "✅ PUT ok (HTTP $PUT_CODE)"
+echo
+
+OBJ_URL="${PUT_URL%%\?*}"
+echo "🔎 head object (public): $OBJ_URL"
+curl -sS -I "$OBJ_URL" | sed -n '1,12p'
+echo
+
+echo "✅ complete"
+COMPLETE_CODE="$(curl -sS -o /tmp/complete.json -w "%{http_code}" \
+  -X POST "${AUTH[@]}" "${TENANT[@]}" \
+  "$API/admin/files/$FILE_ID/complete")"
+
+cat /tmp/complete.json | jq . || cat /tmp/complete.json
+if [[ ! "$COMPLETE_CODE" =~ ^2 ]]; then
+  echo "❌ COMPLETE failed (HTTP $COMPLETE_CODE)"
+  exit 1
+fi
+echo "✅ COMPLETE ok"
+echo
+
+echo "🔐 presign get"
+GET_CODE="$(curl -sS -o /tmp/presign_get.json -w "%{http_code}" \
+  "${AUTH[@]}" "${TENANT[@]}" \
+  "$API/admin/files/$FILE_ID/presign-get")"
+
+cat /tmp/presign_get.json | jq . || cat /tmp/presign_get.json
+if [[ ! "$GET_CODE" =~ ^2 ]]; then
+  echo "❌ presign-get failed (HTTP $GET_CODE)"
+  exit 1
+fi
+
+GET_URL="$(cat /tmp/presign_get.json | jq -r '.url // empty')"
+test -n "$GET_URL" || { echo "❌ presign-get response url yok"; exit 1; }
+echo
+
+echo "🔗 link file -> product"
+LINK_CODE="$(curl -sS -o /tmp/link.json -w "%{http_code}" \
+  -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+  "$API/admin/files/$FILE_ID/link" \
+  -d "{\"entityType\":\"catalog_product\",\"entityId\":\"$PRODUCT_ID\",\"role\":\"GALLERY\",\"sort\":0}")"
+
+cat /tmp/link.json | jq . || cat /tmp/link.json
+if [[ ! "$LINK_CODE" =~ ^2 ]]; then
+  echo "❌ link failed (HTTP $LINK_CODE)"
+  exit 1
+fi
+echo
+
+echo "📎 entity files list"
+ENTITY_CODE="$(curl -sS -o /tmp/entity_files.json -w "%{http_code}" \
+  "${AUTH[@]}" "${TENANT[@]}" \
+  "$API/admin/files/entity/catalog_product/$PRODUCT_ID")"
+
+cat /tmp/entity_files.json | jq . || cat /tmp/entity_files.json
+if [[ ! "$ENTITY_CODE" =~ ^2 ]]; then
+  echo "❌ entity files list failed (HTTP $ENTITY_CODE)"
+  exit 1
+fi
+echo
+
+echo "✅ files smoke ok"
+echo
+
+############################################
+# Now safe to delete product/category
+############################################
 echo "🗑️ delete product (soft delete expected)"
 curl -sS -X DELETE "${AUTH[@]}" "${TENANT[@]}" \
   "$API/admin/products/$PRODUCT_ID" | jq .
@@ -257,113 +410,119 @@ else
 fi
 echo
 
-echo
-echo "🧾 files: presigned put/get + complete + link sanity"
-
-# 1) hazırlık: gerçekten PNG gibi gözüksün + gerçek size
-TMP_FILE="/tmp/smoke.png"
-printf "\x89PNG\r\n\x1a\nsmoke-%s" "$(date +%s)" > "$TMP_FILE"
-SIZE="$(wc -c < "$TMP_FILE" | tr -d ' ')"
-test -n "$SIZE" || { echo "❌ SIZE hesaplanamadı"; exit 1; }
-echo "📦 payload size=$SIZE bytes"
-
-# 2) presign put (TENANT HEADER + JSON)
-PRESIGN_RES="$(curl -sS -X POST \
-  "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  "$API/admin/files/presign-put" \
-  -d "{\"filename\":\"smoke.png\",\"contentType\":\"image/png\",\"size\":$SIZE,\"folder\":\"uploads\"}")"
-
-echo "$PRESIGN_RES" | jq .
-
-FILE_ID="$(echo "$PRESIGN_RES" | jq -r '.fileId // empty')"
-PUT_URL="$(echo "$PRESIGN_RES" | jq -r '.putUrl // empty')"
-KEY="$(echo "$PRESIGN_RES" | jq -r '.key // empty')"
-
-test -n "$FILE_ID" || { echo "❌ presign-put failed (fileId yok)"; exit 1; }
-test -n "$PUT_URL" || { echo "❌ presign-put failed (putUrl yok)"; exit 1; }
-test -n "$KEY" || { echo "❌ presign-put failed (key yok)"; exit 1; }
-
-echo "FILE_ID=$FILE_ID"
-echo "KEY=$KEY"
-echo
-
-# 3) upload put (fail-fast + http code)
-echo "⬆️ upload put"
-PUT_CODE="$(curl -sS -o /tmp/put_body.txt -w "%{http_code}" \
-  -X PUT "$PUT_URL" \
-  -H "Content-Type: image/png" \
-  --data-binary @"$TMP_FILE")"
-
-if [[ "$PUT_CODE" != "200" && "$PUT_CODE" != "204" ]]; then
-  echo "❌ PUT failed (HTTP $PUT_CODE)"
-  cat /tmp/put_body.txt || true
-  exit 1
-fi
-echo "✅ PUT ok (HTTP $PUT_CODE)"
-echo
-
-# 4) (opsiyonel ama çok faydalı) public HEAD ile objenin varlığını doğrula
-OBJ_URL="${PUT_URL%%\?*}"
-echo "🔎 head object (public): $OBJ_URL"
-curl -sS -I "$OBJ_URL" | sed -n '1,12p'
-echo
-
-# 5) complete (fail-fast + http code)
-echo "✅ complete"
-COMPLETE_CODE="$(curl -sS -o /tmp/complete.json -w "%{http_code}" \
-  -X POST "${AUTH[@]}" "${TENANT[@]}" \
-  "$API/admin/files/$FILE_ID/complete")"
-
-cat /tmp/complete.json | jq . || cat /tmp/complete.json
-
-if [[ ! "$COMPLETE_CODE" =~ ^2 ]]; then
-  echo "❌ COMPLETE failed (HTTP $COMPLETE_CODE)"
-  exit 1
-fi
-echo "✅ COMPLETE ok"
-echo
-
-# 6) presign get
-echo "🔐 presign get"
-GET_CODE="$(curl -sS -o /tmp/presign_get.json -w "%{http_code}" \
-  "${AUTH[@]}" "${TENANT[@]}" \
-  "$API/admin/files/$FILE_ID/presign-get")"
-
-cat /tmp/presign_get.json | jq . || cat /tmp/presign_get.json
-if [[ ! "$GET_CODE" =~ ^2 ]]; then
-  echo "❌ presign-get failed (HTTP $GET_CODE)"
-  exit 1
-fi
-
-GET_URL="$(cat /tmp/presign_get.json | jq -r '.url // empty')"
-test -n "$GET_URL" || { echo "❌ presign-get response url yok"; exit 1; }
-echo
-
-# 7) link (ürün silindiği için link fail edebilir; bu yüzden guard koyuyoruz)
-#    Eğer files smoke testinde link de istiyorsan: product delete'i files testinden SONRA yap.
-echo "🔗 link file -> product (note: product delete sırası önemli)"
-LINK_CODE="$(curl -sS -o /tmp/link.json -w "%{http_code}" \
-  -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  "$API/admin/files/$FILE_ID/link" \
-  -d "{\"entityType\":\"catalog_product\",\"entityId\":\"$PRODUCT_ID\",\"role\":\"GALLERY\",\"sort\":0}")"
-
-cat /tmp/link.json | jq . || cat /tmp/link.json
-if [[ ! "$LINK_CODE" =~ ^2 ]]; then
-  echo "ℹ️ link failed (HTTP $LINK_CODE) — ürün silinmiş olabilir, beklenen olabilir"
-fi
-echo
-
-# 8) entity files list
-echo "📎 entity files list"
-ENTITY_CODE="$(curl -sS -o /tmp/entity_files.json -w "%{http_code}" \
-  "${AUTH[@]}" "${TENANT[@]}" \
-  "$API/admin/files/entity/catalog_product/$PRODUCT_ID")"
-
-cat /tmp/entity_files.json | jq . || cat /tmp/entity_files.json
-if [[ ! "$ENTITY_CODE" =~ ^2 ]]; then
-  echo "ℹ️ entity files list failed (HTTP $ENTITY_CODE) — ürün silinmiş olabilir"
-fi
-echo
-
-echo "✅ files smoke ok"
 echo "✅ COMMIT B SMOKE OK"
+echo
+############################################
+# Commit C — Inventory Admin sanity (Option A)
+# - code unique
+# - 409 code conflict => pick existing and continue
+############################################
+
+echo
+echo "📦 Commit C — Inventory Admin sanity (Option A)"
+
+require_env TENANT_ID
+require_env ADMIN_ACCESS_TOKEN
+
+# inventory call wrapper (tenant header kesin)
+inv_call() {
+  local method="$1"; shift
+  local path="$1"; shift
+  local data="${1:-}"
+
+  if [ -n "$data" ]; then
+    curl -sS -X "$method" \
+      -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+      -H "x-tenant-id: $TENANT_ID" \
+      -H "Content-Type: application/json" \
+      "$BASE$path" \
+      -d "$data"
+  else
+    curl -sS -X "$method" \
+      -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+      -H "x-tenant-id: $TENANT_ID" \
+      "$BASE$path"
+  fi
+}
+
+inv_call_code() {
+  local method="$1"; shift
+  local path="$1"; shift
+  local data="${1:-}"
+  local out="${2:-/tmp/inv_body.json}"
+
+  if [ -n "$data" ]; then
+    curl -sS -o "$out" -w "%{http_code}" \
+      -X "$method" \
+      -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+      -H "x-tenant-id: $TENANT_ID" \
+      -H "Content-Type: application/json" \
+      "$BASE$path" \
+      -d "$data"
+  else
+    curl -sS -o "$out" -w "%{http_code}" \
+      -X "$method" \
+      -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+      -H "x-tenant-id: $TENANT_ID" \
+      "$BASE$path"
+  fi
+}
+
+ts="$(date +%s)"
+LOC_CODE="smoke-loc-$ts"
+LOC_NAME="Smoke Location A $ts"
+
+echo "🏬 upsert inventory location A (code=$LOC_CODE)"
+
+CREATE_PAYLOAD="$(jq -cn \
+  --arg name "$LOC_NAME" \
+  --arg code "$LOC_CODE" \
+  '{name:$name, code:$code}')"
+
+CREATE_CODE="$(inv_call_code POST "/api/admin/inventory/locations" "$CREATE_PAYLOAD" "/tmp/loc_create.json")"
+
+cat /tmp/loc_create.json | jq . || cat /tmp/loc_create.json
+echo "HTTP=$CREATE_CODE"
+
+LOC_A_ID=""
+
+if [[ "$CREATE_CODE" =~ ^2 ]]; then
+  LOC_A_ID="$(jq -r '.id // .location.id // empty' /tmp/loc_create.json)"
+elif [[ "$CREATE_CODE" = "409" ]]; then
+  MSG="$(jq -r '.message // empty' /tmp/loc_create.json)"
+  echo "ℹ️ create returned 409 ($MSG). Falling back to list & pick existing…"
+
+  LIST_CODE="$(inv_call_code GET "/api/admin/inventory/locations" "" "/tmp/loc_list.json")"
+  cat /tmp/loc_list.json | jq . || cat /tmp/loc_list.json
+  test "$LIST_CODE" = "200" || { echo "❌ locations list failed (HTTP $LIST_CODE)"; exit 1; }
+
+  # önce code ile bul, yoksa name ile bul, yoksa ilk kaydı al
+  LOC_A_ID="$(jq -r --arg code "$LOC_CODE" --arg name "$LOC_NAME" '
+    (.items // .locations // .data // []) as $arr |
+    ( $arr[]? | select(.code==$code) | .id ) // 
+    ( $arr[]? | select(.name==$name) | .id ) //
+    ( $arr[0].id // empty )
+  ' /tmp/loc_list.json)"
+
+else
+  echo "❌ location create failed (HTTP $CREATE_CODE)"
+  exit 1
+fi
+
+test -n "$LOC_A_ID" || { echo "❌ LOC_A_ID resolve edilemedi"; exit 1; }
+echo "✅ LOC_A_ID=$LOC_A_ID"
+echo
+
+echo "📦 list inventory locations"
+inv_call GET "/api/admin/inventory/locations" | jq .
+echo
+
+echo "📦 list inventory levels (baseline)"
+inv_call GET "/api/admin/inventory/levels" | jq .
+echo
+
+echo "📦 list inventory reservations (baseline)"
+inv_call GET "/api/admin/inventory/reservations" | jq .
+echo
+
+echo "✅ COMMIT C SMOKE OK (Option A)"

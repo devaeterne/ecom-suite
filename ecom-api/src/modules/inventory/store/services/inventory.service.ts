@@ -25,7 +25,7 @@ function sameSet(a: Array<{ k: string }>, b: Array<{ k: string }>) {
 }
 
 @Injectable()
-export class InventoryService {
+export class StoreInventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly checkoutRead: CheckoutCartReadRepo,

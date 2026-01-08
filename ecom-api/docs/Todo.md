@@ -1,216 +1,260 @@
-1. **Envanter (Lokasyon + Stock Level) ile Katalog “variant detay” işini aynı pakete koy**
-    
-    Çünkü “variant’a stok/fiyat tanımlama” dediğin şey pratikte **InventoryLevel + PriceSet/MoneyAmount**. UI’da “variant detail” ekranı tek olur ama backend’de iki modül birlikte yürür.
-    
-2. **Tax/Shipping totals olmadan Pricing/Discount motoru “yarım” kalır**
-    
-    Discount’u yazarsın ama grandTotal hâlâ doğru davranmayabilir. Bu yüzden Pricing fazına “Tax/Shipping rule minimal” bir parça eklemek iyi olur (tam fulfillment değil, sadece totals hesaplarını tamamlayan kadar).
-    
+📌 TODO — Multi-Tenant E-Commerce API (GÜNCEL & SENKRON)
 
-Bunun dışında, senin aşama planını **endpoint deliverable**’a çevirip netleştireyim. Aşağıdaki, “dağılmamak” için her aşamada *ne çıkacak* ve *tam olarak hangi endpointler yazılacak* listesidir.
+İlke: Bir aşama %100 bitmeden sonraki açılmaz
+Önce Admin, sonra Store
+Önce doğruluk, sonra konfor
 
----
+🟢 AŞAMA 0 — CORE PLATFORM (DONE ✅)
+Sistem & Güvenlik
 
-## 🟢 AŞAMA 0 — Mevcut Durum (DONE)
+ Health / live
 
-- [x]  Health & Liveness endpoints
-- [x]  Admin Auth (login / refresh / logout / me)
-- [x]  Store Auth (register / login / refresh / me)
-- [x]  RBAC (roles, permissions, identities)
-- [x]  Catalog (basic): category create, product create/update/publish
-- [x]  Cart (create, line items, coupon apply)
-- [x]  Checkout (create, address, payment providers)
-- [x]  Inventory (reserve / status / release)
-- [x]  Payments (manual provider)
-- [x]  Orders (create from checkout, list, detail)
-- [x]  Smoke test (store full flow)
+ Admin auth (login / refresh / logout / sessions)
 
----
+ Store auth (register / login / refresh / logout)
 
-## 🟡 AŞAMA 1 — Katalog & İçerik Yönetimi (Admin)
+ Password reset
 
-**Amaç:** Ürün üretim hattını tamamlamak
+ RBAC (roles, permissions, bootstrap)
 
-### Category & Structure
+ Tenant resolve (/admin/tenants/me)
 
-- [ ]  GET /api/admin/categories (tree / flat)
-- [ ]  GET /api/admin/categories/:id
-- [ ]  DELETE /api/admin/categories/:id (soft delete)
+Customer & Store Core
 
-### Product Core
+ Customer profile & address CRUD
 
-- [ ]  GET /api/admin/products
-- [ ]  GET /api/admin/products/:id
-- [ ]  DELETE /api/admin/products/:id
-- [ ]  POST /api/admin/products/:id/unpublish
+ Store cart (line item, coupon apply, shipping method placeholder)
 
-### Variant & Options
+ Checkout (create, address, payment providers)
 
-- [ ]  GET /api/admin/products/:id/variants
-- [ ]  POST /api/admin/products/:id/variants
-- [ ]  PATCH /api/admin/variants/:id
-- [ ]  DELETE /api/admin/variants/:id
-- [ ]  POST /api/admin/products/:id/options
-- [ ]  POST /api/admin/options/:id/values
-- [ ]  DELETE /api/admin/options/:id
-- [ ]  DELETE /api/admin/option-values/:id
+ Orders (from checkout, list, detail)
 
-### Media / Files
+ Payments (manual provider)
 
-- [ ]  POST /api/admin/files (upload / presigned)
-- [ ]  POST /api/admin/products/:id/media
-- [ ]  DELETE /api/admin/media/:id
+ Payment webhook ingest
 
-### Collections & Tags
+Inventory (Store tarafı)
 
-- [ ]  GET /api/admin/collections
-- [ ]  POST /api/admin/collections
-- [ ]  PATCH /api/admin/collections/:id
-- [ ]  DELETE /api/admin/collections/:id
-- [ ]  GET /api/admin/tags
-- [ ]  POST /api/admin/tags
-- [ ]  PATCH /api/admin/tags/:id
-- [ ]  DELETE /api/admin/tags/:id
+ InventoryLocation (default seed)
 
-### Translations
+ InventoryLevel (core model)
 
-- [ ]  GET /api/admin/products/:id/translations
-- [ ]  PUT /api/admin/products/:id/translations/:locale
-- [ ]  GET /api/admin/categories/:id/translations
-- [ ]  PUT /api/admin/categories/:id/translations/:locale
+ InventoryReservation
 
-**E2E hedef**
+ Checkout → reserve / status / release
 
-- [ ]  Admin → ürün + varyant + medya → publish → Store catalog’da görünür
+ Idempotency + unique constraints
 
----
+ Store E2E smoke (tam yeşil)
 
-## 🟡 AŞAMA 2 — Fiyatlandırma & İndirim Motoru (Marketing)
+Files / Media (Admin)
 
-**Amaç:** Gerçek fiyat & kampanya yönetimi
+ MinIO entegrasyonu (internal + public endpoint ayrımı)
 
-### Price Lists
+ Presigned PUT
 
-- [ ]  GET /api/admin/price-lists
-- [ ]  POST /api/admin/price-lists
-- [ ]  PATCH /api/admin/price-lists/:id
-- [ ]  POST /api/admin/price-lists/:id/activate
-- [ ]  POST /api/admin/price-lists/:id/deactivate
+ Upload → complete (HEAD doğrulama)
 
-### Variant Pricing
+ Presigned GET
 
-- [ ]  PUT /api/admin/variants/:variantId/prices
-- [ ]  Çoklu currency desteği
-- [ ]  PriceList override mantığı
+ File ↔ entity link
 
-### Discounts / Coupons
+ Entity files list
 
-- [ ]  GET /api/admin/discounts
-- [ ]  POST /api/admin/discounts
-- [ ]  PATCH /api/admin/discounts/:id
-- [ ]  POST /api/admin/discounts/:id/activate
-- [ ]  POST /api/admin/discounts/:id/deactivate
+ Files smoke test (tam yeşil)
 
-### Totals (Mini)
+🟡 AŞAMA 1 — INVENTORY & ADMIN STOCK (ŞİMDİ)
 
-- [ ]  TaxRate / VatRate hesaplaması
-- [ ]  Shipping total placeholder (minimum)
+Kritik karar:
+Variant “detay” ekranı = Inventory + Pricing birlikte
+Ama ilk adım sadece Inventory
 
-**E2E hedef**
+Admin InventoryLocation
 
-- [ ]  Admin → fiyat & kupon tanımla
-- [ ]  Store → sepette kupon → totals doğru
+ GET /api/admin/inventory/locations
 
----
+ POST /api/admin/inventory/locations
 
-## 🟡 AŞAMA 3 — Envanter & Depo Yönetimi (Admin)
+ PATCH /api/admin/inventory/locations/:id
 
-**Amaç:** Stok olmayan ürün satılamasın
+ POST /api/admin/inventory/locations/:id/set-default
 
-### Inventory Locations
+ DELETE /api/admin/inventory/locations/:id
 
-- [ ]  GET /api/admin/inventory/locations
-- [ ]  POST /api/admin/inventory/locations
-- [ ]  PATCH /api/admin/inventory/locations/:id
-- [ ]  POST /api/admin/inventory/locations/:id/set-default
-- [ ]  DELETE /api/admin/inventory/locations/:id
+Admin InventoryLevel
 
-### Inventory Levels
+ GET /api/admin/inventory/levels
 
-- [ ]  GET /api/admin/inventory/levels
-- [ ]  PUT /api/admin/inventory/levels (upsert)
+ PUT /api/admin/inventory/levels (upsert)
 
-### Ops / Debug
+ Variant ↔ location ↔ quantity netliği
 
-- [ ]  GET /api/admin/inventory/reservations
+Ops / Debug
 
-**E2E hedef**
+ GET /api/admin/inventory/reservations
 
-- [ ]  Admin → stok gir
-- [ ]  Store → reserve-stock başarılı
+E2E hedef
 
----
+ Admin stok gir → Store checkout reserve başarılı
 
-## 🟡 AŞAMA 4 — Fulfillment & Shipping
+➡️ Bu aşama bitmeden pricing’e geçilmeyecek
 
-**Amaç:** Sipariş operasyonu
+🟡 AŞAMA 2 — CATALOG GENİŞLETME (ADMIN)
+Category & Structure
 
-### Order Fulfillment
+ GET categories (tree / flat)
 
-- [ ]  POST /api/admin/orders/:id/fulfill
-- [ ]  POST /api/admin/orders/:id/ship
-- [ ]  POST /api/admin/orders/:id/mark-delivered
-- [ ]  GET /api/admin/orders/:id/fulfillments
+ GET category by id
 
-### Shipping Config
+ DELETE category (hard delete + cleanup)
 
-- [ ]  GET/POST/PATCH /api/admin/shipping/carriers
-- [ ]  GET/POST/PATCH /api/admin/shipping/options
-- [ ]  GET/POST/PATCH /api/admin/shipping/profiles
-- [ ]  GET/POST/PATCH /api/admin/pickup-locations
+ Category hierarchy edge-case’leri (cycle guard, child policy)
 
-### Store
+Product & Variant
 
-- [ ]  GET /api/store/shipping-options
+ Product CRUD + publish/unpublish
 
----
+ Variant CRUD
 
-## 🟡 AŞAMA 5 — Finans & Faturalandırma
+ Variant detail view (inventory + pricing placeholder)
 
-**Amaç:** Satış sonrası süreçler
+ Variant metadata genişletme
 
-### Invoice
+Media
 
-- [ ]  GET/POST /api/admin/invoice-series
-- [ ]  POST /api/admin/orders/:id/invoice
-- [ ]  GET /api/admin/invoices/:id
-- [ ]  GET /api/admin/orders/:id/invoice
+ Files core (presign, link)
 
-### Refund
+ Product media role standardları (GALLERY, THUMBNAIL, HERO)
 
-- [ ]  POST /api/admin/orders/:id/refunds
-- [ ]  GET /api/admin/refunds
+ Media reorder
 
----
+Collections & Tags
 
-## 🟡 AŞAMA 6 — SEO & Storefront Polish
+ Collections CRUD
 
-**Amaç:** Arama ve görünürlük
+ Tags CRUD
 
-### SEO
+ Product ↔ collection / tag link
 
-- [ ]  POST /api/admin/seo/meta
-- [ ]  POST /api/admin/slugs
-- [ ]  POST /api/admin/redirects
+Translations
 
-### Store
+ Product translations
 
-- [ ]  GET /api/store/seo/:slug
+ Category translations
 
----
+E2E hedef
 
-## 🔒 KURAL (kendine not)
+ Admin → ürün + varyant + medya → publish → Store’da görünür
 
-- [ ]  Yeni modül yazmadan önce **E2E checklist** tanımla
-- [ ]  Admin endpoint yazılmadan Store endpoint yazma
-- [ ]  Inventory & Pricing tamamlanmadan Fulfillment’a geçme
+🟡 AŞAMA 3 — PRICING & DISCOUNTS (MARKETING)
+
+Önemli:
+Tax + Shipping totals olmadan pricing eksik sayılır
+
+Price Lists
+
+ GET / POST / PATCH price-lists
+
+ Activate / deactivate
+
+ Currency support
+
+Variant Pricing
+
+ PUT /api/admin/variants/:id/prices
+
+ PriceList override logic
+
+Discounts / Coupons
+
+ Discount CRUD
+
+ Activate / deactivate
+
+ Cart entegrasyonu
+
+Totals (Mini ama zorunlu)
+
+ TaxRate / VatRate hesaplama
+
+ Shipping total placeholder (sadece totals için)
+
+E2E hedef
+
+ Admin fiyat + kupon → Store cart totals doğru
+
+🟡 AŞAMA 4 — FULFILLMENT & SHIPPING
+Order Fulfillment
+
+ Fulfill
+
+ Ship
+
+ Mark delivered
+
+ Fulfillment list
+
+Shipping Config
+
+ Carrier
+
+ Shipping option
+
+ Shipping profile
+
+ Pickup location
+
+Store
+
+ GET /api/store/shipping-options
+
+🟡 AŞAMA 5 — FINANCE
+Invoice
+
+ Invoice series
+
+ Order → invoice
+
+ Invoice read
+
+Refund
+
+ Refund create
+
+ Refund list
+
+🟡 AŞAMA 6 — SEO & ANALYTICS
+SEO
+
+ Slug
+
+ Redirect
+
+ SEO meta
+
+Analytics
+
+ Audit log genişletme
+
+ Basic analytics hooks
+
+🔒 SABİT KURALLAR (DEĞİŞMEZ)
+
+ Admin bitmeden Store yazılmaz
+
+ Inventory + Pricing → Fulfillment ön koşulu
+
+ Smoke kırılırsa ilerleme durur
+
+ “Nice to have” asla core’u bozamaz
+
+✅ SON DURUM
+
+Context güncel
+
+TODO net
+
+Bir sonraki gerçek iş: AŞAMA 1 — Admin Inventory
+
+Hazırsan bir sonraki mesajda Aşama 1 için net endpoint + prisma + service planı çıkarırım.
+Bu noktadan sonra dağılmak yok.

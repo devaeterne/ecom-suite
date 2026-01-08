@@ -11,13 +11,13 @@ import {
 import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
 
-import { InventoryService } from "@/modules/inventory/store/services/inventory.service";
+import { StoreInventoryService } from "@/modules/inventory/store/services/inventory.service";
 import { ReserveStockDto, ReleaseStockDto } from "../dto/inventory.dto";
 
 @UseGuards(StoreAccessGuard)
 @Controller("/store/checkouts")
 export class StoreInventoryController {
-  constructor(private readonly inventory: InventoryService) {}
+  constructor(private readonly inventory: StoreInventoryService) {}
 
   @Post("/:id/reserve-stock")
   async reserve(
