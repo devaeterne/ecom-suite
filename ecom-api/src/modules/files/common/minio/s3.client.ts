@@ -1,56 +1,43 @@
 import { Injectable } from "@nestjs/common";
 import { S3Client } from "@aws-sdk/client-s3";
 
-function must(name: string, v?: string) {
-  const val = (v ?? "").trim();
-  if (!val) throw new Error(`Missing env: ${name}`);
-  return val;
-}
-
-function boolEnv(v: string | undefined, def = false) {
-  if (v == null) return def;
-  return ["1", "true", "yes", "on"].includes(String(v).toLowerCase());
-}
-
-function toNumber(v: string | undefined, def: number) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
-}
-
-function normalizeEndpoint() {
-  const host = must("MINIO_ENDPOINT", process.env.MINIO_ENDPOINT); // e.g. "minio" or "localhost"
-  const port = toNumber(process.env.MINIO_PORT, 9000);
-  const useSSL = boolEnv(process.env.MINIO_USE_SSL, false);
-
-  // Eğer kullanıcı MINIO_ENDPOINT'e full URL yazdıysa aynen kullan.
-  if (host.startsWith("http://") || host.startsWith("https://")) {
-    return host;
+function baseClient(endpoint: string) {
+  if (!endpoint) {
+    throw new Error(
+      "S3 endpoint missing. Set S3_ENDPOINT_INTERNAL / S3_ENDPOINT_PUBLIC (or legacy S3_ENDPOINT)."
+    );
   }
 
-  const proto = useSSL ? "https" : "http";
-  return `${proto}://${host}:${port}`;
+  return new S3Client({
+    region: process.env.S3_REGION!,
+    endpoint,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+}
+
+export function createInternalS3Client() {
+  const endpoint = process.env.S3_ENDPOINT_INTERNAL ?? process.env.S3_ENDPOINT;
+  return baseClient(endpoint!);
+}
+
+export function createPublicS3Client() {
+  const endpoint = process.env.S3_ENDPOINT_PUBLIC ?? process.env.S3_ENDPOINT;
+  return baseClient(endpoint!);
 }
 
 @Injectable()
 export class MinioS3Client {
-  public readonly s3: S3Client;
-  public readonly bucket: string;
+  readonly bucket: string;
+  readonly s3: S3Client;
+  readonly presignS3: S3Client;
 
   constructor() {
-    const endpoint = normalizeEndpoint();
-    const accessKeyId = must("MINIO_ACCESS_KEY", process.env.MINIO_ACCESS_KEY);
-    const secretAccessKey = must(
-      "MINIO_SECRET_KEY",
-      process.env.MINIO_SECRET_KEY
-    );
-
-    this.bucket = process.env.MINIO_BUCKET?.trim() || "ecom";
-
-    this.s3 = new S3Client({
-      region: process.env.AWS_REGION || "us-east-1",
-      endpoint, // ✅ artık "http://minio:9000" formatında
-      forcePathStyle: true, // ✅ MinIO için şart
-      credentials: { accessKeyId, secretAccessKey },
-    });
+    this.bucket = process.env.S3_BUCKET ?? process.env.MINIO_BUCKET ?? "ecom";
+    this.s3 = createInternalS3Client(); // ✅ server-side HeadObject vs
+    this.presignS3 = createPublicS3Client(); // ✅ presigned URL host erişimi
   }
 }

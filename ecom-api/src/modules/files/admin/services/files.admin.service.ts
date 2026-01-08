@@ -1,16 +1,21 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
+import { FileStatus } from "@prisma/client";
 import { FILES } from "@/modules/files/common/constants/files.constants";
 import { MinioS3Client } from "@/modules/files/common/minio/s3.client";
 import { FilesRepo } from "@/modules/files/common/prisma/files.repo";
-import type {
-  CreatePresignedUploadInput,
-  PresignedGetResult,
-  PresignedPutResult,
-} from "@/modules/files/common/types/files.types";
+import type { CreatePresignedUploadDto } from "@/modules/files/admin/dto/files.presing.dto";
+import type { CreateFileLinkDto } from "@/modules/files/admin/dto/files.link.dto";
 
 @Injectable()
 export class FilesAdminService {
@@ -19,48 +24,63 @@ export class FilesAdminService {
     private readonly repo: FilesRepo
   ) {}
 
+  private safeName(name: string) {
+    return (name ?? "").replace(/[^\w.\-]/g, "_");
+  }
+
   private buildObjectKey(params: {
     tenantId: string;
     filename: string;
     fileId: string;
+    folder?: string;
   }) {
-    const safeName = params.filename.replace(/[^\w.\-]/g, "_");
-    return `tenants/${params.tenantId}/uploads/${params.fileId}-${safeName}`;
+    const safe = this.safeName(params.filename);
+    const folder = params.folder ? this.safeName(params.folder) : "uploads";
+    return `tenants/${params.tenantId}/${folder}/${params.fileId}-${safe}`;
   }
 
-  async createPresignedUpload(
-    input: CreatePresignedUploadInput
-  ): Promise<PresignedPutResult> {
+  async createPresignedUpload(tenantId: string, dto: CreatePresignedUploadDto) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!dto?.filename) throw new BadRequestException("filename is required");
+    if (!dto?.contentType)
+      throw new BadRequestException("contentType is required");
+    if (typeof dto?.size !== "number" || dto.size <= 0)
+      throw new BadRequestException("size must be a positive number");
+
     const fileId = randomUUID();
     const bucket = this.minio.bucket;
     const key = this.buildObjectKey({
-      tenantId: input.tenantId,
-      filename: input.filename,
+      tenantId,
+      filename: dto.filename,
       fileId,
+      folder: dto.folder,
     });
 
-    // ✅ DB kaydı: bucket/key kolonları + metadata (opsiyonel)
+    // 1) Upload intent kaydı (id=fileId kritik)
     await this.repo.createFileObject({
       id: fileId,
-      tenantId: input.tenantId,
+      tenantId,
       bucket,
       key,
-      filename: input.filename,
-      mimeType: input.contentType,
-      size: input.size,
+      filename: dto.filename,
+      mimeType: dto.contentType,
+      size: dto.size,
+      status: FileStatus.UPLOADING,
       metadata: {
         storage: { driver: "minio", bucket, key },
-        original: { filename: input.filename },
+        original: { filename: dto.filename, contentType: dto.contentType },
+        intent: { createdAt: new Date().toISOString() },
       },
     });
 
+    // 2) Presigned PUT URL (PUBLIC client ile!)
     const cmd = new PutObjectCommand({
       Bucket: bucket,
       Key: key,
-      ContentType: input.contentType,
+      ContentType: dto.contentType,
     });
 
-    const putUrl = await getSignedUrl(this.minio.s3, cmd, {
+    const putUrl = await getSignedUrl(this.minio.presignS3, cmd, {
       expiresIn: FILES.PRESIGN_PUT_EXPIRES_SEC,
     });
 
@@ -71,30 +91,71 @@ export class FilesAdminService {
     return { fileId, bucket, key, putUrl, expiresAt };
   }
 
-  async getPresignedDownload(
-    tenantId: string,
-    fileId: string
-  ): Promise<PresignedGetResult> {
+  async completeUpload(tenantId: string, fileId: string) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!fileId) throw new BadRequestException("fileId is required");
+
     const fo = await this.repo.getFileObjectById(tenantId, fileId);
     if (!fo) throw new NotFoundException("File not found");
 
-    // ✅ Öncelik: kolonlar. Fallback: metadata.storage
-    const bucket =
-      (fo.bucket as string | null) ??
-      (fo.metadata as any)?.storage?.bucket ??
-      this.minio.bucket;
+    const bucket = fo.bucket;
+    const key = fo.key;
+    if (!bucket || !key)
+      throw new BadRequestException("File storage bucket/key missing");
 
-    const key =
-      (fo.key as string | null) ?? (fo.metadata as any)?.storage?.key ?? null;
+    try {
+      // ✅ server-side doğrulama her zaman INTERNAL client ile (minio:9000)
+      const head = await this.minio.s3.send(
+        new HeadObjectCommand({ Bucket: bucket, Key: key })
+      );
 
-    if (!key) throw new NotFoundException("File storage key missing");
+      const size = head.ContentLength ?? fo.size ?? null;
+      const mimeType = head.ContentType ?? fo.mimeType ?? null;
+      const checksum = head.ETag ? String(head.ETag).replaceAll('"', "") : null;
 
-    const cmd = new GetObjectCommand({
-      Bucket: bucket,
-      Key: key,
-    });
+      await this.repo.markReady({
+        tenantId,
+        fileId,
+        size,
+        mimeType,
+        checksum,
+        url: fo.url ?? null,
+      });
 
-    const url = await getSignedUrl(this.minio.s3, cmd, {
+      return {
+        ok: true,
+        fileId,
+        bucket,
+        key,
+        size,
+        mimeType,
+        checksum,
+        status: FileStatus.READY,
+      };
+    } catch (e: any) {
+      // burada artık "127.0.0.1:9000" düşmemeli.
+      await this.repo.markFailed(tenantId, fileId, e?.message ?? "head_failed");
+      throw new BadRequestException(
+        "Upload not found in storage (complete failed)"
+      );
+    }
+  }
+
+  async presignedDownload(tenantId: string, fileId: string) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!fileId) throw new BadRequestException("fileId is required");
+
+    const fo = await this.repo.getFileObjectById(tenantId, fileId);
+    if (!fo) throw new NotFoundException("File not found");
+
+    const bucket = fo.bucket;
+    const key = fo.key;
+    if (!bucket || !key)
+      throw new BadRequestException("File storage key missing");
+
+    // ✅ presigned GET => PUBLIC client ile URL üret
+    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const url = await getSignedUrl(this.minio.presignS3, cmd, {
       expiresIn: FILES.PRESIGN_GET_EXPIRES_SEC,
     });
 
@@ -105,27 +166,75 @@ export class FilesAdminService {
     return { fileId, url, expiresAt };
   }
 
-  async getFileMeta(tenantId: string, fileId: string) {
+  async linkFile(tenantId: string, fileId: string, dto: CreateFileLinkDto) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!fileId) throw new BadRequestException("fileId is required");
+
     const fo = await this.repo.getFileObjectById(tenantId, fileId);
     if (!fo) throw new NotFoundException("File not found");
 
-    const bucket =
-      (fo.bucket as string | null) ??
-      (fo.metadata as any)?.storage?.bucket ??
-      this.minio.bucket;
+    if (fo.status !== FileStatus.READY) {
+      throw new BadRequestException(`File is not READY (status=${fo.status})`);
+    }
 
-    const key =
-      (fo.key as string | null) ?? (fo.metadata as any)?.storage?.key ?? null;
+    const row = await this.repo.createLink({
+      tenantId,
+      fileId,
+      entityType: dto.entityType,
+      entityId: dto.entityId,
+      role: dto.role,
+      sort: dto.sort ?? 0,
+      metadata: {},
+    });
+
+    return { ok: true, link: row };
+  }
+
+  async getFileMeta(tenantId: string, fileId: string) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!fileId) throw new BadRequestException("fileId is required");
+
+    const fo = await this.repo.getFileObjectById(tenantId, fileId);
+    if (!fo) throw new NotFoundException("File not found");
 
     return {
       id: fo.id,
-      tenantId: fo.tenantId,
-      bucket,
-      key,
+      bucket: fo.bucket,
+      key: fo.key,
+      url: fo.url ?? null,
       mimeType: fo.mimeType ?? null,
       size: fo.size ?? null,
-      metadata: fo.metadata ?? {},
+      checksum: fo.checksum ?? null,
+      filename: fo.filename ?? null,
+      title: fo.title ?? null,
+      altText: fo.altText ?? null,
+      status: fo.status ?? null,
       createdAt: fo.createdAt,
+      updatedAt: fo.updatedAt,
     };
+  }
+
+  async listLinksByFile(tenantId: string, fileId: string) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!fileId) throw new BadRequestException("fileId is required");
+
+    const fo = await this.repo.getFileObjectById(tenantId, fileId);
+    if (!fo) throw new NotFoundException("File not found");
+
+    const links = await this.repo.listLinksByFile(tenantId, fileId);
+    return { items: links };
+  }
+
+  async listLinksByEntity(tenantId: string, entityType: any, entityId: string) {
+    if (!tenantId) throw new BadRequestException("tenantId is required");
+    if (!entityType) throw new BadRequestException("entityType is required");
+    if (!entityId) throw new BadRequestException("entityId is required");
+
+    const links = await this.repo.listLinksByEntity(
+      tenantId,
+      entityType,
+      entityId
+    );
+    return { items: links };
   }
 }

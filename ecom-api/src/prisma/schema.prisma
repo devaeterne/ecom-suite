@@ -202,6 +202,21 @@ enum PickupPointType {
   LOCKER
 }
 
+enum FileStatus {
+  UPLOADING
+  READY
+  FAILED
+  DELETED
+}
+
+enum FileEntityType {
+  catalog_product
+  catalog_variant
+  product_category
+  order
+  // ...
+}
+
 enum FileRole {
   PRIMARY
   THUMBNAIL
@@ -3386,7 +3401,8 @@ model FileObject {
   title    String?
   altText  String?
 
-  metadata Json @default("{}")
+  metadata Json       @default("{}")
+  status   FileStatus @default(UPLOADING)
 
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
@@ -3404,6 +3420,7 @@ model FileObject {
   @@unique([tenantId, bucket, key], map: "uniq_file_object_bucket_key")
   @@index([tenantId])
   @@index([tenantId, deletedAt], map: "idx_file_object_tenant_deleted_at")
+  @@index([tenantId, status], map: "idx_file_object_tenant_status")
   @@index([tenantId, mimeType], map: "idx_file_object_tenant_mime")
   @@map("file_object")
 }
@@ -3415,8 +3432,8 @@ model FileLink {
 
   fileId String @db.Uuid
 
-  entityType String // "catalog_product", "catalog_variant", "product_category", "order", ...
-  entityId   String @db.Uuid
+  entityType FileEntityType
+  entityId   String         @db.Uuid
 
   role FileRole @default(GALLERY) // PRIMARY, THUMBNAIL, INVOICE, LABEL...
   sort Int      @default(0)

@@ -45,6 +45,10 @@ export type Env = {
   MINIO_USE_SSL: boolean;
   MINIO_ROOT_USER: string;
   MINIO_ROOT_PASSWORD: string;
+  MINIO_ACCESS_KEY: string;
+  MINIO_SECRET_KEY: string;
+  S3_INTERNAL_ENDPOINT: string;
+  S3_PUBLIC_ENDPOINT: string;
 
   // CORS / Cookie
   ADMIN_ORIGIN: string;
@@ -96,6 +100,14 @@ export const env: Env = {
   MINIO_USE_SSL: bool("MINIO_USE_SSL", "false"),
   MINIO_ROOT_USER: req("MINIO_ROOT_USER"),
   MINIO_ROOT_PASSWORD: req("MINIO_ROOT_PASSWORD"),
+  MINIO_ACCESS_KEY: req("MINIO_ACCESS_KEY", "minio"),
+  MINIO_SECRET_KEY: req("MINIO_SECRET_KEY", "minio_password_123"),
+
+  // FIX: Changed defaults to match Docker network architecture
+  // Internal: API container -> MinIO container (use service name)
+  S3_INTERNAL_ENDPOINT: req("S3_INTERNAL_ENDPOINT", "http://minio:9000"),
+  // Public: Browser/Host -> MinIO (use localhost for development)
+  S3_PUBLIC_ENDPOINT: req("S3_PUBLIC_ENDPOINT", "http://localhost:9000"),
 
   // CORS / Cookie
   ADMIN_ORIGIN: req("ADMIN_ORIGIN", "http://localhost:3001"),
