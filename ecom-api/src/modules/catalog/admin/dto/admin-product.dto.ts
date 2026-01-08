@@ -7,6 +7,8 @@ import {
   IsUUID,
   Length,
   ValidateNested,
+  IsInt,
+  Min,
 } from "class-validator";
 import { Type } from "class-transformer";
 
@@ -90,4 +92,21 @@ export class AdminUpdateProductDto {
   @IsArray()
   @IsUUID("4", { each: true })
   collectionIds?: string[];
+}
+export class AdminProductListQueryDto {
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number;
 }

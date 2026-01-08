@@ -11,6 +11,8 @@ type ListProductsArgs = {
   publishedOnly: boolean;
 };
 
+const notDeleted = { deletedAt: null } as const;
+
 @Injectable()
 export class CatalogRepo {
   constructor(private readonly prisma: PrismaService) {}
@@ -51,14 +53,13 @@ export class CatalogRepo {
     // include etmek yerine "categories"/"collections" ilişkisinin mevcut olduğunu varsayar.
     const where: any = {
       tenantId,
-      deletedAt: null, // CatalogProduct'ta var ✅
+      ...notDeleted, // CatalogProduct'ta var ✅
       ...(publishedOnly ? { status: "published" } : {}),
       ...(q
         ? {
             OR: [
               { title: { contains: q, mode: "insensitive" } },
               { handle: { contains: q, mode: "insensitive" } },
-              { description: { contains: q, mode: "insensitive" } },
             ],
           }
         : {}),
@@ -81,12 +82,12 @@ export class CatalogRepo {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.catalogProduct.findMany({
         where,
-        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
         skip: offset,
         take: limit,
+        orderBy: [{ createdAt: "desc" }],
         include: {
-          categories: { include: { category: true } }, // ✅ link -> category
-          collections: { include: { collection: true } }, // ✅ link -> collection
+          categories: { include: { category: true } },
+          collections: { include: { collection: true } },
           variants: true, // ✅ variant'ta deletedAt yok
         },
       }),
@@ -101,7 +102,7 @@ export class CatalogRepo {
       where: {
         tenantId,
         id,
-        deletedAt: null,
+        ...notDeleted,
         ...(publishedOnly ? { status: "published" } : {}),
       },
       include: {
@@ -121,47 +122,38 @@ export class CatalogRepo {
       where: {
         tenantId,
         id: productId,
-        deletedAt: null,
+        ...notDeleted,
         ...(publishedOnly ? { status: "published" } : {}),
       },
-      select: { id: true },
+      include: {
+        variants: true,
+      },
     });
 
-    if (!product) return null;
-
-    return this.prisma.catalogProductVariant.findMany({
-      where: { tenantId, productId },
-      orderBy: { createdAt: "asc" },
-    });
+    return product?.variants ?? [];
   }
 
-  // ===== ADMIN =====
-
-  async adminCreateCategory(
-    tenantId: string,
-    data: { name: string; handle: string; parentId?: string | null }
-  ) {
+  async adminCreateCategory(tenantId: string, data: any) {
     return this.prisma.productCategory.create({
       data: {
         tenantId,
         name: data.name,
-        handle: data.handle,
+        handle: data.handle ?? null,
         parentId: data.parentId ?? null,
+        rank: data.rank ?? 0,
       },
     });
   }
 
-  async adminUpdateCategory(
-    tenantId: string,
-    id: string,
-    data: { name?: string; handle?: string; parentId?: string | null }
-  ) {
+  async adminUpdateCategory(tenantId: string, id: string, data: any) {
     return this.prisma.productCategory.update({
-      where: { id, tenantId },
+      where: { id },
       data: {
-        ...(data.name !== undefined ? { name: data.name } : {}),
-        ...(data.handle !== undefined ? { handle: data.handle } : {}),
-        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
+        // tenantId check'i policy seviyesinde yapılabilir
+        name: data.name ?? undefined,
+        handle: data.handle ?? undefined,
+        parentId: data.parentId ?? undefined,
+        rank: data.rank ?? undefined,
       },
     });
   }
@@ -171,7 +163,7 @@ export class CatalogRepo {
       data: {
         tenantId,
         title: data.title,
-        handle: data.handle,
+        handle: data.handle ?? null,
         description: data.description ?? null,
         status: data.status ?? "draft",
 
@@ -189,21 +181,7 @@ export class CatalogRepo {
           ? {
               collections: {
                 create: data.collectionIds.map((collectionId: string) => ({
-                  collectionId, // ✅ tenantId yok
-                })),
-              },
-            }
-          : {}),
-
-        ...(data.variants?.length
-          ? {
-              variants: {
-                create: data.variants.map((v: any) => ({
-                  title: v.title ?? null,
-                  sku: v.sku ?? null,
-                  barcode: v.barcode ?? null,
-                  isActive: v.isActive ?? true,
-                  // ✅ tenantId yok
+                  collectionId,
                 })),
               },
             }
@@ -218,44 +196,38 @@ export class CatalogRepo {
   }
 
   async adminUpdateProduct(tenantId: string, id: string, data: any) {
+    // Basit update: links'i komple resetlemek yerine ileride patch mantığı eklenebilir.
+    // Şimdilik: categoryIds/collectionIds gelirse set gibi davran.
     return this.prisma.catalogProduct.update({
-      // ✅ composite var ise bunu kullan (tercih)
-      where: { tenantId_id: { tenantId, id } },
-
-      // composite yoksa şu da olur:
-      // where: { id, tenantId },
-
+      where: { id },
       data: {
-        ...(data.title !== undefined ? { title: data.title } : {}),
-        ...(data.handle !== undefined ? { handle: data.handle } : {}),
-        ...(data.description !== undefined
-          ? { description: data.description }
-          : {}),
-        ...(data.status !== undefined ? { status: data.status } : {}),
+        title: data.title ?? undefined,
+        handle: data.handle ?? undefined,
+        description: data.description ?? undefined,
+        status: data.status ?? undefined,
 
-        ...(data.categoryIds
+        ...(Array.isArray(data.categoryIds)
           ? {
               categories: {
-                deleteMany: {}, // product scope içinde çalışır
+                deleteMany: {},
                 create: data.categoryIds.map((categoryId: string) => ({
-                  categoryId, // ✅ tenantId YOK
+                  categoryId,
                 })),
               },
             }
           : {}),
 
-        ...(data.collectionIds
+        ...(Array.isArray(data.collectionIds)
           ? {
               collections: {
                 deleteMany: {},
                 create: data.collectionIds.map((collectionId: string) => ({
-                  collectionId, // ✅ tenantId YOK
+                  collectionId,
                 })),
               },
             }
           : {}),
       },
-
       include: {
         categories: { include: { category: true } },
         collections: { include: { collection: true } },
@@ -266,16 +238,10 @@ export class CatalogRepo {
 
   async adminPublishProduct(tenantId: string, id: string) {
     return this.prisma.catalogProduct.update({
-      // ikisi de olur; sende hangisi çalışıyorsa onu bırak
-      where: { tenantId_id: { tenantId, id } },
-      // where: { id, tenantId },
-
+      where: { id },
       data: {
         status: "published",
-        publishedAt: new Date(),
       },
-
-      // 🔥 kritik: mapper’ın beklediği nested include
       include: {
         categories: { include: { category: true } },
         collections: { include: { collection: true } },

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, Length } from "class-validator";
+import { IsOptional, IsString, IsUUID, Length, IsIn } from "class-validator";
 
 export class AdminCreateCategoryDto {
   @IsString()
@@ -28,4 +28,13 @@ export class AdminUpdateCategoryDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+}
+export class AdminCategoryListQueryDto {
+  @IsOptional()
+  @IsIn(["tree", "flat"])
+  view?: "tree" | "flat";
+
+  @IsOptional()
+  @IsString()
+  q?: string;
 }

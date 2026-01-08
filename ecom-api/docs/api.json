@@ -1,0 +1,1813 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "HealthController_getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Service health status (db/redis/minio)"
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/admin/auth/login": {
+      "post": {
+        "operationId": "AdminAuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAuthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin Auth"
+        ]
+      }
+    },
+    "/api/admin/auth/refresh": {
+      "post": {
+        "operationId": "AdminAuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAuthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Admin Auth"
+        ]
+      }
+    },
+    "/api/admin/auth/logout": {
+      "post": {
+        "operationId": "AdminAuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Admin Auth"
+        ]
+      }
+    },
+    "/api/admin/auth/logout-all": {
+      "post": {
+        "operationId": "AdminAuthController_logoutAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Admin Auth"
+        ]
+      }
+    },
+    "/api/admin/auth/me": {
+      "get": {
+        "operationId": "AdminAuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Admin Auth"
+        ]
+      }
+    },
+    "/api/admin/sessions": {
+      "get": {
+        "operationId": "SessionsAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SessionsAdmin"
+        ]
+      }
+    },
+    "/api/admin/sessions/{id}/revoke": {
+      "post": {
+        "operationId": "SessionsAdminController_revokeOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SessionsAdmin"
+        ]
+      }
+    },
+    "/api/admin/sessions/revoke-all": {
+      "post": {
+        "operationId": "SessionsAdminController_revokeAll",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "SessionsAdmin"
+        ]
+      }
+    },
+    "/api/store/auth/register": {
+      "post": {
+        "operationId": "StoreAuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreRegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreAuthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/store/auth/login": {
+      "post": {
+        "operationId": "StoreAuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreAuthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/store/auth/refresh": {
+      "post": {
+        "operationId": "StoreAuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreAuthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/store/auth/logout": {
+      "post": {
+        "operationId": "StoreAuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/store/auth/logout-all": {
+      "post": {
+        "operationId": "StoreAuthController_logoutAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/store/auth/me": {
+      "get": {
+        "operationId": "StoreAuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Store Auth"
+        ]
+      }
+    },
+    "/api/auth/reset-password/request": {
+      "post": {
+        "operationId": "PasswordResetController_request",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Password Reset"
+        ]
+      }
+    },
+    "/api/auth/reset-password/confirm": {
+      "post": {
+        "operationId": "PasswordResetController_confirm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetConfirmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Password Reset"
+        ]
+      }
+    },
+    "/api/admin/tenants/me": {
+      "get": {
+        "operationId": "TenantAdminController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantAdmin"
+        ]
+      },
+      "patch": {
+        "operationId": "TenantAdminController_patchMe",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantMePatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "TenantAdmin"
+        ]
+      }
+    },
+    "/api/admin/permissions": {
+      "get": {
+        "operationId": "PermissionsAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PermissionsAdmin"
+        ]
+      }
+    },
+    "/api/admin/roles": {
+      "get": {
+        "operationId": "RolesAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RolesAdmin"
+        ]
+      },
+      "post": {
+        "operationId": "RolesAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RolesAdmin"
+        ]
+      }
+    },
+    "/api/admin/roles/{id}": {
+      "patch": {
+        "operationId": "RolesAdminController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RolesAdmin"
+        ]
+      }
+    },
+    "/api/admin/roles/{id}/permissions": {
+      "post": {
+        "operationId": "RolesAdminController_setPermissions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePermissionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RolesAdmin"
+        ]
+      }
+    },
+    "/api/admin/rbac/bootstrap": {
+      "post": {
+        "operationId": "RbacBootstrapAdminController_bootstrap",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "RbacBootstrapAdmin"
+        ]
+      }
+    },
+    "/api/admin/identities": {
+      "get": {
+        "operationId": "IdentitiesAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "IdentitiesAdmin"
+        ]
+      },
+      "post": {
+        "operationId": "IdentitiesAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityCreateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "IdentitiesAdmin"
+        ]
+      }
+    },
+    "/api/admin/identities/{id}": {
+      "patch": {
+        "operationId": "IdentitiesAdminController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityPatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "IdentitiesAdmin"
+        ]
+      }
+    },
+    "/api/admin/identities/{id}/invite": {
+      "post": {
+        "operationId": "IdentitiesAdminController_invite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "IdentitiesAdmin"
+        ]
+      }
+    },
+    "/api/store/categories": {
+      "get": {
+        "operationId": "CatalogStoreController_listCategories",
+        "parameters": [
+          {
+            "name": "tree",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/categories/{id}": {
+      "get": {
+        "operationId": "CatalogStoreController_getCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/collections": {
+      "get": {
+        "operationId": "CatalogStoreController_listCollections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/brands": {
+      "get": {
+        "operationId": "CatalogStoreController_listBrands",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/products": {
+      "get": {
+        "operationId": "CatalogStoreController_listProducts",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "collectionId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/products/{id}": {
+      "get": {
+        "operationId": "CatalogStoreController_getProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/store/products/{id}/variants": {
+      "get": {
+        "operationId": "CatalogStoreController_getVariants",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogStore"
+        ]
+      }
+    },
+    "/api/admin/categories": {
+      "post": {
+        "operationId": "CatalogAdminController_createCategory",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogAdmin"
+        ]
+      }
+    },
+    "/api/admin/categories/{id}": {
+      "patch": {
+        "operationId": "CatalogAdminController_updateCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogAdmin"
+        ]
+      }
+    },
+    "/api/admin/products": {
+      "post": {
+        "operationId": "CatalogAdminController_createProduct",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogAdmin"
+        ]
+      }
+    },
+    "/api/admin/products/{id}": {
+      "patch": {
+        "operationId": "CatalogAdminController_updateProduct",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogAdmin"
+        ]
+      }
+    },
+    "/api/admin/products/{id}/publish": {
+      "post": {
+        "operationId": "CatalogAdminController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CatalogAdmin"
+        ]
+      }
+    },
+    "/api/store/cart": {
+      "post": {
+        "operationId": "StoreCartController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      },
+      "get": {
+        "operationId": "StoreCartController_current",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      }
+    },
+    "/api/store/cart/line-items": {
+      "post": {
+        "operationId": "StoreCartController_addLineItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddLineItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      }
+    },
+    "/api/store/cart/line-items/{id}": {
+      "patch": {
+        "operationId": "StoreCartController_updateLineItem",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLineItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      },
+      "delete": {
+        "operationId": "StoreCartController_deleteLineItem",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      }
+    },
+    "/api/store/cart/apply-coupon": {
+      "post": {
+        "operationId": "StoreCartController_applyCoupon",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyCouponDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      }
+    },
+    "/api/store/cart/shipping-method": {
+      "post": {
+        "operationId": "StoreCartController_shippingMethod",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetShippingMethodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreCart"
+        ]
+      }
+    },
+    "/api/store/customers/me": {
+      "get": {
+        "operationId": "CustomersStoreController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      },
+      "patch": {
+        "operationId": "CustomersStoreController_updateMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      }
+    },
+    "/api/store/customers/me/addresses": {
+      "get": {
+        "operationId": "CustomersStoreController_listAddresses",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      },
+      "post": {
+        "operationId": "CustomersStoreController_createAddress",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      }
+    },
+    "/api/store/customers/me/addresses/{id}": {
+      "patch": {
+        "operationId": "CustomersStoreController_updateAddress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      },
+      "delete": {
+        "operationId": "CustomersStoreController_deleteAddress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CustomersStore"
+        ]
+      }
+    },
+    "/api/store/checkout": {
+      "post": {
+        "operationId": "CheckoutStoreController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CheckoutStore"
+        ]
+      }
+    },
+    "/api/store/checkout/{id}/addresses": {
+      "patch": {
+        "operationId": "CheckoutStoreController_upsertAddress",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertCheckoutAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CheckoutStore"
+        ]
+      }
+    },
+    "/api/store/checkout/{id}/payment-providers": {
+      "get": {
+        "operationId": "CheckoutStoreController_providers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CheckoutStore"
+        ]
+      }
+    },
+    "/api/store/checkout/{id}/start-payment": {
+      "post": {
+        "operationId": "CheckoutStoreController_startPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "CheckoutStore"
+        ]
+      }
+    },
+    "/api/store/orders": {
+      "get": {
+        "operationId": "OrdersStoreController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OrdersStore"
+        ]
+      }
+    },
+    "/api/store/orders/{id}": {
+      "get": {
+        "operationId": "OrdersStoreController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OrdersStore"
+        ]
+      }
+    },
+    "/api/store/orders/from-checkout": {
+      "post": {
+        "operationId": "OrdersStoreController_createFromCheckout",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderFromCheckoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "OrdersStore"
+        ]
+      }
+    },
+    "/api/store/payments": {
+      "post": {
+        "operationId": "PaymentsStoreController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorePaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PaymentsStore"
+        ]
+      }
+    },
+    "/api/store/payments/checkouts/{checkoutId}": {
+      "get": {
+        "operationId": "PaymentsStoreController_byCheckout",
+        "parameters": [
+          {
+            "name": "checkoutId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PaymentsStore"
+        ]
+      }
+    },
+    "/api/payments/webhooks": {
+      "post": {
+        "operationId": "PaymentsWebhookController_ingest",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "PaymentsWebhook"
+        ]
+      }
+    },
+    "/api/store/checkouts/{id}/reserve-stock": {
+      "post": {
+        "operationId": "StoreInventoryController_reserve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReserveStockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreInventory"
+        ]
+      }
+    },
+    "/api/store/checkouts/{id}/release-stock": {
+      "post": {
+        "operationId": "StoreInventoryController_release",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseStockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreInventory"
+        ]
+      }
+    },
+    "/api/store/checkouts/{id}/stock-status": {
+      "get": {
+        "operationId": "StoreInventoryController_stockStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locationId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "StoreInventory"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "E-commerce API",
+    "description": "Multi-tenant e-commerce backend",
+    "version": "1.0",
+    "contact": {
+
+    }
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "AdminLoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "admin@acme.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "P@ssw0rd!"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "AdminAuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "StoreRegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "buyer1@acme.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "Passw0rd!"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Buyer"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "One"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "StoreAuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "StoreLoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "buyer1@acme.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "Passw0rd!"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "ResetRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "admin@acme.com"
+          },
+          "typ": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "store"
+            ],
+            "default": "admin"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ResetConfirmDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 8
+          },
+          "typ": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "store"
+            ],
+            "example": "admin"
+          }
+        },
+        "required": [
+          "token",
+          "newPassword",
+          "typ"
+        ]
+      },
+      "TenantMePatchDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "RoleCreateDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "RolePatchDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "RolePermissionsDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "IdentityCreateDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "IdentityPatchDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "AdminCreateCategoryDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "AdminUpdateCategoryDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "AdminCreateProductDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "AdminUpdateProductDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "CreateCartDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "AddLineItemDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "UpdateLineItemDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "ApplyCouponDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "SetShippingMethodDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "CreateCheckoutDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "UpsertCheckoutAddressDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "StartPaymentDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "CreateOrderFromCheckoutDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "StorePaymentDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "PaymentWebhookDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "ReserveStockDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      },
+      "ReleaseStockDto": {
+        "type": "object",
+        "properties": {
+
+        }
+      }
+    }
+  }
+}

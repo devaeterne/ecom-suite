@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { BadRequestException } from "@nestjs/common";
 
 /**
  * Header standardı:
@@ -18,4 +19,21 @@ export function isUuidLike(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     v
   );
+}
+
+/**
+ * Request context'ten tenantId okur (Guard'lar tarafından set edilen alanları kullanır).
+ * Öncelik:
+ * - req.tenant.id (TenantGuard resolve ettiyse)
+ * - req.tenantId (fallback)
+ * - req.user.tenantId (token payload fallback)
+ */
+export function requireTenantId(req: any): string {
+  const tenantId = req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId;
+
+  if (!tenantId || typeof tenantId !== "string") {
+    throw new BadRequestException("Tenant context missing");
+  }
+
+  return tenantId;
 }

@@ -14,53 +14,50 @@ import { getTenantHeaderValue, isUuidLike } from "./tenant.util";
  * - Header UUID ise: tenantId = header
  * - Header UUID değilse: bunu tenant "code" kabul eder ve DB'den tenant.id (uuid) resolve eder
  *
- * Sonuç:
- * - req.tenantId her zaman UUID olur (Prisma ilişkileri için güvenli)
- * - req.tenant = { id, code } set edilir
+ * Bu guard:
+ * - req.tenantId (uuid) set eder
+ * - req.tenant = { id, code? } set eder
  *
- * Ek güvenlik:
- * - Eğer req.tenant zaten auth guard tarafından set edildiyse (token payload),
- *   header ile resolve edilen tenantId eşleşmek zorunda. Değilse 403.
+ * Not:
+ * - AdminAuthGuard bazı akışlarda req.tenant.id set etmiş olabilir.
+ *   Eğer ikisi çakışırsa Forbidden döner.
  */
 @Injectable()
-export class TenantHeaderGuard implements CanActivate {
+export class TenantGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<any>();
 
-    // 1) Header değerini al
-    const raw = getTenantHeaderValue(req);
+    const headerVal = getTenantHeaderValue(req);
+    if (!headerVal) throw new BadRequestException("x-tenant-id header missing");
 
-    // Header yoksa: bazı endpointlerde tenant zorunlu (catalog/admin gibi)
-    if (!raw) {
-      throw new BadRequestException("Missing x-tenant-id header");
-    }
+    // 1) Eğer header UUID ise direkt tenantId kabul et
+    if (isUuidLike(headerVal)) {
+      const resolvedTenantId = headerVal;
 
-    // 2) Header UUID ise direkt geç
-    let resolvedTenantId: string;
-    let resolvedTenantCode: string | null = null;
-
-    if (isUuidLike(raw)) {
-      resolvedTenantId = raw;
-    } else {
-      // 3) UUID değilse bunu "tenant code" varsayıp DB'den çöz
-      // NOT: Senin schema'da "handle" yok; tenant-config’te de "code" geçiyor.
-      const t = await this.prisma.tenant.findFirst({
-        where: { code: raw },
-        select: { id: true, code: true },
-      });
-
-      if (!t) {
-        throw new BadRequestException(`Unknown tenant: ${raw}`);
+      // 2) Eğer req.tenant.id varsa ve farklıysa: mismatch
+      if (req.tenant?.id && req.tenant.id !== resolvedTenantId) {
+        throw new ForbiddenException("Tenant mismatch");
       }
 
-      resolvedTenantId = t.id;
-      resolvedTenantCode = t.code;
+      req.tenantId = resolvedTenantId;
+      req.tenant = { id: resolvedTenantId };
+      return true;
     }
 
-    // 4) Auth guard zaten req.tenant set ettiyse, uyuşmazlık durumunda 403
-    // (örn: token tenantId = X, header başka tenant gösteriyor -> multi-tenant isolation)
+    // 3) UUID değilse: tenant code (örn "acme") olarak resolve et
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { code: headerVal },
+      select: { id: true, code: true },
+    });
+
+    if (!tenant) throw new BadRequestException("Invalid tenant code");
+
+    const resolvedTenantId = tenant.id;
+    const resolvedTenantCode = tenant.code;
+
+    // 4) Eğer req.tenant.id varsa ve farklıysa: mismatch
     if (req.tenant?.id && req.tenant.id !== resolvedTenantId) {
       throw new ForbiddenException("Tenant mismatch");
     }
@@ -75,3 +72,10 @@ export class TenantHeaderGuard implements CanActivate {
     return true;
   }
 }
+
+/**
+ * Backward compatibility:
+ * Projede bazı yerlerde TenantHeaderGuard import ediliyor.
+ * Yeni isim: TenantGuard
+ */
+export const TenantHeaderGuard = TenantGuard;

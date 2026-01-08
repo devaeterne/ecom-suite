@@ -5,15 +5,19 @@ BASE="${BASE:-http://localhost:3001}"
 EMAIL="${OWNER_EMAIL:-admin@acme.com}"
 PASS="${OWNER_PASS:-ChangeMe123!}"
 
-# İstersen dışarıdan API_BASE kullanıyorsan bunu da destekle:
+# Tek kaynak: API_BASE
 API_BASE="${API_BASE:-$BASE}"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "❌ missing dependency: $1"; exit 1; }; }
+need curl
+need jq
 
 echo "🔐 Login…"
 
 TOKEN="$(curl -sS \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" \
-  "$BASE/api/admin/auth/login" | jq -r '.accessToken')"
+  "$API_BASE/api/admin/auth/login" | jq -r '.accessToken')"
 
 echo "TOKEN_LEN=${#TOKEN}"
 test "${#TOKEN}" -gt 50 || { echo "❌ token alınamadı"; exit 1; }
@@ -27,13 +31,13 @@ echo
 # 1) RBAC bootstrap
 echo "🧱 RBAC bootstrap"
 curl -sS -X POST "${AUTH[@]}" \
-  "$BASE/api/admin/rbac/bootstrap" | jq .
+  "$API_BASE/api/admin/rbac/bootstrap" | jq .
 echo
 
 # 2) tenants/me
 echo "🏢 tenant resolve"
 TENANT_JSON="$(curl -sS "${AUTH[@]}" \
-  "$BASE/api/admin/tenants/me")"
+  "$API_BASE/api/admin/tenants/me")"
 
 echo "$TENANT_JSON" | jq .
 TENANT_ID="$(echo "$TENANT_JSON" | jq -r '.id')"
@@ -47,13 +51,13 @@ TENANT=(-H "x-tenant-id: $TENANT_ID")
 # 3) roles list
 echo "🧑‍⚖️ roles list"
 curl -sS "${AUTH[@]}" "${TENANT[@]}" \
-  "$BASE/api/admin/roles" | jq .
+  "$API_BASE/api/admin/roles" | jq .
 echo
 
 # 4) identities list
 echo "👤 identities list"
 curl -sS "${AUTH[@]}" "${TENANT[@]}" \
-  "$BASE/api/admin/identities" | jq .
+  "$API_BASE/api/admin/identities" | jq .
 echo
 
 # 5) identity create
@@ -63,7 +67,7 @@ echo "📨 create identity ($INV_EMAIL)"
 CREATE_ID_RES="$(curl -sS -X POST \
   "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
   -d "{\"email\":\"$INV_EMAIL\",\"roleScope\":\"STAFF\"}" \
-  "$BASE/api/admin/identities")"
+  "$API_BASE/api/admin/identities")"
 
 echo "$CREATE_ID_RES" | jq .
 
@@ -73,16 +77,12 @@ test -n "$IDENTITY_ID" || { echo "❌ identity create failed"; exit 1; }
 echo "IDENTITY_ID=$IDENTITY_ID"
 echo
 
-# 6) invite
+# 6) invite (FIXED)
 echo "✉️ invite identity"
-
 INVITE_RES="$(curl -sS \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "x-tenant-id: $TENANT_ID" \
-  -H "content-type: application/json" \
-  -X POST "$BASE/api/admin/identities/$IDENTITY_ID/invite" \
-  -d '{}' | jq .
-)"
+  "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+  -X POST "$API_BASE/api/admin/identities/$IDENTITY_ID/invite" \
+  -d '{}')"
 
 echo "$INVITE_RES" | jq .
 
@@ -92,11 +92,12 @@ test "$OK" = "true" || { echo "❌ invite failed"; exit 1; }
 echo
 echo "🎉 ADMIN SMOKE OK"
 echo "tenant=$TENANT_ID identity=$IDENTITY_ID"
+echo
 
 # 7) admin sessions list
 echo "🪪 sessions list"
 SESSIONS_JSON="$(curl -sS "${AUTH[@]}" \
-  "$BASE/api/admin/sessions")"
+  "$API_BASE/api/admin/sessions")"
 
 echo "$SESSIONS_JSON" | jq .
 SESSION_ID="$(echo "$SESSIONS_JSON" | jq -r '.items[0].id // empty')"
@@ -110,12 +111,55 @@ else
   # 7a) revoke single session
   echo "🧨 revoke single session"
   curl -sS -X POST "${AUTH[@]}" \
-    "$BASE/api/admin/sessions/$SESSION_ID/revoke" | jq .
+    "$API_BASE/api/admin/sessions/$SESSION_ID/revoke" | jq .
   echo
 fi
 
 # 7b) revoke all sessions for identity
 echo "🔥 revoke all sessions"
 curl -sS -X POST "${AUTH[@]}" \
-  "$BASE/api/admin/sessions/revoke-all" | jq .
+  "$API_BASE/api/admin/sessions/revoke-all" | jq .
 echo
+
+# 8) Commit A — Catalog Admin READ sanity (NEW)
+echo "📦 Commit A sanity: catalog admin read"
+
+echo "📂 categories (flat)"
+CATS_FLAT="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+  "$API_BASE/api/admin/categories?view=flat")"
+echo "$CATS_FLAT" | jq .
+echo
+
+echo "🌳 categories (tree)"
+CATS_TREE="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+  "$API_BASE/api/admin/categories?view=tree")"
+echo "$CATS_TREE" | jq .
+echo
+
+echo "🛍️ products list"
+PRODS="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+  "$API_BASE/api/admin/products?limit=10&offset=0")"
+echo "$PRODS" | jq .
+echo
+
+PRODUCT_ID="$(echo "$PRODS" | jq -r '.items[0].id // empty')"
+if [[ -z "$PRODUCT_ID" ]]; then
+  echo "ℹ️ hiç ürün yok, product detail/variants test atlanıyor (seed ile ürün bekleniyorsa burada kontrol et)"
+else
+  echo "PRODUCT_ID=$PRODUCT_ID"
+  echo
+
+  echo "🔎 product detail"
+  PROD_DETAIL="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+    "$API_BASE/api/admin/products/$PRODUCT_ID")"
+  echo "$PROD_DETAIL" | jq .
+  echo
+
+  echo "🧩 product variants"
+  VARS="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+    "$API_BASE/api/admin/products/$PRODUCT_ID/variants")"
+  echo "$VARS" | jq .
+  echo
+fi
+
+echo "✅ COMMIT A SMOKE OK"
