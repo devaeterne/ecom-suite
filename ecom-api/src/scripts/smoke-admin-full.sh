@@ -255,5 +255,32 @@ else
 fi
 echo
 
+echo "🧾 files: presigned put/get sanity"
+
+FILE_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+  -d "{\"filename\":\"smoke.png\",\"contentType\":\"image/png\",\"size\":1234}" \
+  "$API_BASE/api/admin/files")"
+
+echo "$FILE_RES" | jq .
+
+FILE_ID="$(echo "$FILE_RES" | jq -r '.fileId // empty')"
+PUT_URL="$(echo "$FILE_RES" | jq -r '.putUrl // empty')"
+
+test -n "$FILE_ID" || { echo "❌ file create failed"; exit 1; }
+test "${#PUT_URL}" -gt 20 || { echo "❌ putUrl missing"; exit 1; }
+
+echo "FILE_ID=$FILE_ID"
+
+GET_URL_RES="$(curl -sS "${AUTH[@]}" "${TENANT[@]}" \
+  "$API_BASE/api/admin/files/$FILE_ID/url")"
+
+echo "$GET_URL_RES" | jq .
+
+DL_URL="$(echo "$GET_URL_RES" | jq -r '.url // empty')"
+test "${#DL_URL}" -gt 20 || { echo "❌ get url missing"; exit 1; }
+
+echo "✅ files smoke ok"
+echo
+
 
 echo "✅ COMMIT B SMOKE OK"
