@@ -69,7 +69,7 @@ export class CatalogAdminController {
   @Delete("/categories/:id")
   async deleteCategory(@Req() req: Request, @Param("id") id: string) {
     const tenantId = requireTenantId(req as any);
-    return this.service.deleteCategory(tenantId, id);
+    return this.service.adminDeleteCategory(tenantId, id);
   }
 
   // -------------------------

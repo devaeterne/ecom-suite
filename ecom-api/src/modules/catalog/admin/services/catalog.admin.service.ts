@@ -41,9 +41,14 @@ export class CatalogAdminService {
     return mapCategory(row);
   }
 
-  async deleteCategory(tenantId: string, id: string) {
-    const existing = await this.repo.getCategoryById(tenantId, id);
-    if (!existing) throw new NotFoundException("Category not found");
+  async adminDeleteCategory(req: any, id: string) {
+    const tenantId = req.tenantId;
+
+    const cat = await this.repo.getCategoryById(tenantId, id);
+    if (!cat) throw new NotFoundException("Category not found");
+
+    const hasChildren = await this.repo.hasCategoryChildren(tenantId, id);
+    if (hasChildren) throw new ConflictException("Category has children");
 
     const inUse = await this.repo.isCategoryInUse(tenantId, id);
     if (inUse) throw new ConflictException("Category is in use");

@@ -22,6 +22,15 @@ export class CatalogRepo {
   // =========================================================
   // Categories (ProductCategory)  ✅ deletedAt YOK -> HARD DELETE
   // =========================================================
+  async hasCategoryChildren(
+    tenantId: string,
+    categoryId: string
+  ): Promise<boolean> {
+    const n = await this.prisma.productCategory.count({
+      where: { tenantId, parentId: categoryId },
+    });
+    return n > 0;
+  }
 
   async listCategories(tenantId: string) {
     return this.prisma.productCategory.findMany({
@@ -286,14 +295,29 @@ export class CatalogRepo {
   }
 
   async adminSoftDeleteProduct(tenantId: string, id: string) {
-    return this.prisma.catalogProduct.update({
-      where: { id },
-      data: {
-        deletedAt: this.now(),
-        status: "draft",
-        publishedAt: null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      // Link cleanup: category/collection/tag (silme conflict’lerini kaldırır)
+      await tx.productCategoryLink.deleteMany({
+        where: { tenantId, productId: id },
+      });
+      await tx.productCollectionLink.deleteMany({
+        where: { tenantId, productId: id },
+      });
+      await tx.productTagLink.deleteMany({
+        where: { tenantId, productId: id },
+      });
+
+      // (Opsiyonel) ürün media link’leri de temizlik
+      await tx.productMedia.deleteMany({ where: { tenantId, productId: id } });
+
+      // Soft delete product
+      await tx.catalogProduct.update({
+        where: { id },
+        data: { deletedAt: this.now(), status: "draft", publishedAt: null },
+      });
     });
+
+    return { ok: true };
   }
 
   // =========================================================

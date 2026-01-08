@@ -241,20 +241,19 @@ curl -sS -X DELETE "${AUTH[@]}" "${TENANT[@]}" \
   "$API_BASE/api/admin/products/$PRODUCT_ID" | jq .
 echo
 
-echo "🗑️ delete category (hard delete; link kaldıysa 409 beklenebilir)"
+echo "🗑️ delete category (hard delete; link cleanup sonrası 2xx beklenir)"
 DEL_CAT_CODE="$(curl -sS -o /tmp/del_cat.json -w "%{http_code}" \
   -X DELETE "${AUTH[@]}" "${TENANT[@]}" \
   "$API_BASE/api/admin/categories/$CATEGORY_ID")"
 
 cat /tmp/del_cat.json | jq . || true
-if [[ "$DEL_CAT_CODE" = "409" ]]; then
-  echo "ℹ️ category delete -> 409 (in use) beklenen/ok (link cleanup endpointi yok)"
-elif [[ "$DEL_CAT_CODE" =~ ^2 ]]; then
+if [[ "$DEL_CAT_CODE" =~ ^2 ]]; then
   echo "✅ category delete ok"
 else
   echo "❌ category delete failed (HTTP $DEL_CAT_CODE)"
   exit 1
 fi
 echo
+
 
 echo "✅ COMMIT B SMOKE OK"
