@@ -7,140 +7,140 @@
 🟢 AŞAMA 0 — CORE PLATFORM (DONE ✅)
 Sistem & Güvenlik
 
- Health / live
+- [x]  Health / live
 
- Admin auth (login / refresh / logout / sessions)
+- [x]  Admin auth (login / refresh / logout / sessions)
 
- Store auth (register / login / refresh / logout)
+- [x]  Store auth (register / login / refresh / logout)
 
- Password reset
+- [x]  Password reset
 
- RBAC (roles, permissions, bootstrap)
+- [x]  RBAC (roles, permissions, bootstrap)
 
- Tenant resolve (/admin/tenants/me)
+- [x]  Tenant resolve (/admin/tenants/me)
 
 Customer & Store Core
 
- Customer profile & address CRUD
+- [x]  Customer profile & address CRUD
 
- Store cart (line item, coupon apply, shipping method placeholder)
+- [x]  Store cart (line item, coupon apply, shipping method placeholder)
 
- Checkout (create, address, payment providers)
+- [x]  Checkout (create, address, payment providers)
 
- Orders (from checkout, list, detail)
+- [x]  Orders (from checkout, list, detail)
 
- Payments (manual provider)
+- [x]  Payments (manual provider)
 
- Payment webhook ingest
+- [x]  Payment webhook ingest
 
-Inventory (Store tarafı)
+Inventory (Store tarafı) ✅ (core hazır)
 
- InventoryLocation (default seed)
+- [x]  InventoryLocation (default seed)
 
- InventoryLevel (core model)
+- [x]  InventoryLevel (core model)
 
- InventoryReservation
+- [x]  InventoryReservation
 
- Checkout → reserve / status / release
+- [x]  Checkout → reserve / status / release
 
- Idempotency + unique constraints
+- [x]  Idempotency + unique constraints
 
- Store E2E smoke (tam yeşil)
+- [x]  Store E2E smoke (tam yeşil) (senin önceki notuna göre)
 
-Files / Media (Admin)
+Files / Media (Admin) ✅
 
- MinIO entegrasyonu (internal + public endpoint ayrımı)
+- [x]  MinIO entegrasyonu (internal + public endpoint ayrımı)
 
- Presigned PUT
+- [x]  Presigned PUT
 
- Upload → complete (HEAD doğrulama)
+- [x]  Upload → complete (HEAD doğrulama)
 
- Presigned GET
+- [x]  Presigned GET
 
- File ↔ entity link
+- [x]  File ↔ entity link
 
- Entity files list
+- [x]  Entity files list
 
- Files smoke test (tam yeşil)
+- [x]  Files smoke test (tam yeşil)
 
 🟡 AŞAMA 1 — INVENTORY & ADMIN STOCK (ŞİMDİ)
 
-Kritik karar:
-Variant “detay” ekranı = Inventory + Pricing birlikte
+Kritik karar: Variant “detay” ekranı = Inventory + Pricing birlikte
 Ama ilk adım sadece Inventory
 
-Admin InventoryLocation
+Admin InventoryLocation ✅
 
- GET /api/admin/inventory/locations
+- [x]  GET /api/admin/inventory/locations
 
- POST /api/admin/inventory/locations
+- [x]  POST /api/admin/inventory/locations
 
- PATCH /api/admin/inventory/locations/:id
+- [x]  PATCH /api/admin/inventory/locations/:id
 
- POST /api/admin/inventory/locations/:id/set-default
+- [x]  POST /api/admin/inventory/locations/:id/set-default
 
- DELETE /api/admin/inventory/locations/:id
+- [x]  DELETE /api/admin/inventory/locations/:id
 
-Admin InventoryLevel
+Admin InventoryLevel ✅
 
- GET /api/admin/inventory/levels
+- [x]  GET /api/admin/inventory/levels
 
- PUT /api/admin/inventory/levels (upsert)
+- [x]  PUT /api/admin/inventory/levels (upsert)
 
- Variant ↔ location ↔ quantity netliği
+- [x]  Variant ↔ location ↔ quantity netliği (model + endpoint var; smoke seviyesinde doğrulandı)
 
-Ops / Debug
+Ops / Debug ✅
 
- GET /api/admin/inventory/reservations
+- [x]  GET /api/admin/inventory/reservations
 
-E2E hedef
+- [ ] E2E hedef (Aşama 1’in “bitme” kriteri)
 
- Admin stok gir → Store checkout reserve başarılı
+ Admin stok gir → Store checkout reserve başarılı → Admin reservations’ta ACTIVE görünür
+(Admin tarafı hazır. Bu madde “tek smoke script” ile uçtan uca yeşil alınca kapanacak.)
 
 ➡️ Bu aşama bitmeden pricing’e geçilmeyecek
 
 🟡 AŞAMA 2 — CATALOG GENİŞLETME (ADMIN)
 Category & Structure
 
- GET categories (tree / flat)
+- [x] GET categories (tree / flat)
 
- GET category by id
+- [x] GET category by id
 
- DELETE category (hard delete + cleanup)
+- [x] DELETE category (hard delete + cleanup)
 
- Category hierarchy edge-case’leri (cycle guard, child policy)
+- [ ] Category hierarchy edge-case’leri (cycle guard, child policy)
 
 Product & Variant
 
- Product CRUD + publish/unpublish
+- [x] Product CRUD + publish/unpublish (smoke: create + publish/unpublish + delete)
 
- Variant CRUD
+- [x] Variant CRUD (smoke: create + hard delete)
 
- Variant detail view (inventory + pricing placeholder)
+- [ ] Variant detail view (inventory + pricing placeholder)
 
- Variant metadata genişletme
+- [ ] Variant metadata genişletme
 
 Media
 
- Files core (presign, link)
+- [x] Files core (presign, link)
 
- Product media role standardları (GALLERY, THUMBNAIL, HERO)
+- [ ] Product media role standardları (GALLERY, THUMBNAIL, HERO)
 
- Media reorder
+- [ ] Media reorder
 
 Collections & Tags
 
- Collections CRUD
+- [ ] Collections CRUD
 
- Tags CRUD
+- [ ] Tags CRUD
 
- Product ↔ collection / tag link
+- [ ] Product ↔ collection / tag link
 
 Translations
 
- Product translations
+- [ ] Product translations
 
- Category translations
+- [ ] Category translations
 
 E2E hedef
 
@@ -148,105 +148,50 @@ E2E hedef
 
 🟡 AŞAMA 3 — PRICING & DISCOUNTS (MARKETING)
 
-Önemli:
-Tax + Shipping totals olmadan pricing eksik sayılır
+- [ ] Price Lists (GET / POST / PATCH)
 
-Price Lists
+- [ ] Activate / deactivate
 
- GET / POST / PATCH price-lists
+- [ ] Currency support
 
- Activate / deactivate
+- [ ] Variant Pricing (PUT /api/admin/variants/:id/prices)
 
- Currency support
+- [ ] PriceList override logic
 
-Variant Pricing
+- [ ] Discounts / Coupons (CRUD + activate/deactivate + cart entegrasyonu)
 
- PUT /api/admin/variants/:id/prices
+- [ ] Totals (TaxRate/VatRate + Shipping placeholder)
 
- PriceList override logic
-
-Discounts / Coupons
-
- Discount CRUD
-
- Activate / deactivate
-
- Cart entegrasyonu
-
-Totals (Mini ama zorunlu)
-
- TaxRate / VatRate hesaplama
-
- Shipping total placeholder (sadece totals için)
-
-E2E hedef
-
- Admin fiyat + kupon → Store cart totals doğru
+- [ ] E2E: Admin fiyat + kupon → Store cart totals doğru
 
 🟡 AŞAMA 4 — FULFILLMENT & SHIPPING
-Order Fulfillment
 
- Fulfill
+- [ ] Fulfill / Ship / Mark delivered / list
 
- Ship
+- [ ] Shipping config (carrier, option, profile, pickup)
 
- Mark delivered
-
- Fulfillment list
-
-Shipping Config
-
- Carrier
-
- Shipping option
-
- Shipping profile
-
- Pickup location
-
-Store
-
- GET /api/store/shipping-options
+- [ ] Store shipping options endpoint
 
 🟡 AŞAMA 5 — FINANCE
-Invoice
 
- Invoice series
+- [ ] Invoice series + Order→invoice + read
 
- Order → invoice
-
- Invoice read
-
-Refund
-
- Refund create
-
- Refund list
+ - [ ]Refund create + list
 
 🟡 AŞAMA 6 — SEO & ANALYTICS
-SEO
 
- Slug
+- [ ] SEO (slug, redirect, meta)
 
- Redirect
-
- SEO meta
-
-Analytics
-
- Audit log genişletme
-
- Basic analytics hooks
-
+- [ ] Analytics (audit log genişletme + basic hooks)
 🔒 SABİT KURALLAR (DEĞİŞMEZ)
 
- Admin bitmeden Store yazılmaz
+- [ ] Admin bitmeden Store yazılmaz
 
- Inventory + Pricing → Fulfillment ön koşulu
+- [ ] Inventory + Pricing → Fulfillment ön koşulu
 
- Smoke kırılırsa ilerleme durur
+- [ ] Smoke kırılırsa ilerleme durur
 
- “Nice to have” asla core’u bozamaz
+- [ ] “Nice to have” asla core’u bozamaz
 
 ✅ SON DURUM
 

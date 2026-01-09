@@ -76,10 +76,14 @@ export class TenantContextMiddleware implements NestMiddleware {
       if (shouldBypassTenant(req.url)) return next();
 
       // 1) Header önceliği
-      const headerTenantId = req.headers?.["x-tenant-id"] as string | undefined;
-      const headerTenantCode = req.headers?.["x-tenant-code"] as
-        | string
-        | undefined;
+      const h = req.headers ?? {};
+      const headerTenantId =
+        (h["x-tenant-id"] as string | undefined) ??
+        (h["x-tenantid"] as string | undefined);
+
+      const headerTenantCode =
+        (h["x-tenant-code"] as string | undefined) ??
+        (h["x-tenant"] as string | undefined);
 
       let resolvedTenant: { id: string; code?: string } | undefined;
 
@@ -115,7 +119,16 @@ export class TenantContextMiddleware implements NestMiddleware {
         }
       }
 
-      if (resolvedTenant) req.tenant = resolvedTenant;
+      if (resolvedTenant) {
+        req.tenant = resolvedTenant;
+        req.tenantId = resolvedTenant.id; // ✅ critical
+        req.tenantCode = resolvedTenant.code; // opsiyonel ama faydalı
+      }
+      console.log("[TenantContextMiddleware]", {
+        url: req.url,
+        tenantIdHeader: req.headers?.["x-tenant-id"],
+        tenantCodeHeader: req.headers?.["x-tenant-code"],
+      });
 
       return next();
     } catch (err) {

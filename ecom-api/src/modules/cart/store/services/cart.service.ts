@@ -101,15 +101,14 @@ export class StoreCartService {
   async addLineItem(
     tenantId: string,
     cartId: string,
-    input: { variantId: string; quantity: number }
+    input: { variantId: string; quantity: number; locationId?: string }
   ): Promise<Cart> {
     if (input.quantity < 1)
       throw new BadRequestException("quantity must be >= 1");
 
-    const locationId = await resolveDefaultInventoryLocationId(
-      this.prisma,
-      tenantId
-    );
+    const locationId =
+      input.locationId ??
+      (await resolveDefaultInventoryLocationId(this.prisma, tenantId));
 
     const row = await this.prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findFirst({
@@ -129,7 +128,30 @@ export class StoreCartService {
         locationId,
         input.variantId
       );
+      // ... level lock'tan sonra
       const available = level.stockedQuantity - level.reservedQuantity;
+
+      if (input.quantity > available) {
+        // 🎯 debug
+        console.warn("[CART][INSUFFICIENT_STOCK]", {
+          tenantId,
+          cartId,
+          variantId: input.variantId,
+          resolvedLocationId: locationId,
+          stockedQuantity: level.stockedQuantity,
+          reservedQuantity: level.reservedQuantity,
+          available,
+          requested: input.quantity,
+        });
+
+        throw new ConflictException({
+          code: "INSUFFICIENT_STOCK",
+          message: "Insufficient stock for reservation",
+          available,
+          requested: input.quantity,
+        });
+      }
+
       if (input.quantity > available) {
         throw new ConflictException({
           code: "INSUFFICIENT_STOCK",

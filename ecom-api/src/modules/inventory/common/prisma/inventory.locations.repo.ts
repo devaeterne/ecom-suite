@@ -8,11 +8,13 @@ import { PrismaService } from "@/prisma/prisma.service";
 @Injectable()
 export class InventoryLocationsRepo {
   constructor(private readonly prisma: PrismaService) {}
+
   countActive(tenantId: string) {
     return this.prisma.inventoryLocation.count({
       where: { tenantId, deletedAt: null },
     });
   }
+
   async list(tenantId: string) {
     return this.prisma.inventoryLocation.findMany({
       where: { tenantId, deletedAt: null },
@@ -48,7 +50,7 @@ export class InventoryLocationsRepo {
     code?: string | null;
     address?: any | null;
     metadata?: any;
-    isDefault?: boolean; // ⬅️ servis isterse gönderebilsin
+    isDefault?: boolean;
   }) {
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -56,7 +58,7 @@ export class InventoryLocationsRepo {
           where: { tenantId: params.tenantId, deletedAt: null },
         });
 
-        const hasDefault = await tx.inventoryLocation.count({
+        const defaultCount = await tx.inventoryLocation.count({
           where: {
             tenantId: params.tenantId,
             deletedAt: null,
@@ -64,12 +66,8 @@ export class InventoryLocationsRepo {
           },
         });
 
-        // Kural:
-        // - tablo boşsa => default true
-        // - dto isDefault true geldiyse => default true (tek default enforce edilecek)
-        // - tablo dolu ama default yoksa => bu create’i default yap (self-heal)
         const shouldBeDefault =
-          activeCount === 0 || params.isDefault === true || hasDefault === 0;
+          activeCount === 0 || params.isDefault === true || defaultCount === 0;
 
         if (shouldBeDefault) {
           await tx.inventoryLocation.updateMany({
@@ -78,7 +76,7 @@ export class InventoryLocationsRepo {
           });
         }
 
-        const created = await tx.inventoryLocation.create({
+        return tx.inventoryLocation.create({
           data: {
             tenantId: params.tenantId,
             name: params.name,
@@ -88,11 +86,9 @@ export class InventoryLocationsRepo {
             isDefault: shouldBeDefault,
           },
         });
-
-        return created;
       });
     } catch (e: any) {
-      if (e.code === "P2002") {
+      if (e?.code === "P2002") {
         throw new ConflictException("INVENTORY_LOCATION_CODE_CONFLICT");
       }
       throw e;
@@ -120,7 +116,10 @@ export class InventoryLocationsRepo {
         },
       });
     } catch (e: any) {
-      throw new ConflictException("INVENTORY_LOCATION_CODE_CONFLICT");
+      if (e?.code === "P2002") {
+        throw new ConflictException("INVENTORY_LOCATION_CODE_CONFLICT");
+      }
+      throw e;
     }
   }
 
@@ -128,13 +127,11 @@ export class InventoryLocationsRepo {
     const row = await this.findByIdOrThrow(tenantId, id);
 
     return this.prisma.$transaction(async (tx) => {
-      // önce sil
       await tx.inventoryLocation.update({
         where: { tenantId_id: { tenantId, id } },
         data: { isDefault: false, deletedAt: new Date() },
       });
 
-      // eğer silinen default ise, kalanlardan oldest olanı default yap
       if (row.isDefault) {
         const fallback = await tx.inventoryLocation.findFirst({
           where: { tenantId, deletedAt: null },
@@ -161,15 +158,20 @@ export class InventoryLocationsRepo {
   /**
    * Tek default kuralı: transaction ile enforce.
    */
-  async setDefault(tenantId: string, id: string) {
+  async setDefault(tenantId: string, locationId: string) {
     return this.prisma.$transaction(async (tx) => {
       await tx.inventoryLocation.updateMany({
-        where: { tenantId, deletedAt: null },
+        where: {
+          tenantId,
+          deletedAt: null,
+          isDefault: true,
+          id: { not: locationId },
+        },
         data: { isDefault: false },
       });
 
-      return tx.inventoryLocation.update({
-        where: { tenantId_id: { tenantId, id } },
+      await tx.inventoryLocation.update({
+        where: { id: locationId },
         data: { isDefault: true },
       });
     });

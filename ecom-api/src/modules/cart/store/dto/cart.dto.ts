@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, Min, IsUUID } from "class-validator";
 
 export class CreateCartDto {
   @IsOptional()
@@ -13,6 +13,11 @@ export class AddLineItemDto {
   @IsInt()
   @Min(1)
   quantity!: number;
+
+  // ✅ optional: smoke / advanced clients
+  @IsOptional()
+  @IsUUID()
+  locationId?: string;
 }
 
 export class UpdateLineItemDto {

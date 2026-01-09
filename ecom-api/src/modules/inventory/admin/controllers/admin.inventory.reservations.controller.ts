@@ -6,6 +6,7 @@ import { AdminInventoryService } from "../services/inventory.service";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { AdminInventoryReservationsQueryDto } from "../dto/admin.inventory.reservations.query.dto";
 
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 @Controller("/admin/inventory/reservations")
@@ -18,23 +19,18 @@ export class AdminInventoryReservationsController {
   @Get()
   async list(
     @Req() req: Request,
-    @Query("locationId") locationId?: string,
-    @Query("variantId") variantId?: string,
-    @Query("checkoutId") checkoutId?: string,
-    @Query("status") status?: "ACTIVE" | "COMPLETED" | "CANCELED" | "EXPIRED",
-    @Query("take") take?: string,
-    @Query("skip") skip?: string
+    @Query() query: AdminInventoryReservationsQueryDto
   ) {
     const { tenantId } = this.tenancy.getScope(req);
 
     const reservations = await this.service.listReservations({
       tenantId,
-      locationId,
-      variantId,
-      checkoutId,
-      status,
-      take: take ? Number(take) : undefined,
-      skip: skip ? Number(skip) : undefined,
+      locationId: query.locationId,
+      variantId: query.variantId,
+      checkoutId: query.checkoutId,
+      status: query.status,
+      take: query.take,
+      skip: query.skip,
     });
 
     return { reservations };

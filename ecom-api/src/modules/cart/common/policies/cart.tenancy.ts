@@ -8,14 +8,20 @@ import { Request } from "express";
  * - req.tenantId
  * - req.tenant?.id
  */
-export function getTenantIdOrThrow(req: Request): string {
-  const anyReq = req as any;
-  const tenantId: string | undefined = anyReq.tenantId ?? anyReq.tenant?.id;
+export function getTenantIdOrThrow(req: any): string {
+  const tenantId =
+    req?.tenantId ??
+    req?.tenant?.id ??
+    req?.tenant?.tenantId ??
+    (req?.headers?.["x-tenant-id"] as string | undefined);
+
   if (!tenantId) {
-    // Multi-tenant yok ama schema zorunlu => tenant bootstrap şart.
-    throw new Error(
-      "Missing tenantId on request. Ensure tenant-bootstrap sets req.tenantId (from tenant.json)."
-    );
+    const err = new Error(
+      "Missing tenantId on request. Ensure tenant context is set (middleware) or x-tenant-id header is provided."
+    ) as any;
+    err.status = 400;
+    throw err;
   }
+
   return tenantId;
 }
