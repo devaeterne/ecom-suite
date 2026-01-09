@@ -37,3 +37,9 @@ export function requireTenantId(req: any): string {
 
   return tenantId;
 }
+// örnek implementasyon (sende zaten benzeri vardır)
+export function getTenantIdOrThrow(req: any): string {
+  const tenantId = req?.tenant?.id ?? req?.tenantId; // projendeki standarda göre
+  if (!tenantId) throw new Error("Tenant not resolved on request");
+  return tenantId;
+}

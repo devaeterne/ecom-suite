@@ -2,33 +2,102 @@
 set -euo pipefail
 
 ############################################
+# Expectations
+############################################
+expect_400 () { [ "$1" = "400" ]; }
+expect_409 () { [ "$1" = "409" ]; }
+expect_2xx () { [[ "${1//[^0-9]/}" =~ ^2 ]]; }
+
+############################################
 # Logging
 ############################################
 LOG_FILE="${LOG_FILE:-/tmp/smoke-admin-$(date +%Y%m%d_%H%M%S).log}"
 exec > >(tee -a "$LOG_FILE") 2>&1
-echo "LOG_FILE=$LOG_FILE"
+echo "LOG_FILE= $LOG_FILE"
 echo
 
 ############################################
 # Helpers
 ############################################
 need() { command -v "$1" >/dev/null 2>&1 || { echo "❌ missing dependency: $1"; exit 1; }; }
-expect_2xx () { [[ "$1" =~ ^2 ]]; }
-step() { echo; echo "🧩 $*"; }
-reqline() { echo "➡️  $1 $2"; }
+step() { echo; echo "🧩 $*" >&2; }
+
+reqline() { echo "➡️  $1 $2" >&2; }
+
 
 need curl
 need jq
 need date
+need node
+need sed
+need dd
+
+
 
 ############################################
 # Env / Config
 ############################################
+AUTH=()
+TENANT=()
+JSON=()
+STORE_AUTH=()
+
 BASE="${BASE:-http://localhost:3001}"
 API="$BASE/api"
 
 EMAIL="${OWNER_EMAIL:-admin@acme.com}"
 PASS="${OWNER_PASS:-ChangeMe123!}"
+TENANT_ID=""
+
+
+############################################
+# Admin helper: call (body + http_code)
+# - data varsa Content-Type gönderir
+# - data yoksa sadece auth+tenant ile gider
+############################################
+admin_call_code() {
+  local method="$1"; shift
+  local url="$1"; shift
+  local data="${1:-}"
+  local out="${2:-/tmp/admin_body.json}"
+
+  local headers=()
+  headers+=("${AUTH[@]:-}")
+  headers+=("${TENANT[@]:-}")
+
+  if [ -n "$data" ]; then
+    headers+=("${JSON[@]:-}")
+    curl -sS -o "$out" -w "%{http_code}\n" \
+      -X "$method" "${headers[@]}" \
+      "$url" -d "$data" | tail -n 1
+  else
+    curl -sS -o "$out" -w "%{http_code}\n" \
+      -X "$method" "${headers[@]}" \
+      "$url" | tail -n 1
+  fi
+}
+
+
+
+############################################
+# Store helper: always sends JSON body if data provided
+############################################
+store_call_code() {
+  local method="$1"; shift
+  local url="$1"; shift
+  local data="${1:-}"
+  local out="${2:-/tmp/store_body.json}"
+
+  if [ -n "$data" ]; then
+    curl -sS -o "$out" -w "%{http_code}" \
+      -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+      "$url" -d "$data"
+  else
+    curl -sS -o "$out" -w "%{http_code}" \
+      -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" \
+      "$url"
+  fi
+}
 
 ############################################
 # Admin Login
@@ -55,56 +124,27 @@ echo "✅ admin login ok"
 step "Resolve tenant"
 reqline "GET" "$API/admin/tenants/me"
 
-TENANT_JSON="$(curl -sS "${AUTH[@]}" "$API/admin/tenants/me")"
+TENANT_JSON="$(
+  curl -sS \
+    -H "Authorization: Bearer $ADMIN_ACCESS_TOKEN" \
+    "$API/admin/tenants/me"
+)"
 TENANT_ID="$(echo "$TENANT_JSON" | jq -r '.id')"
 
-test -n "$TENANT_ID" || { echo "❌ tenantId yok"; exit 1; }
+test -n "$TENANT_ID" || { echo "❌ tenantId yok"; echo "$TENANT_JSON"; exit 1; }
 TENANT=(-H "x-tenant-id: $TENANT_ID")
 
 echo "TENANT_ID=$TENANT_ID"
+step "Resolve tenant"
+reqline "GET" "$API/admin/tenants/me"
 
-############################################
-# Admin helper: call (body + http_code)
-# - data varsa Content-Type gönderir
-# - data yoksa sadece auth+tenant ile gider
-############################################
-admin_call_code() {
-  local method="$1"; shift
-  local url="$1"; shift
-  local data="${1:-}"
-  local out="${2:-/tmp/admin_body.json}"
+TENANT_JSON="$(curl -sS "${AUTH[@]}" "$API/admin/tenants/me")"
+TENANT_ID="$(echo "$TENANT_JSON" | jq -r '.tenant.id // .id // empty')"
 
-  if [ -n "$data" ]; then
-    curl -sS -o "$out" -w "%{http_code}" \
-      -X "$method" "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-      "$url" -d "$data"
-  else
-    curl -sS -o "$out" -w "%{http_code}" \
-      -X "$method" "${AUTH[@]}" "${TENANT[@]}" \
-      "$url"
-  fi
-}
+test -n "$TENANT_ID" || { echo "❌ tenantId yok"; echo "$TENANT_JSON" | jq .; exit 1; }
+TENANT=(-H "x-tenant-id: $TENANT_ID")
+echo "TENANT_ID=$TENANT_ID"
 
-############################################
-# Store helper: always sends JSON body if data provided
-############################################
-store_call_code() {
-  local method="$1"; shift
-  local url="$1"; shift
-  local data="${1:-}"
-  local out="${2:-/tmp/store_body.json}"
-
-  if [ -n "$data" ]; then
-    curl -sS -o "$out" -w "%{http_code}" \
-      -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-      "$url" -d "$data"
-  else
-    # ⚠️ JSON endpointlerde body bekleniyorsa bunu kullanmıyoruz.
-    curl -sS -o "$out" -w "%{http_code}" \
-      -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" \
-      "$url"
-  fi
-}
 
 ############################################
 # Commit C — Inventory Location + set-default + verify default
@@ -141,7 +181,6 @@ test -n "$DEFAULT_LOC_ID" || { echo "❌ default location bulunamadı"; exit 1; 
 
 echo "✅ DEFAULT_LOC_ID=$DEFAULT_LOC_ID"
 
-# determinism: default must be ours
 if [ "$DEFAULT_LOC_ID" != "$LOC_A_ID" ]; then
   echo "❌ Default location mismatch!"
   echo "   expected LOC_A_ID=$LOC_A_ID"
@@ -155,7 +194,7 @@ echo "✅ default verification ok"
 ############################################
 step "Commit D — Inventory E2E"
 
-# 1) Create product+variant
+# 1) Create category -> product -> variant
 reqline "POST" "$API/admin/categories"
 CAT_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
   -d "{\"name\":\"Smoke Cat $TS\",\"handle\":\"smoke-cat-$TS\"}" \
@@ -178,7 +217,7 @@ VARIANT_ID="$(echo "$VAR_RES" | jq -r '.id // .variant.id // empty')"
 test -n "$VARIANT_ID" || { echo "❌ variant create failed"; echo "$VAR_RES"; exit 1; }
 echo "✅ VARIANT_ID=$VARIANT_ID"
 
-# 2) Upsert inventory level (use DEFAULT_LOC_ID)
+# 2) Upsert inventory level at default
 reqline "PUT" "$API/admin/inventory/levels"
 UP_PAYLOAD="$(jq -cn \
   --arg locationId "$DEFAULT_LOC_ID" \
@@ -189,8 +228,7 @@ cat /tmp/levels.json | jq .
 expect_2xx "$CODE" || { echo "❌ level upsert failed (HTTP $CODE)"; exit 1; }
 echo "✅ inventory stocked (default location)"
 
-
-# --- determinism: enforce default AGAIN right before store/cart ---
+# determinism: enforce default again right before store/cart
 reqline "POST" "$API/admin/inventory/locations/$LOC_A_ID/set-default"
 CODE="$(admin_call_code POST "$API/admin/inventory/locations/$LOC_A_ID/set-default" '{}' /tmp/loc_set_default2.json)"
 expect_2xx "$CODE" || { echo "❌ set-default(2) failed (HTTP $CODE)"; cat /tmp/loc_set_default2.json; exit 1; }
@@ -205,11 +243,9 @@ DEFAULT_LOC_ID="$(jq -r '(.locations // .items // []) | map(select(.isDefault==t
 echo "✅ DEFAULTS_CNT=$DEFAULTS_CNT"
 echo "✅ DEFAULT_LOC_ID=$DEFAULT_LOC_ID"
 
-# must be unique + must be ours
 test "$DEFAULTS_CNT" -eq 1 || { echo "❌ multiple default locations detected"; jq '.locations // .items' /tmp/loc_list2.json; exit 1; }
 test "$DEFAULT_LOC_ID" = "$LOC_A_ID" || { echo "❌ default mismatch: expected $LOC_A_ID got $DEFAULT_LOC_ID"; exit 1; }
 
-# sanity: inventory level must exist at default
 reqline "GET" "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID"
 CODE="$(admin_call_code GET "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID" "" /tmp/levels_check.json)"
 cat /tmp/levels_check.json | jq .
@@ -238,9 +274,8 @@ echo "✅ store auth ok"
 # Store flow: Cart -> Line item -> Checkout -> Reserve
 ############################################
 step "Cart create"
-
-# ✅ FIX: /store/cart endpoint JSON body istiyor. Boş body gönderme; "{}" gönder.
 reqline "POST" "$API/store/cart"
+
 CART_CODE="$(store_call_code POST "$API/store/cart" '{}' /tmp/cart.json)"
 cat /tmp/cart.json | jq .
 expect_2xx "$CART_CODE" || { echo "❌ cart create failed (HTTP $CART_CODE)"; exit 1; }
@@ -249,22 +284,9 @@ CART_ID="$(jq -r '.cart.id // .id // empty' /tmp/cart.json)"
 test -n "$CART_ID" && [ "$CART_ID" != "null" ] || { echo "❌ CART_ID yok"; exit 1; }
 echo "✅ CART_ID=$CART_ID"
 
-step "Add line item"
+step "Add line item (single call)"
 reqline "POST" "$API/store/cart/line-items"
-ADD_RES="$(curl -sS -X POST "${STORE_AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  -d "{\"variantId\":\"$VARIANT_ID\",\"quantity\":1}" \
-  "$API/store/cart/line-items")"
 
-echo "$ADD_RES" | jq .
-
-# 🔥 KRİTİK: backend bu endpoint’te yeni cart yaratmış olabilir
-NEW_CART_ID="$(echo "$ADD_RES" | jq -r '.cart.id // empty')"
-test -n "$NEW_CART_ID" || { echo "❌ add line item response cart.id yok"; exit 1; }
-
-CART_ID="$NEW_CART_ID"
-echo "✅ CART_ID (effective)=$CART_ID"
-echo
-# Not: locationId desteklenmiyorsa ignore edilir; destekleniyorsa deterministik olur.
 ADD_PAYLOAD="$(jq -cn \
   --arg variantId "$VARIANT_ID" \
   --arg locationId "$DEFAULT_LOC_ID" \
@@ -273,11 +295,15 @@ ADD_PAYLOAD="$(jq -cn \
 ADD_CODE="$(store_call_code POST "$API/store/cart/line-items" "$ADD_PAYLOAD" /tmp/add_item.json)"
 cat /tmp/add_item.json | jq .
 expect_2xx "$ADD_CODE" || { echo "❌ add line item failed (HTTP $ADD_CODE)"; exit 1; }
+
+# Backend cart id changes -> accept response as source of truth
+CART_ID="$(jq -r '.cart.id // empty' /tmp/add_item.json)"
+test -n "$CART_ID" || { echo "❌ CART_ID missing after add line item"; exit 1; }
+echo "✅ CART_ID (effective)=$CART_ID"
 echo "✅ line item ok"
 
 step "Checkout create"
 reqline "POST" "$API/store/checkout"
-
 
 CHECKOUT_PAYLOAD="$(jq -cn --arg cartId "$CART_ID" '{cartId:$cartId}')"
 CHK_CODE="$(store_call_code POST "$API/store/checkout" "$CHECKOUT_PAYLOAD" /tmp/checkout.json)"
@@ -301,6 +327,16 @@ cat /tmp/reserve.json | jq .
 expect_2xx "$RES_CODE" || { echo "❌ reserve failed (HTTP $RES_CODE)"; exit 1; }
 echo "✅ reserve ok"
 
+NOOP="$(jq -r '.noop // false' /tmp/reserve.json)"
+ITEMS_LEN="$(jq -r '(.items // []) | length' /tmp/reserve.json)"
+
+if [ "$NOOP" = "true" ] || [ "$ITEMS_LEN" -lt 1 ]; then
+  echo "❌ reserve-stock noop oldu: reservation üretilmedi"
+  echo "   debug: cartId=$CART_ID checkoutId=$CHECKOUT_ID variantId=$VARIANT_ID locationId=$DEFAULT_LOC_ID"
+  cat /tmp/reserve.json | jq .
+  exit 1
+fi
+
 ############################################
 # Assert reservation exists (ADMIN)
 ############################################
@@ -314,9 +350,302 @@ expect_2xx "$CODE" || { echo "❌ reservations list failed (HTTP $CODE)"; exit 1
 CNT="$(jq -r '(.reservations // .items // []) | length' /tmp/res.json)"
 test "$CNT" -ge 1 || { echo "❌ reservation bulunamadı"; exit 1; }
 
+echo "✅ Inventory E2E GREEN"
+
+############################################
+# Commit E — Category edge-case (cycle + delete policy)
+############################################
+step "Commit E — Category edge-case (cycle + delete policy)"
+
+# Create child category under CATEGORY_ID
+reqline "POST" "$API/admin/categories"
+CHILD_PAYLOAD="$(jq -cn \
+  --arg name "Smoke Child $TS" \
+  --arg handle "smoke-child-$TS" \
+  --arg parentId "$CATEGORY_ID" \
+  '{name:$name, handle:$handle, parentId:$parentId}')"
+
+CODE="$(admin_call_code POST "$API/admin/categories" "$CHILD_PAYLOAD" /tmp/cat_child.json)"
+cat /tmp/cat_child.json | jq .
+expect_2xx "$CODE" || { echo "❌ child category create failed (HTTP $CODE)"; exit 1; }
+
+CATEGORY_CHILD_ID="$(jq -r '.id // .category.id // empty' /tmp/cat_child.json)"
+test -n "$CATEGORY_CHILD_ID" || { echo "❌ CATEGORY_CHILD_ID yok"; exit 1; }
+echo "✅ CATEGORY_CHILD_ID=$CATEGORY_CHILD_ID"
+
+# Self-parent should be 400
+step "Category self-parent -> 400"
+reqline "PATCH" "$API/admin/categories/$CATEGORY_ID"
+
+SELF_PARENT_PAYLOAD="$(jq -cn --arg parentId "$CATEGORY_ID" '{parentId:$parentId}')"
+CODE="$(admin_call_code PATCH "$API/admin/categories/$CATEGORY_ID" "$SELF_PARENT_PAYLOAD" /tmp/cat_self_parent.json)"
+cat /tmp/cat_self_parent.json | jq . || true
+expect_400 "$CODE" || { echo "❌ expected 400, got HTTP $CODE"; exit 1; }
+echo "✅ self-parent 400 ok"
+
+# Descendant-parent should be 409
+step "Category move under descendant -> 409"
+reqline "PATCH" "$API/admin/categories/$CATEGORY_ID"
+
+DESC_PAYLOAD="$(jq -cn --arg parentId "$CATEGORY_CHILD_ID" '{parentId:$parentId}')"
+CODE="$(admin_call_code PATCH "$API/admin/categories/$CATEGORY_ID" "$DESC_PAYLOAD" /tmp/cat_cycle.json)"
+cat /tmp/cat_cycle.json | jq . || true
+expect_409 "$CODE" || { echo "❌ expected 409, got HTTP $CODE"; exit 1; }
+echo "✅ descendant-parent 409 ok"
+
+# Delete parent with child should be 409
+step "Delete category with child -> 409"
+reqline "DELETE" "$API/admin/categories/$CATEGORY_ID"
+CODE="$(admin_call_code DELETE "$API/admin/categories/$CATEGORY_ID" "" /tmp/cat_del_parent.json)"
+cat /tmp/cat_del_parent.json | jq . || true
+expect_409 "$CODE" || { echo "❌ expected 409, got HTTP $CODE"; exit 1; }
+echo "✅ delete-with-child 409 ok"
+
+# Now delete child (should be 2xx), then delete parent again => must be in-use 409
+step "Delete child category (should be 2xx)"
+reqline "DELETE" "$API/admin/categories/$CATEGORY_CHILD_ID"
+CODE="$(admin_call_code DELETE "$API/admin/categories/$CATEGORY_CHILD_ID" "" /tmp/cat_del_child.json)"
+cat /tmp/cat_del_child.json | jq . || true
+expect_2xx "$CODE" || { echo "❌ expected 2xx, got HTTP $CODE"; exit 1; }
+echo "✅ child delete ok"
+
+step "Delete in-use category after child removed -> 409"
+reqline "DELETE" "$API/admin/categories/$CATEGORY_ID"
+CODE="$(admin_call_code DELETE "$API/admin/categories/$CATEGORY_ID" "" /tmp/cat_del_inuse.json)"
+cat /tmp/cat_del_inuse.json | jq . || true
+expect_409 "$CODE" || { echo "❌ expected 409, got HTTP $CODE"; exit 1; }
+echo "✅ in-use delete 409 ok"
+
+############################################
+# Commit F — Variant detail (inventory read-only + pricing placeholder)
+############################################
+step "Commit F — Variant detail (inventory snapshot + pricing placeholder)"
+reqline "GET" "$API/admin/variants/$VARIANT_ID"
+
+CODE="$(admin_call_code GET "$API/admin/variants/$VARIANT_ID" "" /tmp/variant_detail.json)"
+cat /tmp/variant_detail.json | jq .
+expect_2xx "$CODE" || { echo "❌ variant detail failed (HTTP $CODE)"; exit 1; }
+
+HAS_VARIANT="$(jq -r '.variant.id // empty' /tmp/variant_detail.json)"
+HAS_INV_DEFAULT="$(jq -r '.inventory.defaultLocationId // empty' /tmp/variant_detail.json)"
+LEVELS_LEN="$(jq -r '(.inventory.levels // []) | length' /tmp/variant_detail.json)"
+PRICING_MODE="$(jq -r '.pricing.mode // empty' /tmp/variant_detail.json)"
+
+test "$HAS_VARIANT" = "$VARIANT_ID" || { echo "❌ variant.id mismatch"; exit 1; }
+test -n "$HAS_INV_DEFAULT" || { echo "❌ inventory.defaultLocationId missing"; exit 1; }
+test "$LEVELS_LEN" -ge 1 || { echo "❌ inventory.levels empty"; exit 1; }
+test "$PRICING_MODE" = "NOT_IMPLEMENTED" || { echo "❌ pricing.mode expected NOT_IMPLEMENTED"; exit 1; }
+
+echo "✅ variant detail contract ok"
+
 echo
-echo "🎉 Inventory E2E GREEN — smoke tamam"
+echo "🎉 SMOKE ADMIN FULL GREEN — tamam"
 echo
 echo "export TENANT_ID=$TENANT_ID"
 echo "export ADMIN_ACCESS_TOKEN=$ADMIN_ACCESS_TOKEN"
 echo "export STORE_ACCESS_TOKEN=$STORE_ACCESS_TOKEN"
+
+############################################
+# Commit G — Variant metadata patch
+############################################
+step "Commit G — Variant metadata patch"
+reqline "PATCH" "$API/admin/variants/$VARIANT_ID"
+
+META_PAYLOAD="$(jq -cn \
+  --arg title "Variant Patched $TS" \
+  --arg sku "SMOKE-PATCH-$TS" \
+  --arg barcode "BRC-$TS" \
+  --argjson rank 7 \
+  --argjson isActive true \
+  --arg source "smoke" \
+  --argjson ts "$TS" \
+  '{title:$title, sku:$sku, barcode:$barcode, rank:$rank, isActive:$isActive, metadata:{source:$source, ts:$ts}}')"
+  
+CODE="$(admin_call_code PATCH "$API/admin/variants/$VARIANT_ID" "$META_PAYLOAD" /tmp/variant_patch.json)"
+cat /tmp/variant_patch.json | jq .
+expect_2xx "$CODE" || { echo "❌ variant patch failed (HTTP $CODE)"; exit 1; }
+
+PATCHED_ID="$(jq -r '.id // .variant.id // empty' /tmp/variant_patch.json)"
+test "$PATCHED_ID" = "$VARIANT_ID" || { echo "❌ patched variant id mismatch"; exit 1; }
+############################################
+# Commit H — Product media roles + reorder (GREEN + self-debug)
+############################################
+step "Commit H — Product media roles + reorder"
+
+need awk
+need tr
+need grep
+
+is_uuid() {
+  [[ "${1:-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+}
+
+mkfile() {
+  local filename="$1"
+  local content_type="$2"
+  local size="${3:-1024}"
+
+  local presign_json file_id put_url etag
+
+  presign_json="$(curl -sS --fail \
+    -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+    -d "$(jq -cn --arg filename "$filename" --arg contentType "$content_type" --argjson size "$size" \
+      '{filename:$filename, contentType:$contentType, size:$size}')" \
+    "$API/admin/files/presign-put")"
+
+  file_id="$(echo "$presign_json" | jq -r '.file.id // .fileId // empty')"
+  put_url="$(echo "$presign_json" | jq -r '.putUrl // .uploadUrl // .url // .presignedUrl // empty')"
+
+  if ! is_uuid "$file_id" || [ -z "${put_url:-}" ]; then
+    echo "❌ presign-put parse failed" >&2
+    echo "$presign_json" | jq . >&2 || true
+    return 1
+  fi
+
+  put_url="$(echo "$put_url" \
+    | sed -E 's#http://(minio|ecom_minio):9000#http://localhost:9000#g' \
+    | sed -E 's#https://(minio|ecom_minio):9000#https://localhost:9000#g')"
+
+  echo "ℹ️  fileId=$file_id" >&2
+  echo "ℹ️  putUrl=$put_url" >&2
+
+  rm -f /tmp/put_headers.txt
+  dd if=/dev/zero bs="$size" count=1 2>/dev/null | \
+    curl -sS --fail --max-time 30 \
+      -D /tmp/put_headers.txt \
+      -o /dev/null \
+      -X PUT -H "Content-Type: $content_type" \
+      --data-binary @- \
+      "$put_url"
+
+  etag="$(grep -i '^etag:' /tmp/put_headers.txt | head -n1 | awk '{print $2}' | tr -d '\r' | tr -d '"')"
+  [ -n "${etag:-}" ] || etag="dummy"
+
+  # complete: TRY with body, fallback to no-body
+  local code
+  code="$(admin_call_code POST "$API/admin/files/$file_id/complete" "$(jq -cn --arg etag "$etag" '{etag:$etag}')" /tmp/file_complete.json)"
+  if ! expect_2xx "$code"; then
+    echo "⚠️  complete with body failed (HTTP $code). retrying without body..."
+    code="$(admin_call_code POST "$API/admin/files/$file_id/complete" "" /tmp/file_complete2.json)"
+    expect_2xx "$code" || {
+      echo "❌ complete failed (HTTP $code) fileId=$file_id"
+      cat /tmp/file_complete2.json 2>/dev/null || true
+      return 1
+    }
+  fi
+
+  echo "$file_id"
+}
+
+FILE_HERO="${FILE_HERO:-$(mkfile "smoke-hero.bin" "application/octet-stream" 1024)}"
+FILE_THUMB="${FILE_THUMB:-$(mkfile "smoke-thumb.bin" "application/octet-stream" 1024)}"
+FILE_G1="${FILE_G1:-$(mkfile "smoke-g1.bin" "application/octet-stream" 1024)}"
+FILE_G2="${FILE_G2:-$(mkfile "smoke-g2.bin" "application/octet-stream" 1024)}"
+
+echo "✅ FILE_HERO=$FILE_HERO"
+echo "✅ FILE_THUMB=$FILE_THUMB"
+echo "✅ FILE_G1=$FILE_G1"
+echo "✅ FILE_G2=$FILE_G2"
+
+step "Cleaning existing media to avoid 409 Conflict"
+CODE="$(admin_call_code GET "$API/admin/products/$PRODUCT_ID/media" "" /tmp/media_list.json)"
+expect_2xx "$CODE" || {
+  echo "❌ list media failed (HTTP $CODE)"
+  cat /tmp/media_list.json
+  exit 1
+}
+
+cat /tmp/media_list.json | jq .
+
+MEDIA_IDS="$(
+  jq -r '(.items // []) | .[]? | .id? // empty' /tmp/media_list.json \
+    | grep -E '^[0-9a-fA-F-]{36}$' || true
+)"
+
+if [ -z "$MEDIA_IDS" ]; then
+  echo "ℹ️  no existing media found (skip delete)"
+else
+  echo "$MEDIA_IDS" | sort -u | while IFS= read -r mid; do
+    [ -n "$mid" ] || continue
+    echo "  → delete media: $mid"
+    admin_call_code DELETE \
+      "$API/admin/products/$PRODUCT_ID/media/$mid" \
+      "" /tmp/media_del.json >/dev/null || true
+  done
+fi
+
+
+attach_media() {
+  local file_id="$1"
+  local role="$2"
+  local rank="$3"
+
+  local payload out code mid
+  payload="$(jq -cn --arg fileId "$file_id" --arg role "$role" --argjson rank "$rank" \
+    '{fileId:$fileId, role:$role, rank:$rank}')"
+
+  out="/tmp/attach_${role}_${rank}.json"
+  echo "➡️  POST $API/admin/products/$PRODUCT_ID/media (role=$role rank=$rank)" >&2
+
+  code="$(admin_call_code POST "$API/admin/products/$PRODUCT_ID/media" "$payload" "$out")"
+  echo "HTTP=$code" >&2
+  cat "$out" | jq . >&2
+
+  if [[ "$code" =~ ^2 ]]; then
+    mid="$(jq -r '.media.id // empty' "$out")"
+    echo "$mid"   # ✅ stdout = sadece id
+    return 0
+  fi
+
+  echo "❌ attach failed" >&2
+  return 1
+}
+
+
+
+
+step "Attach new media set"
+MID_HERO="$(attach_media "$FILE_HERO" "HERO" 0)" || { echo "❌ HERO attach failed"; exit 1; }
+MID_THUMB="$(attach_media "$FILE_THUMB" "THUMBNAIL" 0)" || { echo "❌ THUMB attach failed"; exit 1; }
+MID_G1="$(attach_media "$FILE_G1" "GALLERY" 0)" || { echo "❌ G1 attach failed"; exit 1; }
+MID_G2="$(attach_media "$FILE_G2" "GALLERY" 1)" || { echo "❌ G2 attach failed"; exit 1; }
+
+echo "✅ MID_HERO=$MID_HERO"
+echo "✅ MID_THUMB=$MID_THUMB"
+echo "✅ MID_G1=$MID_G1"
+echo "✅ MID_G2=$MID_G2"
+
+is_uuid() { [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; }
+
+must_uuid() { is_uuid "$1" || { echo "❌ not uuid: [$1]" >&2; exit 1; }; }
+
+must_uuid "$MID_G1"
+must_uuid "$MID_G2"
+
+
+reorder_gallery() {
+  local ordered_json="$1"
+  local payload out code
+
+  payload="$(jq -cn --argjson orderedIds "$ordered_json" '{orderedIds:$orderedIds}')"
+  out="/tmp/reorder.json"
+  code="$(admin_call_code POST "$API/admin/products/$PRODUCT_ID/media/reorder" "$payload" "$out")"
+
+  echo "➡️  POST $API/admin/products/$PRODUCT_ID/media/reorder"
+  echo "HTTP=$code"
+  cat "$out" | jq . || cat "$out"
+
+  expect_2xx "$code"
+}
+
+step "Reorder gallery ONLY"
+ORDER_JSON="$(jq -cn --arg a "$MID_G2" --arg b "$MID_G1" '[$a,$b]')"
+payload="$(jq -cn --argjson orderedIds "$ORDER_JSON" '{orderedIds:$orderedIds}')"
+reorder_gallery "$ORDER_JSON" || { echo "❌ reorder failed"; exit 1; }
+
+step "Verify media"
+CODE="$(admin_call_code GET "$API/admin/products/$PRODUCT_ID/media" "" /tmp/media_verify.json)"
+expect_2xx "$CODE" || { echo "❌ verify list failed"; cat /tmp/media_verify.json; exit 1; }
+cat /tmp/media_verify.json | jq .
+
+echo "🎉 Commit H GREEN"

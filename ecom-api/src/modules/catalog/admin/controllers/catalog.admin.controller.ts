@@ -18,6 +18,12 @@ import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { CatalogAdminService } from "@/modules/catalog/admin/services/catalog.admin.service";
 
 import {
+  AdminAttachProductMediaDto,
+  AdminUpdateProductMediaDto,
+  AdminReorderProductMediaDto,
+} from "@/modules/catalog/admin/dto/admin.product.media.dto";
+
+import {
   AdminCreateCategoryDto,
   AdminUpdateCategoryDto,
   AdminCategoryListQueryDto,
@@ -31,7 +37,7 @@ import {
 
 import {
   AdminCreateVariantDto,
-  AdminUpdateVariantDto,
+  AdminVariantUpdateDto,
 } from "@/modules/catalog/admin/dto/admin-variant.dto";
 
 import {
@@ -121,12 +127,16 @@ export class CatalogAdminController {
     const tenantId = requireTenantId(req as any);
     return this.service.createVariant(tenantId, productId, dto);
   }
+  @Get("/variants/:id")
+  async getVariantDetail(@Req() req: Request, @Param("id") id: string) {
+    return this.service.getVariantDetail(req, id);
+  }
 
   @Patch("/variants/:id")
   async updateVariant(
     @Req() req: Request,
     @Param("id") variantId: string,
-    @Body() dto: AdminUpdateVariantDto
+    @Body() dto: AdminVariantUpdateDto
   ) {
     const tenantId = requireTenantId(req as any);
     return this.service.updateVariant(tenantId, variantId, dto);
@@ -211,5 +221,70 @@ export class CatalogAdminController {
     @Param("id") productId: string
   ) {
     return this.service.listVariantsByProduct(req, productId);
+  }
+
+  // -------------------------
+  // Product Media (write/read)
+  // -------------------------
+  @Get("/products/:id/media")
+  async listProductMedia(@Req() req: Request, @Param("id") productId: string) {
+    const tenantId = requireTenantId(req as any);
+    return this.service.listProductMedia(tenantId, productId);
+  }
+
+  /**
+   * Ürüne media attach
+   * - role default: GALLERY
+   * - HERO/THUMBNAIL: replace semantics
+   */
+  @Post("/products/:id/media")
+  async attachProductMedia(
+    @Req() req: Request,
+    @Param("id") productId: string,
+    @Body() dto: AdminAttachProductMediaDto
+  ) {
+    const tenantId = requireTenantId(req as any);
+    return this.service.attachProductMedia(tenantId, productId, dto);
+  }
+
+  /**
+   * Ürün medyası delete
+   */
+  @Delete("/products/:productId/media/:mediaId")
+  async deleteProductMedia(
+    @Req() req: Request,
+    @Param("productId") productId: string,
+    @Param("mediaId") mediaId: string
+  ) {
+    const tenantId = requireTenantId(req as any);
+    return this.service.deleteProductMedia(tenantId, productId, mediaId);
+  }
+
+  /**
+   * GALLERY reorder
+   * Body: { orderedIds: string[] }
+   */
+  @Post("/products/:id/media/reorder")
+  async reorderProductMedia(
+    @Req() req: Request,
+    @Param("id") productId: string,
+    @Body() dto: AdminReorderProductMediaDto
+  ) {
+    const tenantId = requireTenantId(req as any);
+    return this.service.reorderProductMedia(tenantId, productId, dto);
+  }
+  /**
+   * Ürün medyası update
+   * - role değişiyorsa singleton roller için replace semantics devrede
+   */
+  @Patch("/products/:productId/media/:mediaId")
+  async updateProductMedia(
+    @Req() req: Request,
+    @Param("productId") productId: string,
+    @Param("mediaId") mediaId: string,
+    @Body() dto: AdminUpdateProductMediaDto
+  ) {
+    const tenantId = requireTenantId(req as any);
+    return this.service.updateProductMedia(tenantId, productId, mediaId, dto);
   }
 }

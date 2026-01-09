@@ -3,6 +3,8 @@
 
 Multi-tenant, headless bir e-commerce backend geliştiriliyor.
 Amaç: Kurumsal ölçekte ölçeklenebilir, test edilebilir ve genişletilebilir bir altyapı kurmak.
+Notlar 
+CI Modu açık 
 
 Backend: NestJS + Prisma + PostgreSQL
 
@@ -95,6 +97,7 @@ Admin InventoryLocation CRUD
 Admin InventoryLevel (stok gir / güncelle)
 
 Variant ↔ stock ilişkisinin netleştirilmesi
+Mevcut Durum (DONE ✅)
 
 🔹 Aşama 2 — Catalog Genişletme
 

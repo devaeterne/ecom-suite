@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
+import { includes } from "zod";
 
 type ListProductsArgs = {
   tenantId: string;
@@ -9,6 +10,8 @@ type ListProductsArgs = {
   offset: number;
   limit: number;
   publishedOnly: boolean;
+  includeTags?: boolean; // ✅ yeni
+  includeCollections?: boolean; // ✅ opsiyonel
 };
 
 @Injectable()
@@ -68,34 +71,42 @@ export class CatalogRepo {
       },
     });
   }
+  // ✅ minimal select: cycle guard için
+  async getCategoryParentRef(tenantId: string, id: string) {
+    return this.prisma.productCategory.findFirst({
+      where: { tenantId, id },
+      select: { id: true, parentId: true },
+    });
+  }
 
   async adminUpdateCategory(
     tenantId: string,
     id: string,
-    data: Partial<{
-      name: string;
-      handle: string;
-      parentId: string | null;
-      isActive: boolean;
-      rank: number;
-    }>
+    data: {
+      name?: string;
+      handle?: string;
+      parentId?: string | null;
+      rank?: number;
+      isActive?: boolean;
+      metadata?: any;
+    }
   ) {
     return this.prisma.productCategory.update({
-      where: { id },
+      where: { tenantId_id: { tenantId, id } },
       data: {
-        name: data.name ?? undefined,
-        handle: data.handle ?? undefined,
-        parentId: data.parentId ?? undefined,
-        isActive: data.isActive ?? undefined,
-        rank: data.rank ?? undefined,
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.handle !== undefined ? { handle: data.handle } : {}),
+        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
+        ...(data.rank !== undefined ? { rank: data.rank } : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.metadata !== undefined ? { metadata: data.metadata } : {}),
       },
     });
   }
 
   async adminDeleteCategory(tenantId: string, id: string) {
-    // HARD delete (schema’da deletedAt yok)
     return this.prisma.productCategory.delete({
-      where: { id },
+      where: { tenantId_id: { tenantId, id } },
     });
   }
 
@@ -151,6 +162,7 @@ export class CatalogRepo {
           categories: { include: { category: true } },
           collections: { include: { collection: true } },
           variants: true,
+          tags: { include: { tag: true } }, // ✅
         },
       }),
     ]);
@@ -167,9 +179,24 @@ export class CatalogRepo {
         ...(publishedOnly ? { status: "published" } : {}),
       },
       include: {
-        categories: { include: { category: true } },
-        collections: { include: { collection: true } },
-        variants: true,
+        categories: {
+          include: {
+            category: {
+              select: { id: true, handle: true, parentId: true }, // ✅ title yoksa zaten yok
+            },
+          },
+        },
+        collections: {
+          include: {
+            collection: { select: { id: true, title: true, handle: true } },
+          },
+        },
+        variants: true, // istersen bunu da select ile incelt
+        tags: {
+          include: {
+            tag: { select: { id: true, value: true } },
+          },
+        },
       },
     });
   }
@@ -244,27 +271,68 @@ export class CatalogRepo {
       seoDescription: string | null;
       searchKeywords: string | null;
       status: "draft" | "published";
+      categoryIds: string[];
+      collectionIds: string[];
     }>
   ) {
-    await this.prisma.catalogProduct.update({
-      where: { id },
-      data: {
-        title: data.title ?? undefined,
-        handle: data.handle ?? undefined,
-        subtitle: data.subtitle ?? undefined,
-        description: data.description ?? undefined,
-        rank: data.rank ?? undefined,
-        seoTitle: data.seoTitle ?? undefined,
-        seoDescription: data.seoDescription ?? undefined,
-        searchKeywords: data.searchKeywords ?? undefined,
-        status: (data.status as any) ?? undefined,
-        publishedAt:
-          data.status === "published"
-            ? this.now()
-            : data.status === "draft"
-            ? null
-            : undefined,
-      },
+    const categoryIds = data.categoryIds ?? null; // null => dokunma
+    const collectionIds = data.collectionIds ?? null; // null => dokunma
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.catalogProduct.update({
+        where: { id },
+        data: {
+          title: data.title ?? undefined,
+          handle: data.handle ?? undefined,
+          subtitle: data.subtitle ?? undefined,
+          description: data.description ?? undefined,
+          rank: data.rank ?? undefined,
+          seoTitle: data.seoTitle ?? undefined,
+          seoDescription: data.seoDescription ?? undefined,
+          searchKeywords: data.searchKeywords ?? undefined,
+          status: (data.status as any) ?? undefined,
+          publishedAt:
+            data.status === "published"
+              ? this.now()
+              : data.status === "draft"
+              ? null
+              : undefined,
+        },
+      });
+
+      // ✅ categories replace-set (sadece categoryIds gönderildiyse)
+      if (categoryIds !== null) {
+        await tx.productCategoryLink.deleteMany({
+          where: { tenantId, productId: id },
+        });
+        if (categoryIds.length) {
+          await tx.productCategoryLink.createMany({
+            data: categoryIds.map((categoryId) => ({
+              tenantId,
+              productId: id,
+              categoryId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // ✅ collections replace-set (sadece collectionIds gönderildiyse)
+      if (collectionIds !== null) {
+        await tx.productCollectionLink.deleteMany({
+          where: { tenantId, productId: id },
+        });
+        if (collectionIds.length) {
+          await tx.productCollectionLink.createMany({
+            data: collectionIds.map((collectionId) => ({
+              tenantId,
+              productId: id,
+              collectionId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
     });
 
     return this.getProductById(tenantId, id, false);
@@ -335,10 +403,52 @@ export class CatalogRepo {
       orderBy: [{ rank: "asc" }, { createdAt: "asc" }],
     });
   }
+  async getVariantInventorySnapshot(tenantId: string, variantId: string) {
+    const levels = await this.prisma.inventoryLevel.findMany({
+      where: { tenantId, variantId, deletedAt: null },
+      orderBy: [{ updatedAt: "desc" }],
+      select: {
+        locationId: true,
+        stockedQuantity: true,
+        reservedQuantity: true,
+      },
+    });
+
+    const locationIds = Array.from(new Set(levels.map((l) => l.locationId)));
+
+    const locations = await this.prisma.inventoryLocation.findMany({
+      where: { tenantId, id: { in: locationIds }, deletedAt: null },
+      select: { id: true, name: true, isDefault: true },
+    });
+
+    const locById = new Map(locations.map((l) => [l.id, l]));
+
+    const defaultLocationId = locations.find((l) => l.isDefault)?.id ?? null;
+
+    return {
+      defaultLocationId,
+      levels: levels.map((l) => ({
+        locationId: l.locationId,
+        locationName: locById.get(l.locationId)?.name ?? "—",
+        stockedQuantity: l.stockedQuantity,
+        reservedQuantity: l.reservedQuantity,
+        availableQuantity: l.stockedQuantity - l.reservedQuantity,
+      })),
+    };
+  }
 
   async getVariantById(tenantId: string, id: string) {
     return this.prisma.catalogProductVariant.findFirst({
       where: { tenantId, id },
+    });
+  }
+  async getVariantInventoryLevels(tenantId: string, variantId: string) {
+    return this.prisma.inventoryLevel.findMany({
+      where: { tenantId, variantId },
+      include: {
+        location: { select: { id: true, name: true, isDefault: true } },
+      },
+      orderBy: [{ createdAt: "asc" }],
     });
   }
 
@@ -361,14 +471,24 @@ export class CatalogRepo {
   async adminUpdateVariant(
     tenantId: string,
     id: string,
-    data: { title?: string; sku?: string; barcode?: string }
+    data: {
+      title?: string | null;
+      sku?: string | null;
+      barcode?: string | null;
+      rank?: number;
+      isActive?: boolean;
+      metadata?: any;
+    }
   ) {
     return this.prisma.catalogProductVariant.update({
-      where: { id },
+      where: { tenantId_id: { tenantId, id } },
       data: {
-        title: data.title ?? undefined,
-        sku: data.sku ?? undefined,
-        barcode: data.barcode ?? undefined,
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.sku !== undefined ? { sku: data.sku } : {}),
+        ...(data.barcode !== undefined ? { barcode: data.barcode } : {}),
+        ...(data.rank !== undefined ? { rank: data.rank } : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        ...(data.metadata !== undefined ? { metadata: data.metadata } : {}),
       },
     });
   }

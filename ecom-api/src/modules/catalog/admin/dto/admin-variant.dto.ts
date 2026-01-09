@@ -1,35 +1,64 @@
-import { IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsInt,
+  Min,
+  IsBoolean,
+  IsObject,
+} from "class-validator";
 
 export class AdminCreateVariantDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  title?: string;
+  title?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(128)
-  sku?: string;
+  sku?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(128)
-  barcode?: string;
+  barcode?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  rank?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: any;
 }
 
-export class AdminUpdateVariantDto {
+export class AdminVariantUpdateDto {
   @IsOptional()
   @IsString()
-  @MaxLength(255)
-  title?: string;
+  title?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(128)
-  sku?: string;
+  sku?: string | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(128)
-  barcode?: string;
+  barcode?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  rank?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: any;
 }

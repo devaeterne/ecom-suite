@@ -18,6 +18,12 @@ enum ProductStatus {
   archived
 }
 
+enum ProductMediaRole {
+  GALLERY
+  THUMBNAIL
+  HERO
+}
+
 enum CheckoutStatus {
   OPEN
   PAYMENT_PENDING
@@ -1258,24 +1264,23 @@ model ProductMedia {
   tenantId String @db.Uuid
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  productId String    @db.Uuid
-  type      MediaType @default(IMAGE)
+  productId String         @db.Uuid
+  product   CatalogProduct @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Cascade)
 
-  url      String
-  altText  String?
-  rank     Int     @default(0)
-  metadata Json    @default("{}")
+  fileId String     @db.Uuid
+  file   FileObject @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: Cascade)
 
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
-  deletedAt DateTime? @db.Timestamptz(6)
+  role     ProductMediaRole @default(GALLERY)
+  rank     Int              @default(0) // reorder için
+  isActive Boolean          @default(true)
 
-  product CatalogProduct @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Cascade)
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-  @@unique([tenantId, id])
-  @@index([tenantId, productId, rank], map: "idx_product_media_product_rank")
-  @@index([deletedAt], map: "idx_product_media_deleted_at")
-  @@index([tenantId])
+  @@unique([tenantId, productId, fileId]) // aynı dosya aynı ürüne 1 kez bağlansın
+  @@index([tenantId, productId])
+  @@index([tenantId, fileId])
   @@map("product_media")
 }
 
@@ -3417,6 +3422,7 @@ model FileObject {
   subscriptionPayments     SubscriptionPayment[]
   tenantCompanies          TenantCompany[]
   bankTransferInstructions BankTransferInstruction[]
+  productMedias            ProductMedia[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, bucket, key], map: "uniq_file_object_bucket_key")
