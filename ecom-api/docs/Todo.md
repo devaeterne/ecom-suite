@@ -114,9 +114,9 @@
 - [x] Media reorder
 
 ### Collections & Tags
-- [ ] Collections CRUD
-- [ ] Tags CRUD
-- [ ] Product ↔ collection / tag link
+- [x] Collections CRUD
+- [x] Tags CRUD
+- [x] Product ↔ collection / tag link
 
 ### Translations
 - [ ] Product translations

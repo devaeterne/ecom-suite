@@ -1180,6 +1180,54 @@ model ReturnItem {
  * =========================
  * Mevcut tabloların: catalog_product, catalog_product_variant, catalog_price_set, catalog_money_amount
  */
+model ProductCategoryTranslation {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  categoryId String          @db.Uuid
+  category   ProductCategory @relation(fields: [tenantId, categoryId], references: [tenantId, id], onDelete: Cascade)
+
+  title       String
+  description String?
+
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  localeCode String
+  locale     Locale?  @relation(fields: [localeCode], references: [code])
+
+  @@unique([tenantId, categoryId, localeCode], map: "uniq_product_category_translation")
+  @@index([tenantId, localeCode], map: "idx_product_category_translation_locale")
+  @@index([tenantId, categoryId], map: "idx_product_category_translation_category")
+  @@map("product_category_translation")
+}
+
+model ProductTranslation {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  productId String         @db.Uuid
+  product   CatalogProduct @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Cascade)
+
+  locale String
+
+  title       String
+  subtitle    String?
+  description String?
+
+  seoTitle       String?
+  seoDescription String?
+  searchKeywords String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([tenantId, productId, locale], map: "uniq_product_translation")
+  @@index([tenantId, locale], map: "idx_product_translation_locale")
+  @@index([tenantId, productId], map: "idx_product_translation_product")
+  @@map("product_translation")
+}
 
 model CatalogProduct {
   id       String @id @default(uuid()) @db.Uuid
@@ -1212,6 +1260,7 @@ model CatalogProduct {
   collections                ProductCollectionLink[]
   options                    ProductOption[]
   catalogProductTranslations CatalogProductTranslation[]
+  translations               ProductTranslation[]
 
   @@unique([tenantId, id])
   @@index([status], map: "idx_catalog_product_status")
@@ -2976,6 +3025,7 @@ model Tenant {
   tenantPaymentProfile        TenantPaymentProfile?
   passwordResetTokens         PasswordResetToken[]         @relation("TenantPasswordResetTokens")
   authAuditLogs               AuthAuditLog[]               @relation("TenantAuthAuditLogs")
+  productTranslations         ProductTranslation[]
 
   @@index([isActive])
   @@index([deletedAt])
@@ -3266,32 +3316,6 @@ model CatalogProductTranslation {
   @@index([tenantId])
   @@index([tenantId, deletedAt], map: "idx_product_translation_tenant_deleted_at")
   @@map("catalog_product_translation")
-}
-
-model ProductCategoryTranslation {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  categoryId String @db.Uuid
-  localeCode String
-
-  name   String
-  handle String?
-
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
-  deletedAt DateTime? @db.Timestamptz(6)
-
-  category ProductCategory @relation(fields: [tenantId, categoryId], references: [tenantId, id], onDelete: Cascade)
-  locale   Locale          @relation(fields: [localeCode], references: [code], onDelete: Restrict)
-
-  @@unique([tenantId, id])
-  @@unique([tenantId, categoryId, localeCode], map: "uniq_category_translation_locale")
-  @@unique([tenantId, localeCode, handle], map: "uniq_category_locale_handle")
-  @@index([tenantId])
-  @@index([tenantId, deletedAt], map: "idx_category_translation_tenant_deleted_at")
-  @@map("product_category_translation")
 }
 
 model ProductTagTranslation {

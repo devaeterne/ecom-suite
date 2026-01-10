@@ -1,5 +1,12 @@
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Max, Min } from "class-validator";
+import {
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+  IsString,
+  MaxLength,
+} from "class-validator";
 
 export class PaginationQueryDto {
   @IsOptional()
@@ -14,4 +21,10 @@ export class PaginationQueryDto {
   @Min(1)
   @Max(100)
   limit?: number = 20;
+}
+export class StoreLocaleQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  localeCode?: string;
 }

@@ -8,52 +8,58 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from "@nestjs/common";
 import { Request } from "express";
 
+import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
+
 import {
   AdminCreateTagDto,
-  AdminListTagsQueryDto,
   AdminUpdateTagDto,
+  AdminListTagsQueryDto,
 } from "@/modules/catalog/admin/dto/admin.product.tag.dto";
+
 import { TagsAdminService } from "@/modules/catalog/admin/services/tags.admin.service";
-import { getTenantIdOrThrow } from "@/modules/catalog/common/tenant/tenant.util";
 
 @Controller("/admin/tags")
+@UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class TagsAdminController {
   constructor(private readonly service: TagsAdminService) {}
 
   @Post()
   async create(@Req() req: Request, @Body() dto: AdminCreateTagDto) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req as any);
     return this.service.create(tenantId, dto);
   }
 
   @Get()
   async list(@Req() req: Request, @Query() q: AdminListTagsQueryDto) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req as any);
     return this.service.list(tenantId, q);
   }
 
-  @Get(":id")
-  async getById(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = getTenantIdOrThrow(req);
+  @Get("/:id")
+  async get(@Req() req: Request, @Param("id") id: string) {
+    const tenantId = requireTenantId(req as any);
     return this.service.getById(tenantId, id);
   }
 
-  @Patch(":id")
+  @Patch("/:id")
   async update(
     @Req() req: Request,
     @Param("id") id: string,
     @Body() dto: AdminUpdateTagDto
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req as any);
     return this.service.update(tenantId, id, dto);
   }
 
-  @Delete(":id")
+  @Delete("/:id")
   async remove(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req as any);
     return this.service.delete(tenantId, id);
   }
 }

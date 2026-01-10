@@ -250,7 +250,7 @@ export class CatalogAdminService {
     const view = (q?.view ?? "flat") as "flat" | "tree";
 
     const rows = await this.repo.listCategories(tenantId);
-    const mapped = rows.map(mapCategory);
+    const mapped = rows.map((r) => mapCategory(r));
 
     if (view === "flat") return { items: mapped };
 
@@ -286,7 +286,7 @@ export class CatalogAdminService {
     });
 
     return {
-      items: items.map(mapStoreProduct),
+      items: items.map((x) => mapStoreProduct(x)),
       pagination: { offset, limit, total },
     };
   }

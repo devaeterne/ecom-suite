@@ -10,9 +10,11 @@ import {
 export class CatalogStoreService {
   constructor(private readonly repo: CatalogRepo) {}
 
-  async listCategories(tenantId: string, tree: boolean) {
+  async listCategories(tenantId: string, tree: boolean, query?: any) {
+    const localeCode = query?.localeCode as string | undefined;
+
     const rows = await this.repo.listCategories(tenantId);
-    const mapped = rows.map(mapCategory);
+    const mapped = rows.map((r) => mapCategory(r, localeCode));
 
     if (!tree) return mapped;
 
@@ -29,10 +31,12 @@ export class CatalogStoreService {
     return roots;
   }
 
-  async getCategory(tenantId: string, id: string) {
+  async getCategory(tenantId: string, id: string, query?: any) {
+    const localeCode = query?.localeCode as string | undefined;
+
     const row = await this.repo.getCategoryById(tenantId, id);
     if (!row) throw new NotFoundException("Category not found");
-    return mapCategory(row);
+    return mapCategory(row, localeCode);
   }
 
   async listCollections(tenantId: string) {
@@ -46,6 +50,8 @@ export class CatalogStoreService {
   }
 
   async listProducts(tenantId: string, query: any) {
+    const localeCode = query?.localeCode as string | undefined;
+
     const { items, total } = await this.repo.listProducts({
       tenantId,
       q: query.q,
@@ -56,13 +62,15 @@ export class CatalogStoreService {
       publishedOnly: true,
     });
 
-    return { items: items.map(mapStoreProduct), total };
+    return { items: items.map((x) => mapStoreProduct(x, localeCode)), total };
   }
 
-  async getProduct(tenantId: string, id: string) {
+  async getProduct(tenantId: string, id: string, query?: any) {
+    const localeCode = query?.localeCode as string | undefined;
+
     const row = await this.repo.getProductById(tenantId, id, true);
     if (!row) throw new NotFoundException("Product not found");
-    return mapStoreProduct(row);
+    return mapStoreProduct(row, localeCode);
   }
 
   async getProductVariants(tenantId: string, id: string) {

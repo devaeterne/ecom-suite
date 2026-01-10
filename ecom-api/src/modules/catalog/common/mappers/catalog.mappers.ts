@@ -2,10 +2,47 @@ import { StoreCategoryDto } from "@/modules/catalog/common/dto/category.dto";
 import { StoreCollectionDto } from "@/modules/catalog/common/dto/collection.dto";
 import { StoreProductDto } from "@/modules/catalog/common/dto/product.dto";
 
-export function mapCategory(row: any): StoreCategoryDto {
+type CategoryTranslation = {
+  localeCode: string;
+  title: string;
+  description?: string | null;
+};
+type ProductTranslation = {
+  localeCode: string;
+  title: string;
+  description?: string | null;
+  subtitle?: string | null;
+};
+
+function pickLocalized<T extends { localeCode: string }>(
+  items: T[] | undefined | null,
+  requested?: string | null,
+  fallback?: string | null
+): T | null {
+  const arr = items ?? [];
+  if (!arr.length) return null;
+
+  if (requested) {
+    const hit = arr.find((x) => x.localeCode === requested);
+    if (hit) return hit;
+  }
+  if (fallback) {
+    const hit = arr.find((x) => x.localeCode === fallback);
+    if (hit) return hit;
+  }
+  return arr[0] ?? null;
+}
+
+export function mapCategory(row: any, localeCode?: string): StoreCategoryDto {
+  const t = pickLocalized<CategoryTranslation>(
+    row.translations,
+    localeCode,
+    "en"
+  );
+
   return {
     id: row.id,
-    name: row.name,
+    name: t?.title ?? row.name,
     handle: row.handle,
     parentId: row.parentId ?? null,
   };
@@ -19,17 +56,27 @@ export function mapCollection(row: any): StoreCollectionDto {
   };
 }
 
-export function mapStoreProduct(row: any): StoreProductDto {
+export function mapStoreProduct(
+  row: any,
+  localeCode?: string
+): StoreProductDto {
+  const t = pickLocalized<ProductTranslation>(
+    row.translations,
+    localeCode,
+    "en"
+  );
+
   return {
     id: row.id,
-    title: row.title,
+    title: t?.title ?? row.title,
     handle: row.handle,
     status: row.status,
-    description: row.description ?? null,
+    description: t?.description ?? row.description ?? null,
     publishedAt: row.publishedAt
       ? new Date(row.publishedAt).toISOString()
       : null,
 
+    // ⚠️ category/collection/tag altlarında da localization istersen ayrıca ekleriz
     categories: (row.categories ?? []).map((l: any) => ({
       id: l.category.id,
       name: l.category.name,

@@ -46,9 +46,9 @@ CREATE UNIQUE INDEX "product_media_tenantId_productId_fileId_key" ON "product_me
 ALTER TABLE "product_media" ADD CONSTRAINT "product_media_tenantId_fileId_fkey" FOREIGN KEY ("tenantId", "fileId") REFERENCES "file_object"("tenantId", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_product_media_one_thumbnail
-ON \"product_media\" (\"tenantId\",\"productId\")
-WHERE \"role\" = 'THUMBNAIL';
+ON "product_media" ("tenantId","productId")
+WHERE "role" = 'THUMBNAIL';
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_product_media_one_hero
-ON \"product_media\" (\"tenantId\",\"productId\")
-WHERE \"role\" = 'HERO';
+ON "product_media" ("tenantId","productId")
+WHERE "role" = 'HERO';

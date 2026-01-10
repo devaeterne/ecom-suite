@@ -10,9 +10,48 @@ type ListProductsArgs = {
   offset: number;
   limit: number;
   publishedOnly: boolean;
+  locale?: LocaleFallback;
   includeTags?: boolean; // ✅ yeni
   includeCollections?: boolean; // ✅ opsiyonel
+  includeCategoryTranslations?: boolean; // ✅ opsiyonel ama işini kolaylaştırır
+  includeProductTranslations?: boolean; // ✅
 };
+
+type LocaleFallback = {
+  requested?: string | null;
+  fallback?: string | null; // örn: "en"
+};
+
+function toLocaleIn(
+  requested?: string | null,
+  fallback?: string | null
+): string[] {
+  return Array.from(
+    new Set(
+      [requested, fallback].filter(
+        (x): x is string => typeof x === "string" && x.trim().length > 0
+      )
+    )
+  );
+}
+
+// Basit fallback zinciri: requested -> fallback -> base
+function pickLocalized<T extends { localeCode: string }>(
+  items: T[],
+  requested?: string | null,
+  fallback?: string | null
+): T | null {
+  if (!items?.length) return null;
+  if (requested) {
+    const hit = items.find((x) => x.localeCode === requested);
+    if (hit) return hit;
+  }
+  if (fallback) {
+    const hit = items.find((x) => x.localeCode === fallback);
+    if (hit) return hit;
+  }
+  return items[0] ?? null;
+}
 
 @Injectable()
 export class CatalogRepo {
@@ -35,10 +74,20 @@ export class CatalogRepo {
     return n > 0;
   }
 
-  async listCategories(tenantId: string) {
+  async listCategories(tenantId: string, localeCode?: string) {
     return this.prisma.productCategory.findMany({
       where: { tenantId, isActive: true },
       orderBy: [{ rank: "asc" }, { createdAt: "asc" }],
+      ...(localeCode
+        ? {
+            include: {
+              productCategoryTranslations: {
+                where: { tenantId, localeCode }, // ✅ direkt string
+                take: 1,
+              },
+            },
+          }
+        : {}),
     });
   }
 
@@ -125,7 +174,17 @@ export class CatalogRepo {
       offset,
       limit,
       publishedOnly,
+
+      includeTags = true,
+      includeCollections = true,
+      includeCategoryTranslations = false,
+      includeProductTranslations = false,
+      locale,
     } = args;
+
+    const requested = locale?.requested ?? null;
+    const fallback = locale?.fallback ?? null;
+    const localeIn = toLocaleIn(requested, fallback);
 
     const where: any = {
       tenantId,
@@ -139,14 +198,38 @@ export class CatalogRepo {
             ],
           }
         : {}),
-      ...(categoryId
-        ? {
-            categories: { some: { tenantId, categoryId } },
-          }
-        : {}),
+      ...(categoryId ? { categories: { some: { tenantId, categoryId } } } : {}),
       ...(collectionId
+        ? { collections: { some: { tenantId, collectionId } } }
+        : {}),
+    };
+
+    const include: any = {
+      variants: true,
+      categories: {
+        include: {
+          category: {
+            ...(includeCategoryTranslations && localeIn.length
+              ? {
+                  include: {
+                    productCategoryTranslations: {
+                      where: { tenantId, localeCode: { in: localeIn } },
+                    },
+                  },
+                }
+              : {}),
+          },
+        },
+      },
+      ...(includeCollections
+        ? { collections: { include: { collection: true } } }
+        : {}),
+      ...(includeTags ? { tags: { include: { tag: true } } } : {}),
+      ...(includeProductTranslations && localeIn.length
         ? {
-            collections: { some: { tenantId, collectionId } },
+            catalogProductTranslations: {
+              where: { tenantId, localeCode: { in: localeIn } },
+            },
           }
         : {}),
     };
@@ -158,19 +241,23 @@ export class CatalogRepo {
         skip: offset,
         take: limit,
         orderBy: [{ rank: "asc" }, { updatedAt: "desc" }],
-        include: {
-          categories: { include: { category: true } },
-          collections: { include: { collection: true } },
-          variants: true,
-          tags: { include: { tag: true } }, // ✅
-        },
+        include,
       }),
     ]);
 
     return { total, items };
   }
 
-  async getProductById(tenantId: string, id: string, publishedOnly: boolean) {
+  async getProductById(
+    tenantId: string,
+    id: string,
+    publishedOnly: boolean,
+    locale?: LocaleFallback
+  ) {
+    const requested = locale?.requested ?? null;
+    const fallback = locale?.fallback ?? null;
+    const localeIn = toLocaleIn(requested, fallback);
+
     return this.prisma.catalogProduct.findFirst({
       where: {
         tenantId,
@@ -182,7 +269,22 @@ export class CatalogRepo {
         categories: {
           include: {
             category: {
-              select: { id: true, handle: true, parentId: true }, // ✅ title yoksa zaten yok
+              select: {
+                id: true,
+                handle: true,
+                parentId: true,
+                name: true,
+                productCategoryTranslations: localeIn.length
+                  ? {
+                      where: { tenantId, localeCode: { in: localeIn } },
+                      select: {
+                        localeCode: true,
+                        title: true,
+                        description: true,
+                      },
+                    }
+                  : false,
+              },
             },
           },
         },
@@ -191,12 +293,15 @@ export class CatalogRepo {
             collection: { select: { id: true, title: true, handle: true } },
           },
         },
-        variants: true, // istersen bunu da select ile incelt
-        tags: {
-          include: {
-            tag: { select: { id: true, value: true } },
-          },
-        },
+        variants: true,
+        tags: { include: { tag: { select: { id: true, value: true } } } },
+        ...(localeIn.length
+          ? {
+              catalogProductTranslations: {
+                where: { tenantId, localeCode: { in: localeIn } },
+              },
+            }
+          : {}),
       },
     });
   }
@@ -451,6 +556,30 @@ export class CatalogRepo {
       orderBy: [{ createdAt: "asc" }],
     });
   }
+  async replaceProductCategories(
+    tenantId: string,
+    productId: string,
+    categoryIds: string[]
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productCategoryLink.deleteMany({
+        where: { tenantId, productId },
+      });
+
+      if (categoryIds.length) {
+        await tx.productCategoryLink.createMany({
+          data: categoryIds.map((categoryId) => ({
+            tenantId,
+            productId,
+            categoryId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    });
+
+    return this.getProductById(tenantId, productId, false);
+  }
 
   async adminCreateVariant(
     tenantId: string,
@@ -574,14 +703,10 @@ export class CatalogRepo {
   }
 
   async adminDeleteOption(tenantId: string, optionId: string) {
-    // Service zaten isOptionInUse ile 409 veriyor; yine de güvenli davranalım:
     await this.prisma.productOptionValue.deleteMany({
       where: { tenantId, optionId },
     });
-
-    return this.prisma.productOption.delete({
-      where: { id: optionId },
-    });
+    return this.prisma.productOption.delete({ where: { id: optionId } });
   }
 
   async adminDeleteOptionValue(tenantId: string, optionValueId: string) {

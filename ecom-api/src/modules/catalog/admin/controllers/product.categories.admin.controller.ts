@@ -5,25 +5,25 @@ import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 
-import { AdminReplaceProductCollectionsDto } from "@/modules/catalog/admin/dto/admin.product.collections.dto";
-import { ProductCollectionsAdminService } from "@/modules/catalog/admin/services/product.collections.admin.service";
+import { AdminReplaceProductCategoriesDto } from "@/modules/catalog/admin/dto/admin.product.categories.dto";
+import { ProductCategoriesAdminService } from "@/modules/catalog/admin/services/product.categories.admin.service";
 
 @Controller("/admin/products")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
-export class ProductCollectionsAdminController {
-  constructor(private readonly service: ProductCollectionsAdminService) {}
+export class ProductCategoriesAdminController {
+  constructor(private readonly service: ProductCategoriesAdminService) {}
 
-  @Post("/:id/collections")
-  async replaceCollections(
+  @Post("/:id/categories")
+  async replaceCategories(
     @Req() req: Request,
     @Param("id") productId: string,
-    @Body() dto: AdminReplaceProductCollectionsDto
+    @Body() dto: AdminReplaceProductCategoriesDto
   ) {
     const tenantId = requireTenantId(req as any);
-    return this.service.replaceCollections({
+    return this.service.replaceCategories({
       tenantId,
       productId,
-      collectionIds: dto.collectionIds ?? [],
+      categoryIds: dto.categoryIds ?? [],
     });
   }
 }

@@ -21,6 +21,14 @@ import { TagRepository } from "./tags/common/prisma/tag.repo";
 import { TagsAdminService } from "./admin/services/tags.admin.service";
 import { ProductTagsAdminService } from "./admin/services/product.tags.admin.service";
 import { ProductCollectionsAdminService } from "./admin/services/product.collections.admin.service";
+import { ProductCategoriesAdminController } from "./admin/controllers/product.categories.admin.controller";
+import { ProductCategoriesAdminService } from "./admin/services/product.categories.admin.service";
+import { ProductTranslationsAdminController } from "./admin/controllers/product.translations.admin.controller";
+import { ProductTranslationRepository } from "./translations/common/prisma/product.translation.repo";
+import { ProductTranslationsAdminService } from "./admin/services/product.translations.admin.service";
+import { CategoryTranslationsAdminController } from "./admin/controllers/category.translations.admin.controller";
+import { CategoryTranslationsAdminService } from "./admin/services/category.translations.admin.service";
+import { CategoryTranslationRepository } from "./translations/common/prisma/category.translations.repo";
 
 @Module({
   imports: [PrismaModule],
@@ -31,6 +39,9 @@ import { ProductCollectionsAdminService } from "./admin/services/product.collect
     ProductCollectionsAdminController,
     TagsAdminController,
     ProductTagsAdminController,
+    ProductCategoriesAdminController,
+    ProductTranslationsAdminController,
+    CategoryTranslationsAdminController,
   ],
   providers: [
     CatalogRepo,
@@ -44,6 +55,11 @@ import { ProductCollectionsAdminService } from "./admin/services/product.collect
     TagsAdminService,
     ProductTagsAdminService,
     ProductCollectionsAdminService,
+    ProductCategoriesAdminService,
+    ProductTranslationsAdminService,
+    ProductTranslationRepository,
+    CategoryTranslationsAdminService,
+    CategoryTranslationRepository,
   ],
   exports: [CatalogRepo],
 })
