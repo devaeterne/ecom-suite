@@ -156,4 +156,17 @@ export class StoreCartController {
     setCartCookie(res, updated.id);
     return { cart: cartToResponseDto(updated) };
   }
+  @Delete("/coupon")
+  async removeCoupon(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const tenantId = getTenantIdOrThrow(req);
+    const cartId = getCartId(req);
+    if (!cartId) throw new BadRequestException("Missing cart cookie");
+
+    const updated = await this.carts.removeCoupon(tenantId, cartId);
+    setCartCookie(res, updated.id);
+    return { cart: cartToResponseDto(updated) };
+  }
 }

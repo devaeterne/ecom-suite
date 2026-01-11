@@ -119,8 +119,8 @@
 - [x] Product ↔ collection / tag link
 
 ### Translations
-- [ ] Product translations
-- [ ] Category translations
+- [x] Product translations
+- [x] Category translations
 
 ### 🎯 E2E Hedef
 

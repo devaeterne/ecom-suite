@@ -1,3 +1,4 @@
+// src/modules/cart/common/prisma/cart.repo.ts
 import { Injectable } from "@nestjs/common";
 import { Prisma, CartStatus } from "@prisma/client";
 import { PrismaService } from "@/prisma/prisma.service";
@@ -7,6 +8,24 @@ export type Tx = Prisma.TransactionClient;
 @Injectable()
 export class CartRepo {
   constructor(private readonly prisma: PrismaService) {}
+
+  private fullInclude = {
+    lineItems: true,
+    //adjustments: true, // legacy (ileride silebilirsin)
+    shippingMethods: { where: { deletedAt: null } },
+    cartDiscountApplications: {
+      where: { deletedAt: null },
+      include: {
+        discount: {
+          select: {
+            id: true,
+            // code DB’de unique/lookup için var, listede de göstermek isteriz
+            code: true,
+          },
+        },
+      },
+    },
+  } as const;
 
   async createCart(
     tx: Tx,
@@ -25,14 +44,14 @@ export class CartRepo {
         email: data.email ?? null,
         expiresAt: data.expiresAt,
       },
-      include: { lineItems: true, adjustments: true, shippingMethods: true },
+      include: this.fullInclude,
     });
   }
 
   async findCartById(tx: Tx, tenantId: string, cartId: string) {
     return tx.cart.findFirst({
       where: { tenantId, id: cartId, deletedAt: null },
-      include: { lineItems: true, adjustments: true, shippingMethods: true },
+      include: this.fullInclude,
     });
   }
 
@@ -44,7 +63,7 @@ export class CartRepo {
         deletedAt: null,
         status: CartStatus.ACTIVE,
       },
-      include: { lineItems: true, adjustments: true, shippingMethods: true },
+      include: this.fullInclude,
     });
   }
 
@@ -59,19 +78,18 @@ export class CartRepo {
     return tx.cart.update({
       where: { id: cartId },
       data: { expiresAt },
-      include: { lineItems: true, adjustments: true, shippingMethods: true },
+      include: this.fullInclude,
     });
   }
 
   async getFullCart(tx: Tx, tenantId: string, cartId: string) {
     return tx.cart.findFirst({
       where: { tenantId, id: cartId, deletedAt: null },
-      include: { lineItems: true, adjustments: true, shippingMethods: true },
+      include: this.fullInclude,
     });
   }
 
   // ---------- Inventory lock + reservations ----------
-
   async lockInventoryLevel(
     tx: Tx,
     tenantId: string,
@@ -128,27 +146,6 @@ export class CartRepo {
     };
   }
 
-  async upsertLineItem(tx: Tx, tenantId: string, cartId: string, input: any) {
-    return tx.cartLineItem.upsert({
-      where: { cartId_variantId: { cartId, variantId: input.variantId } },
-      create: {
-        tenantId,
-        cartId,
-        variantId: input.variantId,
-        quantity: input.quantity,
-        unitPriceSnapshot: input.unitPriceSnapshot ?? 0,
-        compareAtSnapshot: input.compareAtSnapshot ?? null,
-        skuSnapshot: input.skuSnapshot ?? null,
-        titleSnapshot: input.titleSnapshot ?? null,
-        metadata: input.metadata ?? {},
-      },
-      update: {
-        quantity: { increment: input.quantity },
-      },
-      select: { id: true, quantity: true, variantId: true },
-    });
-  }
-
   async findActiveReservation(
     tx: Tx,
     tenantId: string,
@@ -164,6 +161,74 @@ export class CartRepo {
         deletedAt: null,
       },
       select: { id: true, quantity: true },
+    });
+  }
+
+  // ---------- Cart line items (deterministic qty + snapshots) ----------
+  async getLineItemByCartVariant(
+    tx: Tx,
+    tenantId: string,
+    cartId: string,
+    variantId: string
+  ) {
+    return tx.cartLineItem.findFirst({
+      where: { tenantId, cartId, variantId },
+      select: { id: true, quantity: true, variantId: true },
+    });
+  }
+
+  async createLineItem(
+    tx: Tx,
+    tenantId: string,
+    cartId: string,
+    input: {
+      variantId: string;
+      quantity: number;
+      unitPriceSnapshot: number;
+      compareAtSnapshot?: number | null;
+      skuSnapshot?: string | null;
+      titleSnapshot?: string | null;
+      metadata?: any;
+    }
+  ) {
+    return tx.cartLineItem.create({
+      data: {
+        tenantId,
+        cartId,
+        variantId: input.variantId,
+        quantity: input.quantity,
+        unitPriceSnapshot: input.unitPriceSnapshot ?? 0,
+        compareAtSnapshot: input.compareAtSnapshot ?? null,
+        skuSnapshot: input.skuSnapshot ?? null,
+        titleSnapshot: input.titleSnapshot ?? null,
+        metadata: input.metadata ?? {},
+      },
+      select: { id: true, quantity: true, variantId: true },
+    });
+  }
+
+  async updateLineItemSnapshots(
+    tx: Tx,
+    tenantId: string,
+    lineItemId: string,
+    patch: {
+      quantity: number;
+      unitPriceSnapshot: number;
+      compareAtSnapshot?: number | null;
+      skuSnapshot?: string | null;
+      titleSnapshot?: string | null;
+    }
+  ) {
+    return tx.cartLineItem.update({
+      where: { id: lineItemId },
+      data: {
+        quantity: patch.quantity,
+        unitPriceSnapshot: patch.unitPriceSnapshot ?? 0,
+        compareAtSnapshot: patch.compareAtSnapshot ?? null,
+        skuSnapshot: patch.skuSnapshot ?? null,
+        titleSnapshot: patch.titleSnapshot ?? null,
+      },
+      select: { id: true, quantity: true, variantId: true },
     });
   }
 }

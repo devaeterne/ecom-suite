@@ -1,4 +1,6 @@
+// src/modules/cart/common/mappers/cart.mappers.ts
 import { Cart, Money } from "@/modules/cart/common/types/cart.types";
+import type { CartComputedTotals } from "@/modules/cart/common/services/cart-totals.service";
 
 function money(amount: number | null | undefined, currencyCode: string): Money {
   return { amount: amount ?? 0, currencyCode };
@@ -17,12 +19,6 @@ export type PrismaCartEntity = {
 
   status: string;
   currencyCode: string;
-
-  subtotal: number | null;
-  discountTotal: number | null;
-  shippingTotal: number | null;
-  taxTotal: number | null;
-  grandTotal: number | null;
 
   expiresAt: Date | null;
 
@@ -45,7 +41,8 @@ export type PrismaCartEntity = {
     metadata: any;
   }>;
 
-  adjustments: Array<{
+  // legacy (tamamen emekli): mapper kullanmıyor
+  adjustments?: Array<{
     id: string;
     type: string; // DISCOUNT
     code: string | null;
@@ -58,10 +55,34 @@ export type PrismaCartEntity = {
     shippingOptionId: string;
     amount: number | null;
     currencyCode: string | null;
+    deletedAt?: Date | null;
+  }>;
+
+  // ✅ source-of-truth discounts
+  cartDiscountApplications?: Array<{
+    id: string;
+    deletedAt: Date | null;
+
+    codeSnapshot: string | null;
+
+    methodSnapshot: string;
+    valueBpSnapshot: number | null;
+    valueSnapshot: number | null;
+    currencyCodeSnapshot: string | null;
+
+    discountTotal: number;
+
+    discount?: {
+      id: string;
+      code: string | null;
+    } | null;
   }>;
 };
 
-export function prismaCartToDomain(entity: PrismaCartEntity): Cart {
+export function prismaCartToDomain(
+  entity: PrismaCartEntity,
+  computed?: CartComputedTotals
+): Cart {
   const currencyCode = entity.currencyCode ?? "EUR";
 
   const items = (entity.lineItems ?? []).map((li) => ({
@@ -77,15 +98,26 @@ export function prismaCartToDomain(entity: PrismaCartEntity): Cart {
     metadata: li.metadata ?? {},
   }));
 
-  const discounts = (entity.adjustments ?? [])
-    .filter((a) => a.type === "DISCOUNT" && !!a.code)
-    .map((a) => ({
-      code: a.code!,
-      description: a.description ?? undefined,
-      amount: money(a.amount ?? 0, currencyCode),
-    }));
+  // ✅ discounts: %100 cartDiscountApplications (deletedAt=null)
+  const discounts = (entity.cartDiscountApplications ?? [])
+    .filter((a) => a && a.deletedAt == null)
+    .map((a) => {
+      const code = a.codeSnapshot ?? a.discount?.code ?? undefined;
 
-  const shippingRow = (entity.shippingMethods ?? [])[0];
+      return {
+        code: code ?? "COUPON",
+        description: "Discount applied",
+        amount: money(
+          a.discountTotal ?? 0,
+          a.currencyCodeSnapshot ?? currencyCode
+        ),
+      };
+    });
+
+  const shippingRow =
+    (entity.shippingMethods ?? []).find((x: any) => x.deletedAt == null) ??
+    null;
+
   const shipping = shippingRow
     ? {
         shippingOptionId: shippingRow.shippingOptionId,
@@ -95,6 +127,22 @@ export function prismaCartToDomain(entity: PrismaCartEntity): Cart {
         ),
       }
     : undefined;
+
+  const totals = computed
+    ? {
+        subtotal: money(computed.subtotal, computed.currencyCode),
+        discountTotal: money(computed.discountTotal, computed.currencyCode),
+        shippingTotal: money(computed.shippingTotal, computed.currencyCode),
+        taxTotal: money(computed.taxTotal, computed.currencyCode),
+        grandTotal: money(computed.grandTotal, computed.currencyCode),
+      }
+    : {
+        subtotal: money(0, currencyCode),
+        discountTotal: money(0, currencyCode),
+        shippingTotal: money(0, currencyCode),
+        taxTotal: money(0, currencyCode),
+        grandTotal: money(0, currencyCode),
+      };
 
   return {
     id: entity.id,
@@ -109,13 +157,7 @@ export function prismaCartToDomain(entity: PrismaCartEntity): Cart {
     discounts,
     shipping,
 
-    totals: {
-      subtotal: money(entity.subtotal, currencyCode),
-      discountTotal: money(entity.discountTotal, currencyCode),
-      shippingTotal: money(entity.shippingTotal, currencyCode),
-      taxTotal: money(entity.taxTotal, currencyCode),
-      grandTotal: money(entity.grandTotal, currencyCode),
-    },
+    totals,
 
     expiresAt: toIso(entity.expiresAt),
     createdAt: entity.createdAt.toISOString(),
@@ -125,11 +167,6 @@ export function prismaCartToDomain(entity: PrismaCartEntity): Cart {
   };
 }
 
-/**
- * Storefront response DTO mapper:
- * - Domain => API response
- * - İstersen burada field isimlerini sabit tutarız (items/discounts/totals vs.)
- */
 export function cartToResponseDto(cart: Cart) {
   return cart;
 }

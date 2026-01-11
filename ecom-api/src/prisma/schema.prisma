@@ -1590,9 +1590,13 @@ model CatalogPriceSet {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  variant CatalogProductVariant @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Cascade)
+  variant     CatalogProductVariant @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Cascade)
+  priceListId String?               @db.Uuid
+  priceList   PriceList?            @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
 
+  @@unique([tenantId, variantId, priceListId], map: "uniq_price_set_variant_pricelist") // NULL davranışı Postgres’te izin verir
   @@unique([tenantId, id])
+  @@index([tenantId, priceListId], map: "idx_price_set_tenant_price_list")
   @@index([tenantId])
   @@index([tenantId, variantId], map: "idx_price_set_tenant_variant")
   @@index([deletedAt], map: "idx_price_set_deleted_at")
@@ -1649,7 +1653,8 @@ model PriceList {
   updatedAt DateTime  @updatedAt @db.Timestamptz(6)
   deletedAt DateTime? @db.Timestamptz(6)
 
-  rules PriceRule[]
+  rules            PriceRule[]
+  catalogPriceSets CatalogPriceSet[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
