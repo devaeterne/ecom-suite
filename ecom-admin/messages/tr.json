@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "products": "Products",
+    "orders": "Orders",
+    "settings": "Settings"
+  },
+  "topbar": {
+    "admin": "Admin",
+    "dark": "Dark",
+    "light": "Light"
+  }
+}

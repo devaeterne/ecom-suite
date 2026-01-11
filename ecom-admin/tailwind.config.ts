@@ -1,15 +1,14 @@
 import type { Config } from "tailwindcss";
-import medusaPreset from "@medusajs/ui-preset";
 
 const config: Config = {
-  presets: [medusaPreset],
+  darkMode: ["class"], // <- önemli: theme toggle için
+  presets: [require("@medusajs/ui-preset")],
   content: [
-    "./src/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@medusajs/ui/dist/**/*.{js,ts,jsx,tsx}",
   ],
-  theme: {
-    extend: {},
-  },
+  theme: { extend: {} },
   plugins: [],
 };
 

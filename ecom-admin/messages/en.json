@@ -1,0 +1,180 @@
+{
+  "brand": {
+    "name": "Ecom Admin",
+    "subtitle": "Backoffice"
+  },
+  "nav": {
+    "dashboards": "Dashboards",
+    "products": "Products",
+    "orders": "Orders",
+    "settings": "Settings",
+    "inventory": "Inventory"
+  },
+  "topbar": {
+    "scope": "Admin",
+    "theme": {
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "title": {
+      "dashboard": "Dashboard",
+      "products": "Products",
+      "orders": "Orders",
+      "settings": "Settings",
+      "inventory": "Inventory"
+    },
+    "menu": {
+      "profile": "Profile",
+      "account_settings": "Account settings"
+    }
+  },
+  "pages": {
+    "dashboards": {
+      "subtitle": "High-level overview of the admin panel."
+    },
+    "products": {
+      "subtitle": "Manage your catalog, pricing, and availability.",
+      "actions": {
+        "new": "New product",
+        "import": "Import"
+      }
+    },
+    "orders": {
+      "subtitle": "Track orders, payments, and fulfillment status."
+    },
+    "settings": {
+      "subtitle": "Configure your store and operational preferences.",
+      "actions": {
+        "save": "Save changes"
+      }
+    },
+    "inventory": {
+    "overview": {
+      "title": "Inventory",
+      "subtitle": "Manage stock locations, availability, and reservations."
+    },
+    "locations": {
+      "title": "Locations",
+      "subtitle": "Create and manage warehouses, stores, and stock locations."
+    },
+    "location_detail": {
+      "title": "Location",
+      "subtitle": "View and manage inventory settings for this location."
+    },
+    "levels": {
+      "title": "Stock levels",
+      "subtitle": "Monitor available and reserved quantities per variant and location."
+    },
+    "reservations": {
+      "title": "Reservations",
+      "subtitle": "Track stock reserved by active and completed checkouts."
+    }
+  }
+  },
+  "products": {
+    "search": "Search products...",
+    "filters": "Filters",
+    "columns": {
+      "title": "Title",
+      "status": "Status",
+      "inventory": "Inventory",
+      "price": "Price",
+      "updated": "Updated",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "draft": "Draft"
+    },
+    "row": {
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "archive": "Archive"
+    },
+    "empty": {
+      "title": "No products found",
+      "body": "Try adjusting your search or filters."
+    },
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next"
+    }
+  },
+  "orders": {
+    "search": "Search orders...",
+    "filters": "Filters",
+    "columns": {
+      "order": "Order",
+      "customer": "Customer",
+      "status": "Status",
+      "total": "Total",
+      "date": "Date",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "fulfilled": "Fulfilled",
+      "canceled": "Canceled"
+    },
+    "row": {
+      "view": "View",
+      "refund": "Refund",
+      "cancel": "Cancel"
+    },
+    "empty": {
+      "title": "No orders found",
+      "body": "Try adjusting your search or filters."
+    },
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next"
+    }
+  },
+  "settings": {
+    "tabs": {
+      "general": "General",
+      "localization": "Localization",
+      "tax": "Tax",
+      "notifications": "Notifications"
+    },
+    "general": {
+      "title": "Store details",
+      "subtitle": "Basic information used across the admin panel.",
+      "name": "Store name",
+      "email": "Support email",
+      "phone": "Support phone"
+    },
+    "localization": {
+      "title": "Localization",
+      "subtitle": "Language, currency and formatting preferences.",
+      "default_language": "Default language",
+      "default_currency": "Default currency",
+      "timezone": "Timezone"
+    },
+    "tax": {
+      "title": "Tax settings",
+      "subtitle": "Configure tax behavior for your store.",
+      "inclusive": "Prices include tax",
+      "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Control which events trigger notifications.",
+      "orders": "Order updates",
+      "low_stock": "Low stock alerts"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Use your admin credentials to access the backoffice.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "loading": "Signing in...",
+      "error": "Invalid email or password."
+    },
+    "logout": "Logout"
+  }
+}

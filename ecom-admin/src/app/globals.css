@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Admin base */
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Genel arka plan / yazı */
+body {
+  @apply bg-white text-gray-900;
+}
+
+html.dark body {
+  @apply bg-zinc-950 text-zinc-50;
+}

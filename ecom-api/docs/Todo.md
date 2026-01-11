@@ -128,13 +128,13 @@
 
 ## 🟡 AŞAMA 3 — PRICING & DISCOUNTS (MARKETING)
 
-- [ ] Price Lists (GET / POST / PATCH)
-- [ ] Activate / deactivate
-- [ ] Currency support
-- [ ] Variant pricing (`PUT /api/admin/variants/:id/prices`)
-- [ ] PriceList override logic
-- [ ] Discounts / Coupons (CRUD + cart entegrasyonu)
-- [ ] Totals (Tax / VAT / Shipping placeholder)
+- [x] Price Lists (GET / POST / PATCH)
+- [x] Activate / deactivate
+- [x] Currency support
+- [x] Variant pricing (`PUT /api/admin/variants/:id/prices`)
+- [x] PriceList override logic
+- [x] Discounts / Coupons (CRUD + cart entegrasyonu)
+- [x] Totals (Tax / VAT / Shipping placeholder)
 
 ### 🎯 E2E
 
