@@ -4,6 +4,10 @@ import { ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import fastifyCookie from "@fastify/cookie";
 import { env } from "@/config/env";
+import cookieParser from "cookie-parser";
+
+// ✅ cookie isimlerin nerede tanımlıysa burayı güncelle
+import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
 
 export async function setupApp(
   app: NestFastifyApplication,
@@ -54,7 +58,23 @@ export async function setupApp(
       .setTitle("E-commerce API")
       .setDescription("Multi-tenant e-commerce backend")
       .setVersion("1.0")
+
+      // 🔸 Bearer hâlâ kalsın (fallback / test kolaylığı)
       .addBearerAuth()
+
+      // ✅ Admin access cookie
+      .addCookieAuth(
+        COOKIE_NAMES.adminAccess, // cookie name
+        { type: "apiKey", in: "cookie" },
+        "adminAccessCookie" // scheme name (controller’da @ApiCookieAuth ile bunu kullanacağız)
+      )
+
+      // ✅ Store access cookie
+      .addCookieAuth(
+        COOKIE_NAMES.storeAccess,
+        { type: "apiKey", in: "cookie" },
+        "storeAccessCookie"
+      )
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
@@ -65,6 +85,7 @@ export async function setupApp(
   app.use("/health", (req: any, res: any) => {
     res.status(200).send({ ok: true, timestamp: new Date().toISOString() });
   });
+  app.use(cookieParser());
 
   return app;
 }

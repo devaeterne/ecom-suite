@@ -4,11 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import {
-  CartAdjustmentType,
-  CartStatus,
-  InventoryReservationStatus,
-} from "@prisma/client";
+import { CartStatus, InventoryReservationStatus } from "@prisma/client";
 
 import { PrismaService } from "@/prisma/prisma.service";
 import { CartRepo } from "@/modules/cart/common/prisma/cart.repo";
@@ -35,12 +31,21 @@ export class StoreCartService {
     private readonly prisma: PrismaService,
     private readonly repo: CartRepo,
     private readonly totals: CartTotalsService,
-    private readonly pricing: PricingEngineService,
+    private readonly pricingEngine: PricingEngineService,
     private readonly discounts: CartDiscountsService
   ) {}
 
   private reservationExpiresAt() {
     return addMs(new Date(), RESERVATION_TTL_MS);
+  }
+
+  private getCartMeta(metadata: unknown): Record<string, any> {
+    return metadata && typeof metadata === "object" ? (metadata as any) : {};
+  }
+
+  private getCartPriceListId(cart: { metadata: unknown }) {
+    const meta = this.getCartMeta(cart.metadata);
+    return meta.priceListId ?? null;
   }
 
   async createCart(
@@ -120,16 +125,59 @@ export class StoreCartService {
   }
 
   /**
+   * Set / unset cart price list context (stored in cart.metadata.priceListId)
+   */
+  async setPriceList(
+    tenantId: string,
+    cartId: string,
+    priceListId: string | null
+  ): Promise<Cart> {
+    const row = await this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findFirst({
+        where: {
+          tenantId,
+          id: cartId,
+          deletedAt: null,
+          status: CartStatus.ACTIVE,
+        },
+        select: { id: true, metadata: true },
+      });
+      if (!cart) throw new NotFoundException("Cart not found");
+
+      const meta = this.getCartMeta(cart.metadata);
+
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: {
+          metadata: { ...meta, priceListId },
+          expiresAt: addMs(new Date(), CART_TTL_MS),
+        },
+      });
+
+      const computed = await this.totals.recompute(tx, {
+        tenantId,
+        cartId: cart.id,
+      });
+
+      const full = await this.repo.getFullCart(tx, tenantId, cart.id);
+      return { full: full!, computed };
+    });
+
+    return prismaCartToDomain(row.full as any, row.computed);
+  }
+
+  /**
    * Add line item:
-   * - location-aware inventory lock
-   * - delta-based reservation (increment)
-   * - tier pricing snapshot: existingQty + delta => newQty
-   * - recompute totals persisted
+   * - inventory lock (location-aware)
+   * - delta reservation increment
+   * - pricing snapshot (unitPriceSnapshot / compareAtSnapshot)
+   * - totals recompute
    */
   async addLineItem(
     tenantId: string,
     cartId: string,
-    input: { variantId: string; quantity: number; locationId?: string }
+    input: { variantId: string; quantity: number; locationId?: string },
+    ctx?: { priceListId?: string | null }
   ): Promise<Cart> {
     if (input.quantity < 1) {
       throw new BadRequestException("quantity must be >= 1");
@@ -147,7 +195,7 @@ export class StoreCartService {
           deletedAt: null,
           status: CartStatus.ACTIVE,
         },
-        select: { id: true, currencyCode: true },
+        select: { id: true, currencyCode: true, metadata: true },
       });
       if (!cart) throw new NotFoundException("Cart not found");
 
@@ -159,20 +207,9 @@ export class StoreCartService {
         input.variantId
       );
 
-      // 2) stock check with delta
+      // 2) stock check (delta)
       const available = level.stockedQuantity - level.reservedQuantity;
       if (input.quantity > available) {
-        console.warn("[CART][INSUFFICIENT_STOCK]", {
-          tenantId,
-          cartId,
-          variantId: input.variantId,
-          resolvedLocationId: locationId,
-          stockedQuantity: level.stockedQuantity,
-          reservedQuantity: level.reservedQuantity,
-          available,
-          requested: input.quantity,
-        });
-
         throw new ConflictException({
           code: "INSUFFICIENT_STOCK",
           message: "Insufficient stock for reservation",
@@ -181,88 +218,123 @@ export class StoreCartService {
         });
       }
 
-      // 3) tier pricing: newQty = existing + delta
-      const existingLi = await this.repo.getLineItemByCartVariant(
-        tx,
-        tenantId,
-        cart.id,
-        input.variantId
-      );
-      const newQty = (existingLi?.quantity ?? 0) + input.quantity;
+      // 3) existing line item? (unique cartId+variantId)
+      const existing = await tx.cartLineItem.findFirst({
+        where: { tenantId, cartId: cart.id, variantId: input.variantId },
+        select: { id: true, quantity: true },
+      });
 
-      const unit = await this.pricing.resolveUnitPrice(tx, {
+      const newQty = (existing?.quantity ?? 0) + input.quantity;
+
+      const priceListId = this.getCartPriceListId(cart);
+
+      // 4) price resolve (CRITICAL: engine does base-price fallback)
+      const unit = await this.pricingEngine.resolveUnitPrice(tx, {
         tenantId,
         cartId: cart.id,
         variantId: input.variantId,
         currencyCode: cart.currencyCode ?? "EUR",
         quantity: newQty,
+        priceListId,
       });
 
-      // 4) deterministic line item write (quantity + snapshots)
-      const lineItem = existingLi
-        ? await this.repo.updateLineItemSnapshots(tx, tenantId, existingLi.id, {
-            quantity: newQty,
-            unitPriceSnapshot: unit.amount,
-            compareAtSnapshot: unit.compareAt ?? null,
-            // Not: ileride SKU/TITLE snapshot dolduracaksan null’a çekmek yerine koruyabilirsin.
-            skuSnapshot: null,
-            titleSnapshot: null,
-          })
-        : await this.repo.createLineItem(tx, tenantId, cart.id, {
+      if (!unit) {
+        throw new BadRequestException({
+          code: "PRICING_NOT_CONFIGURED",
+          message: "No pricing configured for variant",
+          variantId: input.variantId,
+        });
+      }
+
+      // 5) upsert line item + reservation
+      let liId: string;
+
+      if (!existing) {
+        const created = await tx.cartLineItem.create({
+          data: {
+            tenantId,
+            cartId: cart.id,
             variantId: input.variantId,
-            quantity: newQty,
+            quantity: input.quantity,
             unitPriceSnapshot: unit.amount,
             compareAtSnapshot: unit.compareAt ?? null,
-            skuSnapshot: null,
-            titleSnapshot: null,
             metadata: {},
-          });
+          },
+          select: { id: true },
+        });
 
-      // 5) reservation upsert (delta reserve)
-      const existingResv = await tx.inventoryReservation.findFirst({
-        where: {
-          tenantId,
-          cartId: cart.id,
-          cartLineItemId: lineItem.id,
-          status: InventoryReservationStatus.ACTIVE,
-          deletedAt: null,
-        },
-        select: { id: true, quantity: true },
-      });
+        liId = created.id;
 
-      const expiresAt = this.reservationExpiresAt();
-
-      if (!existingResv) {
         await tx.inventoryReservation.create({
           data: {
             tenantId,
-            locationId,
-            variantId: input.variantId,
             cartId: cart.id,
-            cartLineItemId: lineItem.id,
-            quantity: input.quantity, // delta
+            cartLineItemId: liId,
+            variantId: input.variantId,
+            locationId,
+            quantity: input.quantity,
             status: InventoryReservationStatus.ACTIVE,
-            expiresAt,
+            expiresAt: this.reservationExpiresAt(),
             metadata: {},
           },
         });
       } else {
-        await tx.inventoryReservation.update({
-          where: { id: existingResv.id },
-          data: { quantity: { increment: input.quantity }, expiresAt },
+        liId = existing.id;
+
+        await tx.cartLineItem.update({
+          where: { id: liId },
+          data: {
+            quantity: newQty,
+            unitPriceSnapshot: unit.amount,
+            compareAtSnapshot: unit.compareAt ?? null,
+          },
         });
+
+        // reservation increment (same LI)
+        const resv = await tx.inventoryReservation.findFirst({
+          where: {
+            tenantId,
+            cartId: cart.id,
+            cartLineItemId: liId,
+            status: InventoryReservationStatus.ACTIVE,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+
+        if (!resv) {
+          // self-heal: missing reservation
+          await tx.inventoryReservation.create({
+            data: {
+              tenantId,
+              cartId: cart.id,
+              cartLineItemId: liId,
+              variantId: input.variantId,
+              locationId,
+              quantity: input.quantity,
+              status: InventoryReservationStatus.ACTIVE,
+              expiresAt: this.reservationExpiresAt(),
+              metadata: {},
+            },
+          });
+        } else {
+          await tx.inventoryReservation.update({
+            where: { id: resv.id },
+            data: {
+              quantity: { increment: input.quantity },
+              expiresAt: this.reservationExpiresAt(),
+            },
+          });
+        }
       }
 
-      // 6) inventory reservedQuantity delta update (single write)
+      // inventory reservedQuantity increment (delta)
       await tx.inventoryLevel.update({
         where: { id: level.id },
         data: { reservedQuantity: { increment: input.quantity } },
       });
 
-      // 7) discounts pipeline (şimdilik no-op olabilir, ama entegrasyon noktası hazır)
-      // await this.discounts.recompute(tx, { tenantId, cartId: cart.id });
-
-      // 8) totals persist + extend cart ttl
+      // totals + cart TTL refresh
       const computed = await this.totals.recompute(tx, {
         tenantId,
         cartId: cart.id,
@@ -281,12 +353,12 @@ export class StoreCartService {
   }
 
   /**
-   * Update line item:
-   * - finds ACTIVE reservation and uses its locationId (source of truth)
-   * - delta-based stock check for increases
-   * - snapshot reprice based on newQty (tier pricing)
-   * - reservation quantity set to newQty
-   * - inventory reservedQuantity adjusted by delta
+   * Update line item quantity:
+   * - uses ACTIVE reservation's locationId as source of truth
+   * - delta stock check if increasing
+   * - reprice snapshot using newQty (tier pricing)
+   * - reservation.quantity set to newQty (not increment drift)
+   * - inventoryLevel.reservedQuantity adjusted by delta
    */
   async updateLineItem(
     tenantId: string,
@@ -306,7 +378,7 @@ export class StoreCartService {
           deletedAt: null,
           status: CartStatus.ACTIVE,
         },
-        select: { id: true, currencyCode: true },
+        select: { id: true, currencyCode: true, metadata: true },
       });
       if (!cart) throw new NotFoundException("Cart not found");
 
@@ -336,7 +408,7 @@ export class StoreCartService {
           status: InventoryReservationStatus.ACTIVE,
           deletedAt: null,
         },
-        select: { id: true, locationId: true },
+        select: { id: true, locationId: true, quantity: true },
       });
       if (!resv) throw new Error("ACTIVE reservation not found for line item");
 
@@ -359,34 +431,46 @@ export class StoreCartService {
         }
       }
 
-      const unit = await this.pricing.resolveUnitPrice(tx, {
+      const priceListId = this.getCartPriceListId(cart);
+
+      const unit = await this.pricingEngine.resolveUnitPrice(tx, {
         tenantId,
         cartId: cart.id,
         variantId: li.variantId,
         currencyCode: cart.currencyCode ?? "EUR",
         quantity: newQty,
+        priceListId,
       });
 
-      await this.repo.updateLineItemSnapshots(tx, tenantId, li.id, {
-        quantity: newQty,
-        unitPriceSnapshot: unit.amount,
-        compareAtSnapshot: unit.compareAt ?? null,
-        skuSnapshot: null,
-        titleSnapshot: null,
-      });
+      if (!unit) {
+        throw new BadRequestException({
+          code: "PRICING_NOT_CONFIGURED",
+          message: "No pricing configured for variant",
+          variantId: li.variantId,
+        });
+      }
 
-      await tx.inventoryReservation.update({
-        where: { id: resv.id },
-        data: { quantity: newQty, expiresAt: this.reservationExpiresAt() },
+      await tx.cartLineItem.update({
+        where: { id: li.id },
+        data: {
+          quantity: newQty,
+          unitPriceSnapshot: unit.amount,
+          compareAtSnapshot: unit.compareAt ?? null,
+        },
       });
 
       if (delta !== 0) {
+        await tx.inventoryReservation.update({
+          where: { id: resv.id },
+          data: {
+            quantity: newQty, // set absolute => drift yok
+            expiresAt: this.reservationExpiresAt(),
+          },
+        });
+
         await tx.inventoryLevel.update({
           where: { id: level.id },
-          data: {
-            reservedQuantity:
-              delta > 0 ? { increment: delta } : { decrement: Math.abs(delta) },
-          },
+          data: { reservedQuantity: { increment: delta } },
         });
       }
 
@@ -426,7 +510,7 @@ export class StoreCartService {
 
       const li = await tx.cartLineItem.findFirst({
         where: { tenantId, id: lineItemId, cartId: cart.id },
-        select: { id: true, variantId: true },
+        select: { id: true, variantId: true, quantity: true },
       });
       if (!li) throw new NotFoundException("Line item not found");
 
@@ -522,13 +606,45 @@ export class StoreCartService {
     return prismaCartToDomain(row.full as any, row.computed);
   }
 
+  async removeCoupon(tenantId: string, cartId: string): Promise<Cart> {
+    const row = await this.prisma.$transaction(async (tx) => {
+      const cart = await tx.cart.findFirst({
+        where: {
+          tenantId,
+          id: cartId,
+          deletedAt: null,
+          status: CartStatus.ACTIVE,
+        },
+        select: { id: true },
+      });
+      if (!cart) throw new NotFoundException("Cart not found");
+
+      await this.discounts.removeCoupon(tx, { tenantId, cartId: cart.id });
+
+      const computed = await this.totals.recompute(tx, {
+        tenantId,
+        cartId: cart.id,
+      });
+
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: { expiresAt: addMs(new Date(), CART_TTL_MS) },
+      });
+
+      const full = await this.repo.getFullCart(tx, tenantId, cart.id);
+      return { full: full!, computed };
+    });
+
+    return prismaCartToDomain(row.full as any, row.computed);
+  }
   async setShippingMethod(
     tenantId: string,
     cartId: string,
     shippingOptionId: string
   ): Promise<Cart> {
-    if (!shippingOptionId?.trim())
+    if (!shippingOptionId?.trim()) {
       throw new BadRequestException("shippingOptionId is required");
+    }
 
     const row = await this.prisma.$transaction(async (tx) => {
       const cart = await tx.cart.findFirst({
@@ -556,6 +672,7 @@ export class StoreCartService {
       const amount = option.amount ?? 0;
       const currencyCode = option.currencyCode ?? cart.currencyCode ?? "EUR";
 
+      // Aynı shipping option daha önce set edilmiş mi?
       const existing = await tx.cartShippingMethod.findFirst({
         where: {
           tenantId,
@@ -567,6 +684,13 @@ export class StoreCartService {
       });
 
       if (!existing) {
+        // Eğer business kuralın “tek shipping method” ise,
+        // mevcut diğerlerini soft-delete yapabilirsin. (opsiyonel)
+        await tx.cartShippingMethod.updateMany({
+          where: { tenantId, cartId: cart.id, deletedAt: null },
+          data: { deletedAt: new Date() },
+        });
+
         await tx.cartShippingMethod.create({
           data: {
             tenantId,
@@ -580,41 +704,14 @@ export class StoreCartService {
       } else {
         await tx.cartShippingMethod.update({
           where: { id: existing.id },
-          data: { amount, currencyCode, metadata: {}, deletedAt: null },
+          data: {
+            amount,
+            currencyCode,
+            metadata: {},
+            deletedAt: null,
+          },
         });
       }
-
-      const computed = await this.totals.recompute(tx, {
-        tenantId,
-        cartId: cart.id,
-      });
-
-      await tx.cart.update({
-        where: { id: cart.id },
-        data: { expiresAt: addMs(new Date(), CART_TTL_MS) },
-      });
-
-      const full = await this.repo.getFullCart(tx, tenantId, cart.id);
-      return { full: full!, computed };
-    });
-
-    return prismaCartToDomain(row.full as any, row.computed);
-  }
-
-  async removeCoupon(tenantId: string, cartId: string): Promise<Cart> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.findFirst({
-        where: {
-          tenantId,
-          id: cartId,
-          deletedAt: null,
-          status: CartStatus.ACTIVE,
-        },
-        select: { id: true },
-      });
-      if (!cart) throw new NotFoundException("Cart not found");
-
-      await this.discounts.removeCoupon(tx, { tenantId, cartId: cart.id });
 
       const computed = await this.totals.recompute(tx, {
         tenantId,

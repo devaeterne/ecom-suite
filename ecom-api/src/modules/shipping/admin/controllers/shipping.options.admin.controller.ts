@@ -32,7 +32,7 @@ export class ShippingOptionsAdminController {
   }
 
   @UseGuards(AdminAccessGuard)
-  @Get("/api/admin/shipping/options")
+  @Get("/admin/shipping/options")
   list(@Req() req: AdminAuthContext, @Query("profileId") profileId?: string) {
     return this.service.list({
       tenantId: this.tenantId(req),
@@ -41,7 +41,7 @@ export class ShippingOptionsAdminController {
   }
 
   @UseGuards(AdminAccessGuard)
-  @Post("/api/admin/shipping/profiles/:profileId/options")
+  @Post("/admin/shipping/profiles/:profileId/options")
   create(
     @Req() req: AdminAuthContext,
     @Param("profileId") profileId: string,
@@ -55,7 +55,7 @@ export class ShippingOptionsAdminController {
   }
 
   @UseGuards(AdminAccessGuard)
-  @Patch("/api/admin/shipping/options/:id")
+  @Patch("/admin/shipping/options/:id")
   patch(
     @Req() req: AdminAuthContext,
     @Param("id") id: string,
@@ -69,7 +69,7 @@ export class ShippingOptionsAdminController {
   }
 
   @UseGuards(AdminAccessGuard)
-  @Delete("/api/admin/shipping/options/:id")
+  @Delete("/admin/shipping/options/:id")
   remove(@Req() req: AdminAuthContext, @Param("id") id: string) {
     return this.service.remove(this.tenantId(req), id);
   }

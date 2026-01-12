@@ -17,7 +17,7 @@ import { CreateShipmentDto } from "../dto/create-shipment.dto";
 import { CreateShipmentEventDto } from "../dto/create-shipment-event.dto";
 import { MarkShipmentDeliveredDto } from "../dto/mark-shipment-delivered.dto";
 
-@Controller("/api/admin")
+@Controller("/admin")
 export class ShipmentsAdminController {
   constructor(private readonly service: ShipmentsAdminService) {}
 

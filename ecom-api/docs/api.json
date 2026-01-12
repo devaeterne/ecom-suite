@@ -1553,7 +1553,7 @@
           },
           "password": {
             "type": "string",
-            "example": "P@ssw0rd!"
+            "example": "ChangeMe123!"
           }
         },
         "required": [

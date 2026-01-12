@@ -13,7 +13,7 @@ import { StoreRequest } from "@/modules/auth/store/common/types/store-request";
 import { ShippingStoreService } from "../services/shipping.store.service";
 import { ListShippingOptionsQueryDto } from "../dto/list-shipping-options.query.dto";
 
-@Controller("/api/store/shipping-options")
+@Controller("/store/shipping-options")
 export class ShippingStoreController {
   constructor(private readonly service: ShippingStoreService) {}
 

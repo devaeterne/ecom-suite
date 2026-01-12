@@ -141,11 +141,11 @@
 ---
 
 ## 🟡 AŞAMA 4 — FULFILLMENT & SHIPPING
-- [ ] Fulfill order
-- [ ] Ship
-- [ ] Mark delivered
-- [ ] Shipping config (carrier / option / profile / pickup)
-- [ ] Store shipping options endpoint
+- [x] Fulfill order
+- [x] Ship
+- [x] Mark delivered
+- [x] Shipping config (carrier / option / profile / pickup)
+- [x] Store shipping options endpoint
 
 ---
 

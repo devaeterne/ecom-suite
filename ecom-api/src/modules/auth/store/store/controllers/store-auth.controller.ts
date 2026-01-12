@@ -13,6 +13,7 @@ import {
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiCookieAuth,
   ApiBody,
   ApiOkResponse,
   ApiTags,
@@ -253,7 +254,7 @@ export class StoreAuthController {
 
   @Post("logout-all")
   @UseGuards(StoreAccessGuard)
-  @ApiBearerAuth()
+  @ApiCookieAuth("storeAccessCookie")
   @HttpCode(200)
   async logoutAll(
     @Req() req: any,
@@ -278,12 +279,9 @@ export class StoreAuthController {
 
   @Get("me")
   @UseGuards(StoreAccessGuard)
-  @ApiBearerAuth()
-  @Get("me")
-  @UseGuards(StoreAccessGuard)
-  @ApiBearerAuth()
+  @ApiCookieAuth("storeAccessCookie") // bunu birazdan cookie’ye çevireceğiz
   async me(@Req() req: any) {
-    const { sub, tenantId } = req.user; // sub artık customerId
+    const { sub, tenantId } = req.user;
     return this.service.me(sub, tenantId);
   }
 }

@@ -48,6 +48,14 @@ API="$BASE/api"
 EMAIL="${OWNER_EMAIL:-admin@acme.com}"
 PASS="${OWNER_PASS:-ChangeMe123!}"
 TENANT_ID=""
+############################################
+# Store cookie jar (cart + priceList cookies)
+############################################
+TS="$(date +%s)"
+STORE_JAR="${STORE_JAR:-/tmp/smoke-store-cookie-jar-$TS.txt}"
+: > "$STORE_JAR"
+echo "STORE_JAR=$STORE_JAR"
+
 
 
 ############################################
@@ -80,7 +88,7 @@ admin_call_code() {
 
 
 ############################################
-# Store helper: always sends JSON body if data provided
+# Store helper: supports cookie jar (cart cookie + priceList cookie)
 ############################################
 store_call_code() {
   local method="$1"; shift
@@ -88,16 +96,26 @@ store_call_code() {
   local data="${1:-}"
   local out="${2:-/tmp/store_body.json}"
 
+  # lazy cookie jar
+  if [ -z "${STORE_JAR:-}" ]; then
+    STORE_JAR="/tmp/smoke-store-cookie-jar-$(date +%Y%m%d_%H%M%S).txt"
+    : > "$STORE_JAR"
+    echo "STORE_JAR=$STORE_JAR" >&2
+  fi
+
   if [ -n "$data" ]; then
     curl -sS -o "$out" -w "%{http_code}" \
+      -c "$STORE_JAR" -b "$STORE_JAR" \
       -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
       "$url" -d "$data"
   else
     curl -sS -o "$out" -w "%{http_code}" \
+      -c "$STORE_JAR" -b "$STORE_JAR" \
       -X "$method" "${STORE_AUTH[@]}" "${TENANT[@]}" \
       "$url"
   fi
 }
+
 
 ############################################
 # Admin Login
@@ -189,168 +207,187 @@ if [ "$DEFAULT_LOC_ID" != "$LOC_A_ID" ]; then
 fi
 echo "✅ default verification ok"
 
-############################################
-# Commit D — Inventory E2E
-############################################
-step "Commit D — Inventory E2E"
 
-# 1) Create category -> product -> variant
-reqline "POST" "$API/admin/categories"
-CAT_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  -d "{\"name\":\"Smoke Cat $TS\",\"handle\":\"smoke-cat-$TS\"}" \
-  "$API/admin/categories")"
-CATEGORY_ID="$(echo "$CAT_RES" | jq -r '.id // .category.id // empty')"
-test -n "$CATEGORY_ID" || { echo "❌ category create failed"; echo "$CAT_RES"; exit 1; }
+ ############################################
+ # Commit D — Inventory E2E
+ ############################################
+ step "Commit D — Inventory E2E"
 
-reqline "POST" "$API/admin/products"
-PROD_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  -d "{\"title\":\"Smoke Prod $TS\",\"handle\":\"smoke-prod-$TS\",\"status\":\"draft\",\"categoryIds\":[\"$CATEGORY_ID\"]}" \
-  "$API/admin/products")"
-PRODUCT_ID="$(echo "$PROD_RES" | jq -r '.id // .product.id // empty')"
-test -n "$PRODUCT_ID" || { echo "❌ product create failed"; echo "$PROD_RES"; exit 1; }
+ # 1) Create category -> product -> variant
+ reqline "POST" "$API/admin/categories"
+ CAT_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+   -d "{\"name\":\"Smoke Cat $TS\",\"handle\":\"smoke-cat-$TS\"}" \
+   "$API/admin/categories")"
+ CATEGORY_ID="$(echo "$CAT_RES" | jq -r '.id // .category.id // empty')"
+ test -n "$CATEGORY_ID" || { echo "❌ category create failed"; echo "$CAT_RES"; exit 1; }
 
-reqline "POST" "$API/admin/products/$PRODUCT_ID/variants"
-VAR_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
-  -d "{\"title\":\"Variant\",\"sku\":\"SMOKE-$TS\"}" \
-  "$API/admin/products/$PRODUCT_ID/variants")"
-VARIANT_ID="$(echo "$VAR_RES" | jq -r '.id // .variant.id // empty')"
-test -n "$VARIANT_ID" || { echo "❌ variant create failed"; echo "$VAR_RES"; exit 1; }
-echo "✅ VARIANT_ID=$VARIANT_ID"
+ reqline "POST" "$API/admin/products"
+ PROD_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+   -d "{\"title\":\"Smoke Prod $TS\",\"handle\":\"smoke-prod-$TS\",\"status\":\"draft\",\"categoryIds\":[\"$CATEGORY_ID\"]}" \
+   "$API/admin/products")"
+ PRODUCT_ID="$(echo "$PROD_RES" | jq -r '.id // .product.id // empty')"
+ test -n "$PRODUCT_ID" || { echo "❌ product create failed"; echo "$PROD_RES"; exit 1; }
 
-# 2) Upsert inventory level at default
-reqline "PUT" "$API/admin/inventory/levels"
-UP_PAYLOAD="$(jq -cn \
-  --arg locationId "$DEFAULT_LOC_ID" \
-  --arg variantId "$VARIANT_ID" \
-  '{items:[{locationId:$locationId,variantId:$variantId,stockedQuantity:10}] }')"
-CODE="$(admin_call_code PUT "$API/admin/inventory/levels" "$UP_PAYLOAD" /tmp/levels.json)"
-cat /tmp/levels.json | jq .
-expect_2xx "$CODE" || { echo "❌ level upsert failed (HTTP $CODE)"; exit 1; }
-echo "✅ inventory stocked (default location)"
-
-# determinism: enforce default again right before store/cart
-reqline "POST" "$API/admin/inventory/locations/$LOC_A_ID/set-default"
-CODE="$(admin_call_code POST "$API/admin/inventory/locations/$LOC_A_ID/set-default" '{}' /tmp/loc_set_default2.json)"
-expect_2xx "$CODE" || { echo "❌ set-default(2) failed (HTTP $CODE)"; cat /tmp/loc_set_default2.json; exit 1; }
-
-reqline "GET" "$API/admin/inventory/locations?take=100&skip=0"
-CODE="$(admin_call_code GET "$API/admin/inventory/locations?take=100&skip=0" "" /tmp/loc_list2.json)"
-expect_2xx "$CODE" || { echo "❌ locations list failed (HTTP $CODE)"; exit 1; }
-
-DEFAULTS_CNT="$(jq -r '(.locations // .items // []) | map(select(.isDefault==true)) | length' /tmp/loc_list2.json)"
-DEFAULT_LOC_ID="$(jq -r '(.locations // .items // []) | map(select(.isDefault==true)) | .[0].id // empty' /tmp/loc_list2.json)"
-
-echo "✅ DEFAULTS_CNT=$DEFAULTS_CNT"
-echo "✅ DEFAULT_LOC_ID=$DEFAULT_LOC_ID"
-
-test "$DEFAULTS_CNT" -eq 1 || { echo "❌ multiple default locations detected"; jq '.locations // .items' /tmp/loc_list2.json; exit 1; }
-test "$DEFAULT_LOC_ID" = "$LOC_A_ID" || { echo "❌ default mismatch: expected $LOC_A_ID got $DEFAULT_LOC_ID"; exit 1; }
-
-reqline "GET" "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID"
-CODE="$(admin_call_code GET "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID" "" /tmp/levels_check.json)"
-cat /tmp/levels_check.json | jq .
-expect_2xx "$CODE" || { echo "❌ levels check failed"; exit 1; }
+ reqline "POST" "$API/admin/products/$PRODUCT_ID/variants"
+ VAR_RES="$(curl -sS -X POST "${AUTH[@]}" "${TENANT[@]}" "${JSON[@]}" \
+   -d "{\"title\":\"Variant\",\"sku\":\"SMOKE-$TS\"}" \
+   "$API/admin/products/$PRODUCT_ID/variants")"
+ VARIANT_ID="$(echo "$VAR_RES" | jq -r '.id // .variant.id // empty')"
+ test -n "$VARIANT_ID" || { echo "❌ variant create failed"; echo "$VAR_RES"; exit 1; }
+ echo "✅ VARIANT_ID=$VARIANT_ID"
 
 ############################################
-# Store auth (register)
+# Stage 3 — Pricing seed (base price for variant)
+# Purpose: store/cart line-items needs unit price; otherwise PRICING_NOT_CONFIGURED (HTTP 400)
 ############################################
-step "Store auth"
+step "Seed variant base price (Admin)"
+reqline "POST" "$API/admin/variants/$VARIANT_ID/prices"
 
-BUYER_EMAIL="buyer-$TS@acme.com"
-BUYER_PASS="Passw0rd!"
+PRICE_PAYLOAD="$(jq -cn \
+  --arg currencyCode "EUR" \
+  --argjson amount 1999 \
+  '{currencyCode:$currencyCode, amount:$amount}')"
 
-reqline "POST" "$API/store/auth/register"
-STORE_ACCESS_TOKEN="$(
-  curl -sS -H "Content-Type: application/json" \
-    -d "{\"email\":\"$BUYER_EMAIL\",\"password\":\"$BUYER_PASS\",\"firstName\":\"B\",\"lastName\":\"U\"}" \
-    "$API/store/auth/register" | jq -r '.accessToken // empty'
-)"
-test -n "$STORE_ACCESS_TOKEN" || { echo "❌ store token yok"; exit 1; }
+CODE="$(admin_call_code POST "$API/admin/variants/$VARIANT_ID/prices" "$PRICE_PAYLOAD" /tmp/price_seed.json)"
+cat /tmp/price_seed.json | jq .
+expect_2xx "$CODE" || { echo "❌ variant price seed failed (HTTP $CODE)"; exit 1; }
 
-STORE_AUTH=(-H "Authorization: Bearer $STORE_ACCESS_TOKEN")
-echo "✅ store auth ok"
+echo "✅ base price seeded"
+ # 2) Upsert inventory level at default
+ reqline "PUT" "$API/admin/inventory/levels"
+ UP_PAYLOAD="$(jq -cn \
+   --arg locationId "$DEFAULT_LOC_ID" \
+   --arg variantId "$VARIANT_ID" \
+   '{items:[{locationId:$locationId,variantId:$variantId,stockedQuantity:10}] }')"
+ CODE="$(admin_call_code PUT "$API/admin/inventory/levels" "$UP_PAYLOAD" /tmp/levels.json)"
+ cat /tmp/levels.json | jq .
+ expect_2xx "$CODE" || { echo "❌ level upsert failed (HTTP $CODE)"; exit 1; }
+ echo "✅ inventory stocked (default location)"
 
-############################################
-# Store flow: Cart -> Line item -> Checkout -> Reserve
-############################################
-step "Cart create"
-reqline "POST" "$API/store/cart"
+ # determinism: enforce default again right before store/cart
+ reqline "POST" "$API/admin/inventory/locations/$LOC_A_ID/set-default"
+ CODE="$(admin_call_code POST "$API/admin/inventory/locations/$LOC_A_ID/set-default" '{}' /tmp/loc_set_default2.json)"
+ expect_2xx "$CODE" || { echo "❌ set-default(2) failed (HTTP $CODE)"; cat /tmp/loc_set_default2.json; exit 1; }
 
-CART_CODE="$(store_call_code POST "$API/store/cart" '{}' /tmp/cart.json)"
-cat /tmp/cart.json | jq .
-expect_2xx "$CART_CODE" || { echo "❌ cart create failed (HTTP $CART_CODE)"; exit 1; }
+ reqline "GET" "$API/admin/inventory/locations?take=100&skip=0"
+ CODE="$(admin_call_code GET "$API/admin/inventory/locations?take=100&skip=0" "" /tmp/loc_list2.json)"
+ expect_2xx "$CODE" || { echo "❌ locations list failed (HTTP $CODE)"; exit 1; }
 
-CART_ID="$(jq -r '.cart.id // .id // empty' /tmp/cart.json)"
-test -n "$CART_ID" && [ "$CART_ID" != "null" ] || { echo "❌ CART_ID yok"; exit 1; }
-echo "✅ CART_ID=$CART_ID"
+ DEFAULTS_CNT="$(jq -r '(.locations // .items // []) | map(select(.isDefault==true)) | length' /tmp/loc_list2.json)"
+ DEFAULT_LOC_ID="$(jq -r '(.locations // .items // []) | map(select(.isDefault==true)) | .[0].id // empty' /tmp/loc_list2.json)"
 
-step "Add line item (single call)"
-reqline "POST" "$API/store/cart/line-items"
+ echo "✅ DEFAULTS_CNT=$DEFAULTS_CNT"
+ echo "✅ DEFAULT_LOC_ID=$DEFAULT_LOC_ID"
 
-ADD_PAYLOAD="$(jq -cn \
-  --arg variantId "$VARIANT_ID" \
-  --arg locationId "$DEFAULT_LOC_ID" \
-  '{variantId:$variantId, quantity:1, locationId:$locationId}')"
+ test "$DEFAULTS_CNT" -eq 1 || { echo "❌ multiple default locations detected"; jq '.locations // .items' /tmp/loc_list2.json; exit 1; }
+ test "$DEFAULT_LOC_ID" = "$LOC_A_ID" || { echo "❌ default mismatch: expected $LOC_A_ID got $DEFAULT_LOC_ID"; exit 1; }
 
-ADD_CODE="$(store_call_code POST "$API/store/cart/line-items" "$ADD_PAYLOAD" /tmp/add_item.json)"
-cat /tmp/add_item.json | jq .
-expect_2xx "$ADD_CODE" || { echo "❌ add line item failed (HTTP $ADD_CODE)"; exit 1; }
+ reqline "GET" "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID"
+ CODE="$(admin_call_code GET "$API/admin/inventory/levels?locationId=$DEFAULT_LOC_ID&variantId=$VARIANT_ID" "" /tmp/levels_check.json)"
+ cat /tmp/levels_check.json | jq .
+ expect_2xx "$CODE" || { echo "❌ levels check failed"; exit 1; }
 
-# Backend cart id changes -> accept response as source of truth
-CART_ID="$(jq -r '.cart.id // empty' /tmp/add_item.json)"
-test -n "$CART_ID" || { echo "❌ CART_ID missing after add line item"; exit 1; }
-echo "✅ CART_ID (effective)=$CART_ID"
-echo "✅ line item ok"
+ ############################################
+ # Store auth (register)
+ ############################################
+ step "Store auth"
 
-step "Checkout create"
-reqline "POST" "$API/store/checkout"
+ BUYER_EMAIL="buyer-$TS@acme.com"
+ BUYER_PASS="Passw0rd!"
 
-CHECKOUT_PAYLOAD="$(jq -cn --arg cartId "$CART_ID" '{cartId:$cartId}')"
-CHK_CODE="$(store_call_code POST "$API/store/checkout" "$CHECKOUT_PAYLOAD" /tmp/checkout.json)"
-cat /tmp/checkout.json | jq .
-expect_2xx "$CHK_CODE" || { echo "❌ checkout create failed (HTTP $CHK_CODE)"; exit 1; }
+ reqline "POST" "$API/store/auth/register"
+ STORE_ACCESS_TOKEN="$(
+   curl -sS -H "Content-Type: application/json" \
+     -d "{\"email\":\"$BUYER_EMAIL\",\"password\":\"$BUYER_PASS\",\"firstName\":\"B\",\"lastName\":\"U\"}" \
+     "$API/store/auth/register" | jq -r '.accessToken // empty'
+ )"
+ test -n "$STORE_ACCESS_TOKEN" || { echo "❌ store token yok"; exit 1; }
 
-CHECKOUT_ID="$(jq -r '.checkout.id // .id // empty' /tmp/checkout.json)"
-test -n "$CHECKOUT_ID" && [ "$CHECKOUT_ID" != "null" ] || { echo "❌ CHECKOUT_ID yok"; exit 1; }
-echo "✅ CHECKOUT_ID=$CHECKOUT_ID"
+ STORE_AUTH=(-H "Authorization: Bearer $STORE_ACCESS_TOKEN")
+ echo "✅ store auth ok"
 
-step "Reserve stock"
-reqline "POST" "$API/store/checkouts/$CHECKOUT_ID/reserve-stock"
+ ############################################
+ # Store flow: Cart -> Line item -> Checkout -> Reserve
+ ############################################
+ step "Cart create"
+ reqline "POST" "$API/store/cart"
 
-RESERVE_PAYLOAD="$(jq -cn \
-  --arg locationId "$DEFAULT_LOC_ID" \
-  --arg variantId "$VARIANT_ID" \
-  '{locationId:$locationId, items:[{variantId:$variantId, quantity:1}] }')"
+ CART_CODE="$(store_call_code POST "$API/store/cart" '{}' /tmp/cart.json)"
+ cat /tmp/cart.json | jq .
+ expect_2xx "$CART_CODE" || { echo "❌ cart create failed (HTTP $CART_CODE)"; exit 1; }
 
-RES_CODE="$(store_call_code POST "$API/store/checkouts/$CHECKOUT_ID/reserve-stock" "$RESERVE_PAYLOAD" /tmp/reserve.json)"
-cat /tmp/reserve.json | jq .
-expect_2xx "$RES_CODE" || { echo "❌ reserve failed (HTTP $RES_CODE)"; exit 1; }
-echo "✅ reserve ok"
+ CART_ID="$(jq -r '.cart.id // .id // empty' /tmp/cart.json)"
+ test -n "$CART_ID" && [ "$CART_ID" != "null" ] || { echo "❌ CART_ID yok"; exit 1; }
+ echo "✅ CART_ID=$CART_ID"
 
-NOOP="$(jq -r '.noop // false' /tmp/reserve.json)"
-ITEMS_LEN="$(jq -r '(.items // []) | length' /tmp/reserve.json)"
+ step "Add line item (single call)"
+ reqline "POST" "$API/store/cart/line-items"
 
-if [ "$NOOP" = "true" ] || [ "$ITEMS_LEN" -lt 1 ]; then
-  echo "❌ reserve-stock noop oldu: reservation üretilmedi"
-  echo "   debug: cartId=$CART_ID checkoutId=$CHECKOUT_ID variantId=$VARIANT_ID locationId=$DEFAULT_LOC_ID"
-  cat /tmp/reserve.json | jq .
-  exit 1
-fi
+ ADD_PAYLOAD="$(jq -cn \
+   --arg variantId "$VARIANT_ID" \
+   --arg locationId "$DEFAULT_LOC_ID" \
+   '{variantId:$variantId, quantity:1, locationId:$locationId}')"
 
-############################################
-# Assert reservation exists (ADMIN)
-############################################
-step "Assert reservation (admin)"
-reqline "GET" "$API/admin/inventory/reservations?checkoutId=$CHECKOUT_ID&status=ACTIVE&take=20&skip=0"
+ ADD_CODE="$(store_call_code POST "$API/store/cart/line-items" "$ADD_PAYLOAD" /tmp/add_item.json)"
+ cat /tmp/add_item.json | jq .
+ expect_2xx "$ADD_CODE" || { echo "❌ add line item failed (HTTP $ADD_CODE)"; exit 1; }
 
-CODE="$(admin_call_code GET "$API/admin/inventory/reservations?checkoutId=$CHECKOUT_ID&status=ACTIVE&take=20&skip=0" "" /tmp/res.json)"
-cat /tmp/res.json | jq .
-expect_2xx "$CODE" || { echo "❌ reservations list failed (HTTP $CODE)"; exit 1; }
+ # Backend cart id changes -> accept response as source of truth
+ CART_ID="$(jq -r '.cart.id // empty' /tmp/add_item.json)"
+ test -n "$CART_ID" || { echo "❌ CART_ID missing after add line item"; exit 1; }
+ echo "✅ CART_ID (effective)=$CART_ID"
+ echo "✅ line item ok"
 
-CNT="$(jq -r '(.reservations // .items // []) | length' /tmp/res.json)"
-test "$CNT" -ge 1 || { echo "❌ reservation bulunamadı"; exit 1; }
+ step "Checkout create"
+ reqline "POST" "$API/store/checkout"
 
-echo "✅ Inventory E2E GREEN"
+ CHECKOUT_PAYLOAD="$(jq -cn --arg cartId "$CART_ID" '{cartId:$cartId}')"
+ CHK_CODE="$(store_call_code POST "$API/store/checkout" "$CHECKOUT_PAYLOAD" /tmp/checkout.json)"
+ cat /tmp/checkout.json | jq .
+ expect_2xx "$CHK_CODE" || { echo "❌ checkout create failed (HTTP $CHK_CODE)"; exit 1; }
+
+ CHECKOUT_ID="$(jq -r '.checkout.id // .id // empty' /tmp/checkout.json)"
+ test -n "$CHECKOUT_ID" && [ "$CHECKOUT_ID" != "null" ] || { echo "❌ CHECKOUT_ID yok"; exit 1; }
+ echo "✅ CHECKOUT_ID=$CHECKOUT_ID"
+
+ step "Reserve stock"
+ reqline "POST" "$API/store/checkouts/$CHECKOUT_ID/reserve-stock"
+
+ RESERVE_PAYLOAD="$(jq -cn \
+   --arg locationId "$DEFAULT_LOC_ID" \
+   --arg variantId "$VARIANT_ID" \
+   '{locationId:$locationId, items:[{variantId:$variantId, quantity:1}] }')"
+
+ RES_CODE="$(store_call_code POST "$API/store/checkouts/$CHECKOUT_ID/reserve-stock" "$RESERVE_PAYLOAD" /tmp/reserve.json)"
+ cat /tmp/reserve.json | jq .
+ expect_2xx "$RES_CODE" || { echo "❌ reserve failed (HTTP $RES_CODE)"; exit 1; }
+ echo "✅ reserve ok"
+
+ NOOP="$(jq -r '.noop // false' /tmp/reserve.json)"
+ ITEMS_LEN="$(jq -r '(.items // []) | length' /tmp/reserve.json)"
+
+ if [ "$NOOP" = "true" ] || [ "$ITEMS_LEN" -lt 1 ]; then
+   echo "❌ reserve-stock noop oldu: reservation üretilmedi"
+   echo "   debug: cartId=$CART_ID checkoutId=$CHECKOUT_ID variantId=$VARIANT_ID locationId=$DEFAULT_LOC_ID"
+   cat /tmp/reserve.json | jq .
+   exit 1
+ fi
+
+ ############################################
+ # Assert reservation exists (ADMIN)
+ ############################################
+ step "Assert reservation (admin)"
+ reqline "GET" "$API/admin/inventory/reservations?checkoutId=$CHECKOUT_ID&status=ACTIVE&take=20&skip=0"
+
+ CODE="$(admin_call_code GET "$API/admin/inventory/reservations?checkoutId=$CHECKOUT_ID&status=ACTIVE&take=20&skip=0" "" /tmp/res.json)"
+ cat /tmp/res.json | jq .
+ expect_2xx "$CODE" || { echo "❌ reservations list failed (HTTP $CODE)"; exit 1; }
+
+ CNT="$(jq -r '(.reservations // .items // []) | length' /tmp/res.json)"
+ test "$CNT" -ge 1 || { echo "❌ reservation bulunamadı"; exit 1; }
+
+ echo "✅ Inventory E2E GREEN"
+
 
 ############################################
 # Commit E — Category edge-case (cycle + delete policy)
@@ -649,3 +686,139 @@ expect_2xx "$CODE" || { echo "❌ verify list failed"; cat /tmp/media_verify.jso
 cat /tmp/media_verify.json | jq .
 
 echo "🎉 Commit H GREEN"
+############################################
+# Commit I — PriceList activation / scoped pricing
+############################################
+step "Commit I — PriceList activation / scoped pricing"
+
+# Varsayım:
+# - VARIANT_ID mevcut
+# - DEFAULT_LOC_ID mevcut
+# - Base price zaten seed edilmiş (örn: 1999)
+
+############################################
+# 1) Create PriceList
+############################################
+reqline "POST" "$API/admin/price-lists"
+
+PL_PAYLOAD="$(jq -cn \
+  --arg title "Smoke PriceList $TS" \
+  --arg code "smoke-pl-$TS" \
+  '{title:$title, code:$code}')"
+
+PL_CODE="$(admin_call_code POST "$API/admin/price-lists" "$PL_PAYLOAD" /tmp/pl_create.json)"
+cat /tmp/pl_create.json | jq .
+expect_2xx "$PL_CODE" || { echo "❌ price list create failed (HTTP $PL_CODE)"; exit 1; }
+
+PRICE_LIST_ID="$(jq -r '.id // .priceList.id // empty' /tmp/pl_create.json)"
+test -n "$PRICE_LIST_ID" || { echo "❌ PRICE_LIST_ID yok"; exit 1; }
+echo "✅ PRICE_LIST_ID=$PRICE_LIST_ID"
+
+############################################
+# 2) Activate PriceList
+############################################
+reqline "PATCH" "$API/admin/price-lists/$PRICE_LIST_ID/activate"
+
+ACT_CODE="$(admin_call_code PATCH "$API/admin/price-lists/$PRICE_LIST_ID/activate" '{}' /tmp/pl_activate.json)"
+cat /tmp/pl_activate.json | jq .
+expect_2xx "$ACT_CODE" || { echo "❌ price list activate failed (HTTP $ACT_CODE)"; exit 1; }
+echo "✅ price list activated"
+
+############################################
+# 3) Seed scoped price (EUR 1499)
+############################################
+reqline "POST" "$API/admin/variants/$VARIANT_ID/prices"
+
+SCOPED_PRICE_PAYLOAD="$(jq -cn \
+  --arg currencyCode "EUR" \
+  --argjson amount 1499 \
+  --arg priceListId "$PRICE_LIST_ID" \
+  '{currencyCode:$currencyCode, amount:$amount, priceListId:$priceListId}')"
+
+SP_CODE="$(admin_call_code POST "$API/admin/variants/$VARIANT_ID/prices" "$SCOPED_PRICE_PAYLOAD" /tmp/scoped_price.json)"
+cat /tmp/scoped_price.json | jq .
+expect_2xx "$SP_CODE" || { echo "❌ scoped price seed failed (HTTP $SP_CODE)"; exit 1; }
+echo "✅ scoped price seeded"
+
+
+
+############################################
+# 4) Create new cart
+############################################
+reqline "POST" "$API/store/cart"
+
+CART_CODE="$(store_call_code POST "$API/store/cart" '{}' /tmp/cart_i.json)"
+cat /tmp/cart_i.json | jq .
+expect_2xx "$CART_CODE" || { echo "❌ cart create failed (HTTP $CART_CODE)"; exit 1; }
+
+CART_I_ID="$(jq -r '.cart.id // .id // empty' /tmp/cart_i.json)"
+test -n "$CART_I_ID" || { echo "❌ CART_I_ID yok"; exit 1; }
+echo "✅ CART_I_ID=$CART_I_ID"
+
+############################################
+# 5) Set cart price list
+############################################
+reqline "PATCH" "$API/store/cart/$CART_I_ID/price-list"
+
+SET_PL_PAYLOAD="$(jq -cn --arg priceListId "$PRICE_LIST_ID" '{priceListId:$priceListId}')"
+
+SET_PL_CODE="$(store_call_code PATCH "$API/store/cart/$CART_I_ID/price-list" "$SET_PL_PAYLOAD" /tmp/cart_set_pl.json)"
+cat /tmp/cart_set_pl.json | jq .
+expect_2xx "$SET_PL_CODE" || { echo "❌ set cart price list failed (HTTP $SET_PL_CODE)"; exit 1; }
+echo "✅ cart priceList set"
+
+############################################
+# 6) Add line item → MUST use scoped price (1499)
+############################################
+reqline "POST" "$API/store/cart/line-items"
+
+ADD_PAYLOAD="$(jq -cn \
+  --arg variantId "$VARIANT_ID" \
+  --arg locationId "$DEFAULT_LOC_ID" \
+  '{variantId:$variantId, quantity:1, locationId:$locationId}')"
+
+ADD_CODE="$(store_call_code POST "$API/store/cart/line-items" "$ADD_PAYLOAD" /tmp/add_item_scoped.json)"
+cat /tmp/add_item_scoped.json | jq .
+expect_2xx "$ADD_CODE" || { echo "❌ add line item (scoped) failed (HTTP $ADD_CODE)"; exit 1; }
+
+EFFECTIVE_CART_ID="$(jq -r '.cart.id // empty' /tmp/add_item_scoped.json)"
+test "$EFFECTIVE_CART_ID" = "$CART_I_ID" || {
+  echo "❌ cart drift: expected $CART_I_ID got $EFFECTIVE_CART_ID"
+  exit 1
+}
+
+UNIT_PRICE="$(jq -r '.cart.items[0].unitPrice.amount // empty' /tmp/add_item_scoped.json)"
+test "$UNIT_PRICE" = "1499" || {
+  echo "❌ scoped pricing failed: expected 1499, got $UNIT_PRICE"
+  exit 1
+}
+echo "✅ scoped pricing OK (1499)"
+
+############################################
+# 7) Unset cart price list
+############################################
+reqline "PATCH" "$API/store/cart/$CART_I_ID/price-list"
+
+UNSET_PL_CODE="$(store_call_code PATCH "$API/store/cart/$CART_I_ID/price-list" '{ "priceListId": null }' /tmp/cart_unset_pl.json)"
+cat /tmp/cart_unset_pl.json | jq .
+expect_2xx "$UNSET_PL_CODE" || { echo "❌ unset cart price list failed"; exit 1; }
+echo "✅ cart priceList unset"
+
+############################################
+# 8) Add second item → MUST fallback to base price (1999)
+############################################
+reqline "POST" "$API/store/cart/line-items"
+
+ADD2_CODE="$(store_call_code POST "$API/store/cart/line-items" "$ADD_PAYLOAD" /tmp/add_item_base.json)"
+cat /tmp/add_item_base.json | jq .
+expect_2xx "$ADD2_CODE" || { echo "❌ add line item (base) failed (HTTP $ADD2_CODE)"; exit 1; }
+
+QTY2="$(jq -r '.cart.items[0].quantity // empty' /tmp/add_item_base.json)"
+UNIT_PRICE2="$(jq -r '.cart.items[0].unitPrice.amount // empty' /tmp/add_item_base.json)"
+
+test "$QTY2" = "2" || { echo "❌ expected quantity 2, got $QTY2"; exit 1; }
+test "$UNIT_PRICE2" = "1999" || { echo "❌ base pricing fallback failed: expected 1999, got $UNIT_PRICE2"; exit 1; }
+
+echo "✅ base pricing fallback OK (1999)"
+
+echo "🎉 Commit I GREEN — PriceList scoped pricing works"

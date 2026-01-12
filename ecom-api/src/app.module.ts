@@ -23,6 +23,8 @@ import { PaymentsModule } from "@/modules/payments/payment.module";
 import { SessionsModule } from "@/modules/sessions/sessions.module";
 import { InventoryModule } from "@/modules/inventory/inventory.module";
 import { FilesModule } from "./modules/files/files.module";
+import { ShippingModule } from "./modules/shipping/shipping.module";
+import { PricingModule } from "./modules/pricing/pricing.module";
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { FilesModule } from "./modules/files/files.module";
     SessionsModule,
     InventoryModule,
     FilesModule,
+    ShippingModule,
+    PricingModule,
   ],
 })
 export class AppModule {}

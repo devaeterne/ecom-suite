@@ -1591,7 +1591,7 @@ model CatalogPriceSet {
   deletedAt DateTime? @db.Timestamptz(6)
 
   variant     CatalogProductVariant @relation(fields: [tenantId, variantId], references: [tenantId, id], onDelete: Cascade)
-  priceListId String?               @db.Uuid
+  priceListId String?               @map("price_list_id") @db.Uuid
   priceList   PriceList?            @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, variantId, priceListId], map: "uniq_price_set_variant_pricelist") // NULL davranışı Postgres’te izin verir

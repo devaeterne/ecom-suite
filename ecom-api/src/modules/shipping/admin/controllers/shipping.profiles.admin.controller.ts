@@ -20,7 +20,7 @@ import {
   AdminPatchShippingProfileDto,
 } from "../dto/admin.shipping-profile.dto";
 
-@Controller("/api/admin/shipping/profiles")
+@Controller("/admin/shipping/profiles")
 export class ShippingProfilesAdminController {
   constructor(private readonly service: ShippingProfilesAdminService) {}
 

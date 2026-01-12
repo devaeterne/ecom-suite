@@ -75,10 +75,10 @@
     "search": "Search products...",
     "filters": "Filters",
     "columns": {
-      "title": "Title",
+      "product": "Product",
       "status": "Status",
+      "variants": "Variants",
       "inventory": "Inventory",
-      "price": "Price",
       "updated": "Updated",
       "actions": "Actions"
     },
@@ -86,6 +86,7 @@
       "active": "Active",
       "draft": "Draft"
     },
+    
     "row": {
       "edit": "Edit",
       "duplicate": "Duplicate",
@@ -100,9 +101,18 @@
       "next": "Next"
     }
   },
+  "common": {
+    "actions": {
+      "view": "View"
+    }
+  },
   "orders": {
+    "title": "Orders",
+    "subtitle": "Track orders, payments, and fulfillment status.",
+
     "search": "Search orders...",
     "filters": "Filters",
+
     "columns": {
       "order": "Order",
       "customer": "Customer",
@@ -111,24 +121,102 @@
       "date": "Date",
       "actions": "Actions"
     },
+
     "status": {
       "pending": "Pending",
       "paid": "Paid",
       "fulfilled": "Fulfilled",
-      "canceled": "Canceled"
+      "canceled": "Canceled",
+      "refunded": "Refunded"
     },
+
     "row": {
       "view": "View",
       "refund": "Refund",
       "cancel": "Cancel"
     },
+
     "empty": {
       "title": "No orders found",
       "body": "Try adjusting your search or filters."
     },
+
     "pagination": {
       "prev": "Previous",
       "next": "Next"
+    },
+
+    "detail": {
+      "title": "Order details",
+      "subtitle": "Review items, payments, and fulfillment status.",
+
+      "sections": {
+        "summary": "Summary",
+        "customer": "Customer",
+        "items": "Items",
+        "payment": "Payment",
+        "shipping": "Shipping",
+        "timeline": "Timeline"
+      },
+      "timeline":{
+        "title":"TimeLine"
+      },
+      "fields": {
+        "order_id": "Order ID",
+        "status": "Status",
+        "created_at": "Created at",
+        "customer_name": "Customer",
+        "customer_email": "Email",
+        "total": "Total"
+      },
+
+      "kpi": {
+        "total": "Total",
+        "payment": "Payment",
+        "fulfillment": "Fulfillment",
+        "items": "Items"
+      },
+
+      "badges": {
+        "paid": "Paid",
+        "unpaid": "Unpaid",
+        "fulfilled": "Fulfilled",
+        "unfulfilled": "Unfulfilled"
+      },
+
+      "items": {
+        "title": "Items",
+        "columns": {
+          "item": "Item",
+          "sku": "SKU",
+          "qty": "Qty",
+          "unit_price": "Unit price",
+          "total": "Total"
+        }
+      },
+
+      "payment": {
+        "title": "Payment",
+        "method": "Method",
+        "status": "Status",
+        "transaction": "Transaction",
+        "paid_at": "Paid at"
+      },
+
+      "shipping": {
+        "title": "Shipping",
+        "method": "Method",
+        "address": "Address",
+        "tracking": "Tracking",
+        "status": "Status"
+      },
+
+      "actions": {
+        "back": "Back to orders",
+        "refund": "Refund",
+        "cancel": "Cancel order",
+        "resend_invoice": "Resend invoice"
+      }
     }
   },
   "settings": {

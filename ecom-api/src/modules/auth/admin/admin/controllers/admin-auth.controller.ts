@@ -13,6 +13,7 @@ import {
 } from "@nestjs/common";
 import {
   ApiBearerAuth,
+  ApiCookieAuth,
   ApiBody,
   ApiOkResponse,
   ApiTags,
@@ -194,7 +195,7 @@ export class AdminAuthController {
   @Post("logout-all")
   @HttpCode(200)
   @UseGuards(AdminAccessGuard)
-  @ApiBearerAuth()
+  @ApiCookieAuth("adminAccessCookie")
   async logoutAll(
     @Req() req: FastifyRequest & { user: any },
     @Res({ passthrough: true }) reply: FastifyReply
@@ -217,7 +218,7 @@ export class AdminAuthController {
 
   @Get("me")
   @UseGuards(AdminAccessGuard)
-  @ApiBearerAuth()
+  @ApiCookieAuth("adminAccessCookie")
   me(@Req() req: FastifyRequest & { user: any }) {
     return { user: (req as any).user };
   }

@@ -12,11 +12,14 @@ import {
 
 import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 import { AdminAuthContext } from "@/modules/auth/admin/common/types/admin-request";
+import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 
 import { FullfillmentsAdminService } from "../services/fullfillments.admin.service";
 import { CreateFullfilmentDto } from "../dto/create-fullfilment.dto";
 
-@Controller("/api/admin")
+@ApiTags("FullfilmentsAdmin")
+@ApiCookieAuth("adminAccessCookie")
+@Controller("/admin")
 export class FullfilmentsAdminController {
   constructor(private readonly service: FullfillmentsAdminService) {}
 
