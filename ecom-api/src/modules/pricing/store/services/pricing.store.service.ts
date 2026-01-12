@@ -14,6 +14,9 @@ export type ResolvedUnitPrice = {
 export class PricingStoreService {
   constructor(private readonly prisma: PrismaService) {}
 
+  get prismaClient(): PrismaService {
+    return this.prisma;
+  }
   async attachPriceListToCart(
     tenantId: string,
     cartId: string,

@@ -5,7 +5,7 @@ import { DiscountsAdminService } from "../services/discounts.admin.service";
 import { CreateDiscountDto } from "../dto/discount.dto";
 
 @ApiTags("Admin Discounts")
-@ApiCookieAuth("admin_access")
+@ApiCookieAuth("adminAccessCookie")
 @UseGuards(AdminAccessGuard)
 @Controller("admin/discounts")
 export class DiscountsAdminController {

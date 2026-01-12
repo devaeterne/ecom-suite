@@ -14,7 +14,7 @@ import { PriceListsAdminService } from "../services/price-list.admin.service";
 import { CreatePriceListDto } from "../dto/price-list.dto";
 
 @ApiTags("Admin Price Lists")
-@ApiCookieAuth("admin_access")
+@ApiCookieAuth("adminAccessCookie")
 @UseGuards(AdminAccessGuard)
 @Controller("admin/price-lists")
 export class PriceListsAdminController {

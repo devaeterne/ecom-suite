@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 
 import { PricingStoreService } from "../services/pricing.store.service";
 import { getTenantIdOrThrow } from "@/modules/cart/common/policies/tenant.policy";
+import { PrismaService } from "@/prisma/prisma.service";
 
 import {
   getCartId,
@@ -53,7 +54,7 @@ export class PricingStoreController {
     const quantity = Math.max(1, Number(quantityRaw || 1));
 
     const unit = await this.pricing.resolveUnitPrice(
-      this.pricing.prisma as any,
+      this.pricing.prismaClient as any,
       {
         tenantId,
         cartId: "debug",

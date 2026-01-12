@@ -148,7 +148,6 @@
 - [x] Store shipping options endpoint
 
 ---
-
 ## 🟡 AŞAMA 5 — FINANCE
 - [ ] Invoice series
 - [ ] Order → invoice

@@ -66,6 +66,18 @@ describe("90 - Catalog (Storefront)", () => {
     productId = p.body.id as string;
 
     await adminAgent
+      .post(`/api/admin/products/${productId}/variants`)
+      .set(tenantHeader)
+      .send({ title: "128GB", sku: `IP99-128-${ts}`, isActive: true })
+      .expect(expect200or201);
+
+    await adminAgent
+      .post(`/api/admin/products/${productId}/variants`)
+      .set(tenantHeader)
+      .send({ title: "256GB", sku: `IP99-256-${ts}`, isActive: true })
+      .expect(expect200or201);
+
+    await adminAgent
       .post(`/api/admin/products/${productId}/publish`)
       .set(tenantHeader)
       .send({})

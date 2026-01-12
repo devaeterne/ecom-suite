@@ -15,9 +15,15 @@ export async function createE2EApp(): Promise<INestApplication> {
   const app = moduleRef.createNestApplication<NestFastifyApplication>(
     new FastifyAdapter({ trustProxy: false })
   );
-  const fastify = app.getHttpAdapter().getInstance();
-  fastify.printRoutes?.();
 
   await setupApp(app, { enableSwagger: false });
+
+  // ✅ kritik: nest init + fastify ready
+  await app.init();
+  await app.getHttpAdapter().getInstance().ready();
+
+  // debug istiyorsan init sonrası bas
+  // app.getHttpAdapter().getInstance().printRoutes?.();
+
   return app;
 }

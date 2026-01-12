@@ -4,7 +4,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import fastifyCookie from "@fastify/cookie";
 import { env } from "@/config/env";
-import cookieParser from "cookie-parser";
+//import cookieParser from "cookie-parser";
 
 // ✅ cookie isimlerin nerede tanımlıysa burayı güncelle
 import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
@@ -25,17 +25,19 @@ export async function setupApp(
   });
 
   // 3. Raw body for webhooks (specific routes only)
-  app.use("/api/payments/webhooks", (req: any, res: any, next: any) => {
-    let data = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk: string) => {
-      data += chunk;
+  if (process.env.NODE_ENV !== "test") {
+    app.use("/api/payments/webhooks", (req: any, res: any, next: any) => {
+      let data = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk: string) => {
+        data += chunk;
+      });
+      req.on("end", () => {
+        req.body = Buffer.from(data, "utf8");
+        next();
+      });
     });
-    req.on("end", () => {
-      req.body = Buffer.from(data, "utf8");
-      next();
-    });
-  });
+  }
 
   // 4. Global prefix
   app.setGlobalPrefix("api");
@@ -59,20 +61,25 @@ export async function setupApp(
       .setDescription("Multi-tenant e-commerce backend")
       .setVersion("1.0")
 
-      // 🔸 Bearer hâlâ kalsın (fallback / test kolaylığı)
-      .addBearerAuth()
-
-      // ✅ Admin access cookie
+      // ✅ Admin access cookie (scheme name: adminAccessCookie)
       .addCookieAuth(
-        COOKIE_NAMES.adminAccess, // cookie name
-        { type: "apiKey", in: "cookie" },
-        "adminAccessCookie" // scheme name (controller’da @ApiCookieAuth ile bunu kullanacağız)
+        COOKIE_NAMES.adminAccess,
+        {
+          type: "apiKey",
+          in: "cookie",
+          name: COOKIE_NAMES.adminAccess,
+        },
+        "adminAccessCookie"
       )
 
-      // ✅ Store access cookie
+      // ✅ Store access cookie (scheme name: storeAccessCookie)
       .addCookieAuth(
         COOKIE_NAMES.storeAccess,
-        { type: "apiKey", in: "cookie" },
+        {
+          type: "apiKey",
+          in: "cookie",
+          name: COOKIE_NAMES.storeAccess,
+        },
         "storeAccessCookie"
       )
       .build();
@@ -85,7 +92,7 @@ export async function setupApp(
   app.use("/health", (req: any, res: any) => {
     res.status(200).send({ ok: true, timestamp: new Date().toISOString() });
   });
-  app.use(cookieParser());
+  //app.use(cookieParser());
 
   return app;
 }

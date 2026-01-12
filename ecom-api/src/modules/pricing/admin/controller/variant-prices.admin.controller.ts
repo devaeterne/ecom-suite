@@ -14,7 +14,7 @@ import { CreateVariantPriceDto } from "../dto/variant-price.dto";
 import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 
 @ApiTags("Admin Pricing")
-@ApiCookieAuth("admin_access")
+@ApiCookieAuth("adminAccessCookie")
 @UseGuards(AdminAccessGuard)
 @Controller("admin/variants/:variantId/prices")
 export class VariantPricesAdminController {

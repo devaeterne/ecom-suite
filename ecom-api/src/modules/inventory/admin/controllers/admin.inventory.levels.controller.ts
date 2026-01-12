@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { ApiCookieAuth, ApiHeader, ApiTags } from "@nestjs/swagger";
 
 import { InventoryTenancyPolicy } from "../../common/policies/inventory.tenancy";
 import { AdminInventoryService } from "../services/inventory.service";
@@ -16,7 +17,16 @@ import { AdminInventoryLevelsQueryDto } from "../dto/admin.inventory.levels.quer
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { ApiTenantHeader } from "@/infrastructure/swagger/tenant.swagger";
 
+@ApiTags("AdminInventoryLevels")
+@ApiCookieAuth("adminAccessCookie")
+@ApiHeader({
+  name: "x-tenant-code",
+  required: true,
+  description: "Tenant code header (required by TenantHeaderGuard)",
+})
+@ApiTenantHeader()
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 @Controller("/admin/inventory/levels")
 export class AdminInventoryLevelsController {
