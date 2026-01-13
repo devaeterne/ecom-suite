@@ -8,6 +8,7 @@ import {
   UseGuards,
   UnauthorizedException,
 } from "@nestjs/common";
+import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 
 import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 import { AdminAuthContext } from "@/modules/auth/admin/common/types/admin-request";
@@ -16,7 +17,12 @@ import { ShipmentsAdminService } from "../services/shipments.admin.service";
 import { CreateShipmentDto } from "../dto/create-shipment.dto";
 import { CreateShipmentEventDto } from "../dto/create-shipment-event.dto";
 import { MarkShipmentDeliveredDto } from "../dto/mark-shipment-delivered.dto";
+import { AdminAuthGuard } from "@/infrastructure";
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
+@ApiTags("FullfilmentsAdmin")
+@ApiCookieAuth("adminAccessCookie")
+@UseGuards(AdminAuthGuard, TenantHeaderGuard)
 @Controller("/admin")
 export class ShipmentsAdminController {
   constructor(private readonly service: ShipmentsAdminService) {}

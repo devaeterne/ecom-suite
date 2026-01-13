@@ -16,9 +16,12 @@ import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 
 import { FullfillmentsAdminService } from "../services/fullfillments.admin.service";
 import { CreateFullfilmentDto } from "../dto/create-fullfilment.dto";
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { AdminAuthGuard } from "@/infrastructure";
 
 @ApiTags("FullfilmentsAdmin")
 @ApiCookieAuth("adminAccessCookie")
+@UseGuards(AdminAuthGuard, TenantHeaderGuard)
 @Controller("/admin")
 export class FullfilmentsAdminController {
   constructor(private readonly service: FullfillmentsAdminService) {}

@@ -14,7 +14,7 @@ export class ShipmentsAdminService {
     return this.repo.listShipments(params);
   }
 
-  create(params: {
+  async create(params: {
     tenantId: string;
     fulfillmentId: string;
     carrierId: string;
@@ -24,6 +24,12 @@ export class ShipmentsAdminService {
     providerShipmentId?: string;
     metadata?: any;
   }) {
+    const fulfillment = await this.repo.findFulfillment({
+      tenantId: params.tenantId,
+      fulfillmentId: params.fulfillmentId,
+    });
+    if (!fulfillment) throw new NotFoundException("Fulfillment not found");
+
     return this.repo.createShipment({
       tenantId: params.tenantId,
       fulfillmentId: params.fulfillmentId,
@@ -35,7 +41,6 @@ export class ShipmentsAdminService {
       metadata: params.metadata ?? {},
     });
   }
-
   async addEvent(params: {
     tenantId: string;
     shipmentId: string;
@@ -46,7 +51,12 @@ export class ShipmentsAdminService {
     raw?: any;
     occurredAt: Date;
   }) {
-    // 1) event create
+    const shipment = await this.repo.findShipment({
+      tenantId: params.tenantId,
+      shipmentId: params.shipmentId,
+    });
+    if (!shipment) throw new NotFoundException("Shipment not found");
+
     await this.repo.createShipmentEvent({
       tenantId: params.tenantId,
       shipmentId: params.shipmentId,

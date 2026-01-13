@@ -6,11 +6,18 @@ import { OrdersRepo } from "../../common/prisma/orders.repo";
 export class FullfillmentsAdminService {
   constructor(private readonly repo: OrdersRepo) {}
 
-  list(params: { tenantId: string; orderId: string }) {
+  async list(params: { tenantId: string; orderId: string }) {
+    // opsiyonel ama “kurumsal düzgünlük”: order yoksa 404
+    const order = await this.repo.findOrder({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+    });
+    if (!order) throw new NotFoundException("Order not found");
+
     return this.repo.listFulfillments(params);
   }
 
-  create(params: {
+  async create(params: {
     tenantId: string;
     orderId: string;
     carrierId?: string;
@@ -18,6 +25,12 @@ export class FullfillmentsAdminService {
     status?: FulfillmentStatus;
     metadata?: any;
   }) {
+    const order = await this.repo.findOrder({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+    });
+    if (!order) throw new NotFoundException("Order not found");
+
     return this.repo.createFulfillment({
       tenantId: params.tenantId,
       orderId: params.orderId,

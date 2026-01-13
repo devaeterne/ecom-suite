@@ -346,6 +346,12 @@ export class OrdersRepo {
     });
   }
 
+  findOrder(params: { tenantId: string; orderId: string }) {
+    return this.prisma.order.findFirst({
+      where: { tenantId: params.tenantId, id: params.orderId },
+      select: { id: true }, // minimal
+    });
+  }
   createShipmentEvent(params: {
     tenantId: string;
     shipmentId: string;
@@ -371,6 +377,12 @@ export class OrdersRepo {
         raw: (data.raw ?? {}) as any,
         occurredAt: data.occurredAt,
       },
+    });
+  }
+  findFulfillment(params: { tenantId: string; fulfillmentId: string }) {
+    return this.prisma.orderFulfillment.findFirst({
+      where: { tenantId: params.tenantId, id: params.fulfillmentId },
+      select: { id: true },
     });
   }
 }
