@@ -1,3 +1,5 @@
+//test/helpers/auth.ts
+
 import type { INestApplication } from "@nestjs/common";
 import { agent as makeAgent, api, type HttpAgent } from "@test/helpers/http";
 

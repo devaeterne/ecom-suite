@@ -2,86 +2,104 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import { loginAdmin, bearer } from "@test/helpers/auth";
+import { loginAdmin } from "@test/utils/auth";
 
-describe("Roles Admin (gate e2e)", () => {
+describe("[P00] Roles Admin (gate e2e)", () => {
   let app: INestApplication;
-  let ownerToken!: string;
-  let supportToken: string | undefined;
-  let createdRoleId: string | undefined;
+
+  let ownerCookie: string;
+  let supportCookie: string;
+  let createdRoleId: string;
 
   beforeAll(async () => {
     app = await createE2EApp();
 
-    const owner = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    if (!owner.accessToken) throw new Error("owner accessToken missing");
-    ownerToken = owner.accessToken;
+    ownerCookie = (
+      await loginAdmin(app, {
+        email: fx.owner.email,
+        password: fx.owner.password,
+      })
+    ).cookie;
 
-    const support = await loginAdmin(
-      app,
-      fx.support.email,
-      fx.support.password,
-      {
-        expectStatus: 200,
-      }
-    );
-    supportToken = support.accessToken; // may be undefined if cookie-only
+    supportCookie = (
+      await loginAdmin(app, {
+        email: fx.support.email,
+        password: fx.support.password,
+      })
+    ).cookie;
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  it("owner can list roles", async () => {
-    await api(app).get("/api/admin/roles").set(bearer(ownerToken)).expect(200);
+  // ------------------------------------------------------------
+  // Security contract (regression alarm)
+  // ------------------------------------------------------------
+  it("GET /api/admin/roles without cookie -> 401/403", async () => {
+    const res = await api(app).get("/api/admin/roles");
+    expect([401, 403]).toContain(res.status);
   });
 
-  it("owner can create role", async () => {
+  it("owner can list roles -> 200", async () => {
+    await api(app)
+      .get("/api/admin/roles")
+      .set("Cookie", ownerCookie)
+      .expect(200);
+  });
+
+  it("owner can create role -> 201", async () => {
+    const ts = Date.now();
+
     const res = await api(app)
       .post("/api/admin/roles")
-      .set(bearer(ownerToken))
+      .set("Cookie", ownerCookie)
       .send({
-        name: fx.role.name,
+        name: `${fx.role.name}-${ts}`,
         scope: fx.role.scope,
         description: fx.role.description,
-      })
-      .expect(201);
+      });
 
+    if (res.status !== 201) {
+      // Gate’de debug çıktısı faydalı: validation vs.
+      // eslint-disable-next-line no-console
+      console.log("CREATE ROLE FAIL", res.status, res.body);
+    }
+
+    expect(res.status).toBe(201);
     expect(res.body?.id).toBeTruthy();
     createdRoleId = res.body.id;
   });
 
-  it("owner can patch role", async () => {
-    if (!createdRoleId) return;
-    await api(app)
+  it("owner can patch role -> 200", async () => {
+    const res = await api(app)
       .patch(`/api/admin/roles/${createdRoleId}`)
-      .set(bearer(ownerToken))
-      .send({ description: "QA role updated" })
-      .expect(200);
+      .set("Cookie", ownerCookie)
+      .send({ description: "QA role updated" });
+
+    expect(res.status).toBe(200);
   });
 
-  it("owner can set role permissions", async () => {
-    if (!createdRoleId) return;
-
+  it("owner can set role permissions -> 200/201", async () => {
     const res = await api(app)
       .post(`/api/admin/roles/${createdRoleId}/permissions`)
-      .set(bearer(ownerToken))
-      .send({ permissionKeys: [] })
-      .expect((r) => {
-        if (![200, 201].includes(r.status)) {
-          throw new Error(`Expected 200/201, got ${r.status}`);
-        }
-      });
+      .set("Cookie", ownerCookie)
+      .send({ permissionKeys: [] });
 
+    expect([200, 201]).toContain(res.status);
     expect(res.body).toBeTruthy();
   });
 
-  it("support cannot create role (403) - if token available", async () => {
-    if (!supportToken) return;
-    await api(app)
+  it("support cannot create role -> 403", async () => {
+    const res = await api(app)
       .post("/api/admin/roles")
-      .set(bearer(supportToken))
-      .send({ name: "NOPE", scope: "STAFF", description: "should fail" })
-      .expect(403);
+      .set("Cookie", supportCookie)
+      .send({
+        name: "NOPE",
+        scope: fx.role.scope,
+        description: "should fail",
+      });
+
+    expect(res.status).toBe(403);
   });
 });

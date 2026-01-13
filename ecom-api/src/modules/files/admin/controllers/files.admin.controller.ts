@@ -1,12 +1,25 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { FilesAdminService } from "@/modules/files/admin/services/files.admin.service";
 import { CreatePresignedUploadDto } from "@/modules/files/admin/dto/files.presing.dto";
 import { CreateFileLinkDto } from "@/modules/files/admin/dto/files.link.dto";
 import { TenantId } from "@/modules/files/common/policies/tenant-id.decorator";
+import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { ParseUUIDPipe } from "@nestjs/common";
 
 @Controller("admin/files")
+@UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class FilesAdminController {
   constructor(private readonly service: FilesAdminService) {}
+
+  @Get("entity/:entityType/:entityId")
+  entityFiles(
+    @TenantId() tenantId: string,
+    @Param("entityType") entityType: string,
+    @Param("entityId", new ParseUUIDPipe({ version: "4" })) entityId: string
+  ) {
+    return this.service.listLinksByEntity(tenantId, entityType, entityId);
+  }
 
   @Post("presign-put")
   presignPut(
@@ -43,14 +56,5 @@ export class FilesAdminController {
   @Get(":fileId/links")
   links(@TenantId() tenantId: string, @Param("fileId") fileId: string) {
     return this.service.listLinksByFile(tenantId, fileId);
-  }
-
-  @Get("entity/:entityType/:entityId")
-  entityFiles(
-    @TenantId() tenantId: string,
-    @Param("entityType") entityType: string,
-    @Param("entityId") entityId: string
-  ) {
-    return this.service.listLinksByEntity(tenantId, entityType, entityId);
   }
 }

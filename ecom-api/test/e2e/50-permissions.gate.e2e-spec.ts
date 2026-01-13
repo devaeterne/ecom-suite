@@ -2,31 +2,35 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import { loginAdmin, bearer } from "@test/helpers/auth";
+import { loginAdmin } from "@test/utils/auth";
 
-describe("Permissions Admin (gate e2e)", () => {
+describe("[P00] Permissions Admin (gate e2e)", () => {
   let app: INestApplication;
-  let ownerToken!: string;
+  let adminCookie: string;
 
   beforeAll(async () => {
     app = await createE2EApp();
-    const { accessToken } = await loginAdmin(
-      app,
-      fx.owner.email,
-      fx.owner.password
-    );
-    if (!accessToken) throw new Error("accessToken missing");
-    ownerToken = accessToken;
+    adminCookie = (
+      await loginAdmin(app, {
+        email: fx.owner.email,
+        password: fx.owner.password,
+      })
+    ).cookie;
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  it("GET /api/admin/permissions -> 200 + array", async () => {
+  it("GET /api/admin/permissions without cookie -> 401/403", async () => {
+    const res = await api(app).get("/api/admin/permissions");
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it("GET /api/admin/permissions -> 200 + array (cookie-based)", async () => {
     const res = await api(app)
       .get("/api/admin/permissions")
-      .set(bearer(ownerToken))
+      .set("Cookie", adminCookie)
       .expect(200);
 
     expect(Array.isArray(res.body)).toBe(true);

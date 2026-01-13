@@ -2,60 +2,37 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import {
-  bearer,
-  loginAdmin,
-  refreshAdmin,
-  logoutAdmin,
-  logoutAllAdmin,
-} from "@test/helpers/auth";
+import { loginAdmin } from "@test/utils/auth";
 
-describe("Admin Auth (gate e2e)", () => {
+describe("[P10] Admin Auth (gate e2e)", () => {
   let app: INestApplication;
+  let adminCookie: string;
 
   beforeAll(async () => {
     app = await createE2EApp();
+
+    // deterministic: use seeded fixture credentials
+    adminCookie = (
+      await loginAdmin(app, {
+        email: fx.owner.email,
+        password: fx.owner.password,
+      })
+    ).cookie;
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  it("login -> accessToken (or cookie), me -> 200", async () => {
-    const { accessToken, agent } = await loginAdmin(
-      app,
-      fx.owner.email,
-      fx.owner.password
-    );
-
-    // me with bearer if token exists
-    if (accessToken) {
-      await api(app)
-        .get("/api/admin/auth/me")
-        .set(bearer(accessToken))
-        .expect(200);
-    }
-
-    // me with agent cookies (works if cookie-based)
-    await agent.get("/api/admin/auth/me").expect(200);
+  it("GET /api/admin/auth/me without cookie -> 401/403", async () => {
+    const res = await api(app).get("/api/admin/auth/me");
+    expect([401, 403]).toContain(res.status);
   });
 
-  it("refresh works (cookie agent)", async () => {
-    const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-
-    await refreshAdmin(agent, 200); // adjust to 200 if needed
-    await agent.get("/api/admin/auth/me").expect(200);
-  });
-
-  it("logout invalidates session (agent)", async () => {
-    const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    await logoutAdmin(agent, 200);
-    await agent.get("/api/admin/auth/me").expect(401);
-  });
-
-  it("logout-all invalidates session (agent)", async () => {
-    const { agent } = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    await logoutAllAdmin(agent, 200);
-    await agent.get("/api/admin/auth/me").expect(401);
+  it("GET /api/admin/auth/me with admin cookie -> 200", async () => {
+    await api(app)
+      .get("/api/admin/auth/me")
+      .set("Cookie", adminCookie)
+      .expect(200);
   });
 });

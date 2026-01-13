@@ -1,3 +1,4 @@
+import { ApiPropertyOptional, ApiProperty } from "@nestjs/swagger";
 import {
   IsArray,
   IsBoolean,
@@ -10,53 +11,64 @@ import {
   IsInt,
   Min,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Type } from "class-transformer"; // ✅ burası kritik
 
 class AdminVariantDto {
+  @ApiProperty({ example: "Default" })
   @IsString()
   @Length(2, 180)
   title!: string;
 
+  @ApiPropertyOptional({ example: "SKU-123", nullable: true })
   @IsOptional()
   @IsString()
   sku?: string | null;
 
+  @ApiPropertyOptional({ example: "1234567890", nullable: true })
   @IsOptional()
   @IsString()
   barcode?: string | null;
 
+  @ApiPropertyOptional({ default: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }
 
 export class AdminCreateProductDto {
+  @ApiProperty()
   @IsString()
   @Length(2, 180)
   title!: string;
 
+  @ApiProperty()
   @IsString()
   @Length(2, 180)
   handle!: string;
 
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsString()
   description?: string | null;
 
+  @ApiPropertyOptional({ enum: ["draft", "published", "archived"] })
   @IsOptional()
   @IsIn(["draft", "published", "archived"])
   status?: "draft" | "published" | "archived";
 
+  @ApiPropertyOptional({ type: [String], format: "uuid" })
   @IsOptional()
   @IsArray()
   @IsUUID("4", { each: true })
   categoryIds?: string[];
 
+  @ApiPropertyOptional({ type: [String], format: "uuid" })
   @IsOptional()
   @IsArray()
   @IsUUID("4", { each: true })
   collectionIds?: string[];
 
+  @ApiPropertyOptional({ type: [AdminVariantDto] })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -93,6 +105,7 @@ export class AdminUpdateProductDto {
   @IsUUID("4", { each: true })
   collectionIds?: string[];
 }
+
 export class AdminProductListQueryDto {
   @IsOptional()
   @IsString()

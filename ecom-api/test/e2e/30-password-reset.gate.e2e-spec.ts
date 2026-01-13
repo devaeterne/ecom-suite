@@ -3,7 +3,7 @@ import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
 
-describe("Password Reset (gate e2e)", () => {
+describe("[P00] Password Reset (gate e2e)", () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -14,7 +14,7 @@ describe("Password Reset (gate e2e)", () => {
     await app?.close();
   });
 
-  it("request returns ok even for unknown email (no enumeration)", async () => {
+  it("request returns ok even for unknown email (no enumeration) -> 201", async () => {
     const known = await api(app)
       .post("/api/auth/reset-password/request")
       .send({ email: fx.passwordReset.email })
@@ -25,6 +25,7 @@ describe("Password Reset (gate e2e)", () => {
       .send({ email: fx.passwordReset.randomEmail })
       .expect(201);
 
+    // no enumeration: both should look "successful"
     expect(known.body?.ok).toBeTruthy();
     expect(unknown.body?.ok).toBeTruthy();
   });
@@ -32,13 +33,9 @@ describe("Password Reset (gate e2e)", () => {
   it("confirm validates payload (bad payload -> 400/422)", async () => {
     const res = await api(app)
       .post("/api/auth/reset-password/confirm")
-      .send({}) // intentionally wrong
-      .expect((r) => {
-        if (![400, 422].includes(r.status)) {
-          throw new Error(`Expected 400/422, got ${r.status}`);
-        }
-      });
+      .send({}); // intentionally wrong
 
+    expect([400, 422]).toContain(res.status);
     expect(res.body).toBeTruthy();
   });
 });

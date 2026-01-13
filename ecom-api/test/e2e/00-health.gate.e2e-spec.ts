@@ -2,7 +2,7 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 
-describe("Health (gate e2e)", () => {
+describe("[P00] Health (gate e2e)", () => {
   let app: INestApplication;
 
   beforeAll(async () => {

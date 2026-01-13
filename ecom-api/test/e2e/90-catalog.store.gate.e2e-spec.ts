@@ -1,20 +1,22 @@
 // test/e2e/90-catalog.store.gate.e2e-spec.ts
 import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
+import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import { loginAdmin, loginStore } from "@test/helpers/auth";
 
-const expect200or201 = (res: any) => {
-  expect([200, 201]).toContain(res.status);
-};
+import { loginAdmin, loginStore } from "@test/utils/auth";
+import { withTenantHeaders } from "@test/utils/tenant";
 
-describe("90 - Catalog (Storefront)", () => {
+const expect200or201 = (status: number) => expect([200, 201]).toContain(status);
+
+describe("[P00] Catalog (Storefront) (gate e2e)", () => {
   let app: INestApplication;
-  let adminAgent: any;
-  let storeAgent: any;
+
+  let adminCookie: string;
+  let storeCookie: string;
 
   let tenantId: string;
-  let tenantHeader: Record<string, string>;
+  let tenantCode: string;
 
   let categoryId: string;
   let productId: string;
@@ -22,121 +24,160 @@ describe("90 - Catalog (Storefront)", () => {
   beforeAll(async () => {
     app = await createE2EApp();
 
-    const adminLogin = await loginAdmin(app, fx.owner.email, fx.owner.password);
-    adminAgent = adminLogin.agent;
+    adminCookie = (
+      await loginAdmin(app, {
+        email: fx.owner.email,
+        password: fx.owner.password,
+      })
+    ).cookie;
 
-    const storeLogin = await loginStore(
-      app,
-      fx.storeUser.email,
-      fx.storeUser.password
-    );
-    storeAgent = storeLogin.agent;
+    storeCookie = (
+      await loginStore(app, {
+        email: fx.storeUser.email,
+        password: fx.storeUser.password,
+      })
+    ).cookie;
 
-    // ✅ Tenant header must be UUID (not "acme" code)
-    const me = await adminAgent.get("/api/admin/tenants/me").expect(200);
+    //tenant context (id + code)
+    const me = await api(app)
+      .get("/api/admin/tenants/me")
+      .set("Cookie", adminCookie)
+      .expect(200);
+
     tenantId = me.body?.id as string;
-    tenantHeader = { "x-tenant-id": tenantId };
+    tenantCode = (me.body?.code as string) ?? "test";
 
-    // Seed: admin create + publish (store testleri için deterministik veri)
+    if (!tenantId)
+      throw new Error(
+        "[catalog.store.gate] tenantId missing from /admin/tenants/me"
+      );
+
+    //Seed: admin create + publish (store testleri için deterministik veri)
     const ts = Date.now();
 
-    const cat = await adminAgent
+    const catReq = api(app)
       .post("/api/admin/categories")
-      .set(tenantHeader)
-      .send({ name: "Elektronik", handle: `elektronik-store-${ts}` })
-      .expect(expect200or201);
+      .set("Cookie", adminCookie);
 
-    categoryId = cat.body.id as string;
+    withTenantHeaders(catReq, { tenantId, tenantCode });
 
-    const p = await adminAgent
+    const catRes = await catReq.send({
+      name: "Elektronik",
+      handle: `elektronik-store-${ts}`,
+    });
+
+    expect200or201(catRes.status);
+    categoryId = catRes.body?.id as string;
+    if (!categoryId) throw new Error("[catalog.store.gate] categoryId missing");
+
+    const prodReq = api(app)
       .post("/api/admin/products")
-      .set(tenantHeader)
-      .send({
-        title: "iPhone 99",
-        handle: `iphone-99-${ts}`,
-        status: "draft",
-        categoryIds: [categoryId],
-        variants: [
-          { title: "128GB", sku: `IP99-128-${ts}`, isActive: true },
-          { title: "256GB", sku: `IP99-256-${ts}`, isActive: true },
-        ],
-      })
-      .expect(expect200or201);
+      .set("Cookie", adminCookie);
 
-    productId = p.body.id as string;
+    withTenantHeaders(prodReq, { tenantId, tenantCode });
 
-    await adminAgent
-      .post(`/api/admin/products/${productId}/variants`)
-      .set(tenantHeader)
-      .send({ title: "128GB", sku: `IP99-128-${ts}`, isActive: true })
-      .expect(expect200or201);
+    const pRes = await prodReq.send({
+      title: "iPhone 99",
+      handle: `iphone-99-${ts}`,
+      status: "draft",
+      categoryIds: [categoryId],
+      variants: [
+        { title: "128GB", sku: `IP99-128-${ts}`, isActive: true },
+        { title: "256GB", sku: `IP99-256-${ts}`, isActive: true },
+      ],
+    });
 
-    await adminAgent
-      .post(`/api/admin/products/${productId}/variants`)
-      .set(tenantHeader)
-      .send({ title: "256GB", sku: `IP99-256-${ts}`, isActive: true })
-      .expect(expect200or201);
+    expect200or201(pRes.status);
+    productId = pRes.body?.id as string;
+    if (!productId) throw new Error("[catalog.store.gate] productId missing");
 
-    await adminAgent
+    const pubReq = api(app)
       .post(`/api/admin/products/${productId}/publish`)
-      .set(tenantHeader)
-      .send({})
-      .expect(expect200or201);
+      .set("Cookie", adminCookie);
+
+    withTenantHeaders(pubReq, { tenantId, tenantCode });
+
+    const pubRes = await pubReq.send({});
+    expect200or201(pubRes.status);
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  it("GET /api/store/categories -> 200 + array", async () => {
-    const res = await storeAgent
+  // ------------------------------------------------------------
+  // Security / tenant contract (regression alarm)
+  // ------------------------------------------------------------
+  it("GET /api/store/categories without tenant headers -> 400/403", async () => {
+    const res = await api(app)
       .get("/api/store/categories")
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
 
+    expect([400, 403]).toContain(res.status);
+  });
+
+  it("GET /api/store/categories without cookie -> 200 (public)", async () => {
+    const req = api(app).get("/api/store/categories");
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect([200, 201]).toContain(res.status);
     expect(Array.isArray(res.body)).toBe(true);
   });
 
   it("GET /api/store/categories/{id} -> 200 detail", async () => {
-    const res = await storeAgent
+    const req = api(app)
       .get(`/api/store/categories/${categoryId}`)
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
 
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
     expect(res.body).toHaveProperty("id", categoryId);
   });
 
   it("GET /api/store/categories/{id} -> 404 for missing", async () => {
-    await storeAgent
+    const req = api(app)
       .get("/api/store/categories/00000000-0000-0000-0000-000000000999")
-      .set(tenantHeader)
-      .expect(404);
+      .set("Cookie", storeCookie);
+
+    withTenantHeaders(req, { tenantId, tenantCode });
+    await req.expect(404);
   });
 
   it("GET /api/store/collections -> 200 + array", async () => {
-    const res = await storeAgent
+    const req = api(app)
       .get("/api/store/collections")
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
 
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
     expect(Array.isArray(res.body)).toBe(true);
   });
 
   it("GET /api/store/brands -> 200 + [] (brands=[])", async () => {
-    const res = await storeAgent
-      .get("/api/store/brands")
-      .set(tenantHeader)
-      .expect(expect200or201);
+    const req = api(app).get("/api/store/brands").set("Cookie", storeCookie);
 
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body).toEqual([]);
   });
 
   it("GET /api/store/products -> 200 + {items,total} includes published", async () => {
-    const res = await storeAgent
+    const req = api(app)
       .get("/api/store/products?limit=20&offset=0")
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
+
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
 
     expect(res.body).toHaveProperty("items");
     expect(res.body).toHaveProperty("total");
@@ -148,30 +189,37 @@ describe("90 - Catalog (Storefront)", () => {
   });
 
   it("GET /api/store/products/{id} -> 200 detail", async () => {
-    const res = await storeAgent
+    const req = api(app)
       .get(`/api/store/products/${productId}`)
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
 
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
     expect(res.body).toHaveProperty("id", productId);
     expect(Array.isArray(res.body.variants)).toBe(true);
   });
 
   it("GET /api/store/products/{id}/variants -> 200 array", async () => {
-    const res = await storeAgent
+    const req = api(app)
       .get(`/api/store/products/${productId}/variants`)
-      .set(tenantHeader)
-      .expect(expect200or201);
+      .set("Cookie", storeCookie);
 
+    withTenantHeaders(req, { tenantId, tenantCode });
+    const res = await req;
+
+    expect200or201(res.status);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
   });
 
   it("GET /api/store/products/{id} -> 404 for missing", async () => {
-    await storeAgent
+    const req = api(app)
       .get("/api/store/products/00000000-0000-0000-0000-000000000999")
-      .set(tenantHeader)
-      .expect(404);
+      .set("Cookie", storeCookie);
+
+    withTenantHeaders(req, { tenantId, tenantCode });
+    await req.expect(404);
   });
 });
-20;

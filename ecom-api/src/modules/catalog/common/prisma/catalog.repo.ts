@@ -316,10 +316,17 @@ export class CatalogRepo {
       status?: "draft" | "published";
       categoryIds?: string[];
       collectionIds?: string[];
+      variants?: Array<{
+        title: string;
+        sku?: string | null;
+        barcode?: string | null;
+        isActive?: boolean;
+      }>;
     }
   ) {
     const categoryIds = data.categoryIds ?? [];
     const collectionIds = data.collectionIds ?? [];
+    const variants = data.variants ?? [];
 
     const created = await this.prisma.$transaction(async (tx) => {
       const product = await tx.catalogProduct.create({
@@ -356,10 +363,29 @@ export class CatalogRepo {
         });
       }
 
+      // ✅ VARIANTS: create (deterministic)
+      // Policy: variants yoksa default 1 tane aç (testler için stabil)
+      const toCreate =
+        variants.length > 0
+          ? variants
+          : [{ title: "Default", sku: null, barcode: null, isActive: true }];
+
+      await tx.catalogProductVariant.createMany({
+        data: toCreate.map((v, idx) => ({
+          tenantId,
+          productId: product.id,
+          title: v.title ?? null,
+          sku: v.sku ?? null,
+          barcode: v.barcode ?? null,
+          isActive: v.isActive ?? true,
+          rank: idx,
+          metadata: {},
+        })),
+      });
+
       return product;
     });
 
-    // mapper beklentisi için include’lu geri dön
     return this.getProductById(tenantId, created.id, false);
   }
 
@@ -584,7 +610,14 @@ export class CatalogRepo {
   async adminCreateVariant(
     tenantId: string,
     productId: string,
-    data: { title?: string; sku?: string; barcode?: string }
+    data: {
+      title?: string | null;
+      sku?: string | null;
+      barcode?: string | null;
+      rank?: number;
+      isActive?: boolean;
+      metadata?: any;
+    }
   ) {
     return this.prisma.catalogProductVariant.create({
       data: {
@@ -593,6 +626,9 @@ export class CatalogRepo {
         title: data.title ?? null,
         sku: data.sku ?? null,
         barcode: data.barcode ?? null,
+        rank: data.rank ?? 0,
+        isActive: data.isActive ?? true, // ✅ store testleri için default true mantıklı
+        metadata: data.metadata ?? {},
       },
     });
   }

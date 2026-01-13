@@ -1,71 +1,49 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiPropertyOptional, ApiProperty } from "@nestjs/swagger";
 import {
+  IsBoolean,
+  IsInt,
+  IsObject,
   IsOptional,
   IsString,
+  Length,
   MaxLength,
-  IsInt,
   Min,
-  IsBoolean,
-  IsObject,
 } from "class-validator";
 
 export class AdminCreateVariantDto {
-  @ApiPropertyOptional({ maxLength: 255, example: "Default Variant" })
+  @ApiPropertyOptional({ example: "Default" })
   @IsOptional()
   @IsString()
-  @MaxLength(255)
-  title?: string | null;
+  @Length(2, 180)
+  title?: string;
 
-  @ApiPropertyOptional({ example: "SKU-ACME-001" })
+  @ApiPropertyOptional({ example: "SKU-123", nullable: true })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   sku?: string | null;
 
-  @ApiPropertyOptional({ example: "1234567890123" })
+  @ApiPropertyOptional({ example: "1234567890", nullable: true })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   barcode?: string | null;
 
-  @ApiPropertyOptional({ minimum: 0, example: 0 })
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @ApiPropertyOptional({ minimum: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
   rank?: number;
-
-  @ApiPropertyOptional({ example: true })
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
 
   @ApiPropertyOptional({ type: "object", additionalProperties: true })
   @IsOptional()
   @IsObject()
-  metadata?: any;
+  metadata?: Record<string, any>;
 }
 
-export class AdminVariantUpdateDto {
-  @IsOptional()
-  @IsString()
-  title?: string | null;
-
-  @IsOptional()
-  @IsString()
-  sku?: string | null;
-
-  @IsOptional()
-  @IsString()
-  barcode?: string | null;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  rank?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-
-  @IsOptional()
-  @IsObject()
-  metadata?: any;
-}
+export class AdminVariantUpdateDto extends AdminCreateVariantDto {}

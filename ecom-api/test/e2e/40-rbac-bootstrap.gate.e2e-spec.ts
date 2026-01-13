@@ -2,44 +2,42 @@ import type { INestApplication } from "@nestjs/common";
 import { createE2EApp } from "@test/helpers/bootstrap";
 import { api } from "@test/helpers/http";
 import { fx } from "@test/helpers/fixtures";
-import { loginAdmin, bearer } from "@test/helpers/auth";
+import { loginAdmin } from "@test/utils/auth";
 
-describe("RBAC Bootstrap (gate e2e)", () => {
+describe("[P00] RBAC Bootstrap (gate e2e)", () => {
   let app: INestApplication;
-  let ownerToken: string | undefined;
+  let adminCookie: string;
 
   beforeAll(async () => {
     app = await createE2EApp();
-    const { accessToken } = await loginAdmin(
-      app,
-      fx.owner.email,
-      fx.owner.password
-    );
-    ownerToken = accessToken;
+    adminCookie = (
+      await loginAdmin(app, {
+        email: fx.owner.email,
+        password: fx.owner.password,
+      })
+    ).cookie;
   });
 
   afterAll(async () => {
     await app?.close();
   });
 
-  it("bootstrap is idempotent", async () => {
-    if (!ownerToken)
-      throw new Error("ownerToken missing (login should return accessToken)");
+  it("bootstrap without cookie -> 401/403", async () => {
+    const res = await api(app).post("/api/admin/rbac/bootstrap").send({});
+    expect([401, 403]).toContain(res.status);
+  });
 
-    await api(app)
+  it("bootstrap is idempotent (cookie-based) -> 200/201", async () => {
+    const run1 = await api(app)
       .post("/api/admin/rbac/bootstrap")
-      .set(bearer(ownerToken))
-      .expect((r) => {
-        if (![200, 201].includes(r.status))
-          throw new Error(`Expected 200/201, got ${r.status}`);
-      });
+      .set("Cookie", adminCookie)
+      .send({});
+    expect([200, 201]).toContain(run1.status);
 
-    await api(app)
+    const run2 = await api(app)
       .post("/api/admin/rbac/bootstrap")
-      .set(bearer(ownerToken))
-      .expect((r) => {
-        if (![200, 201].includes(r.status))
-          throw new Error(`Expected 200/201, got ${r.status}`);
-      });
+      .set("Cookie", adminCookie)
+      .send({});
+    expect([200, 201]).toContain(run2.status);
   });
 });

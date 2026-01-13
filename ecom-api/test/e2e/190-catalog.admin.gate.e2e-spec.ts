@@ -16,7 +16,7 @@ const expect200or201 = (r: any) => {
   }
 };
 
-describe("190 - Catalog (Admin)", () => {
+describe("[P00] 190 - Catalog (Admin) (gate e2e)", () => {
   let app: INestApplication;
   let adminAgent: any;
 
@@ -30,11 +30,12 @@ describe("190 - Catalog (Admin)", () => {
     adminAgent = adminLogin.agent;
 
     // ✅ Tenant header must be UUID (not "acme" code)
-    // Bu endpointin policy’si net: 200 dönmesi beklenir.
-    const me = await adminAgent
-      .get("/api/admin/tenants/me")
-      .expect(expect200or201);
+    // Bu endpoint policy'si net: 200 dönmesi beklenir.
+    const me = await adminAgent.get("/api/admin/tenants/me").expect(200);
+
     tenantId = me.body?.id as string;
+    expect(tenantId).toBeTruthy();
+
     tenantHeader = { "x-tenant-id": tenantId };
   });
 
