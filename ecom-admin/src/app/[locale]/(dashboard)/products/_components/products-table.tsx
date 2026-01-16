@@ -1,86 +1,126 @@
 "use client"
 
-import Link from "next/link"
-import { useParams } from "next/navigation"
-import { Button, DropdownMenu, Table } from "@medusajs/ui"
-import { EllipsisHorizontal } from "@medusajs/icons"
-
-import type { AdminProductListItem } from "../_types/products.types"
+import type { AdminProductListItem } from "@/src/modules/products/types/products.types"
 import { ProductStatusBadge } from "./product-status-badge"
 import { InventoryBadge } from "./inventory-badge"
+import { RowActionsMenu } from "./row-actions-menu"
+
+type Props = {
+  items: AdminProductListItem[]
+
+  // pagination
+  offset: number
+  limit: number
+  total: number
+
+  onOffsetChange: (nextOffset: number) => void
+  onLimitChange: (nextLimit: number) => void
+}
 
 export function ProductsTable({
   items,
-  labels,
-}: {
-  items: AdminProductListItem[]
-  labels: {
-    product: string
-    status: string
-    variants: string
-    inventory: string
-    updated: string
-    actions: string
-    view: string
-  }
-}) {
-  const params = useParams<{ locale: string }>()
-  const locale = params?.locale ?? "en"
+  offset,
+  limit,
+  total,
+  onOffsetChange,
+  onLimitChange,
+}: Props) {
+  const page = Math.floor(offset / limit) + 1
+  const pageCount = Math.max(1, Math.ceil(total / limit))
+
+  const canPrev = offset > 0
+  const canNext = offset + limit < total
 
   return (
-    <Table>
-      <Table.Header>
-        <Table.Row>
-          <Table.HeaderCell>{labels.product}</Table.HeaderCell>
-          <Table.HeaderCell>{labels.status}</Table.HeaderCell>
-          <Table.HeaderCell>{labels.variants}</Table.HeaderCell>
-          <Table.HeaderCell>{labels.inventory}</Table.HeaderCell>
-          <Table.HeaderCell>{labels.updated}</Table.HeaderCell>
-          <Table.HeaderCell className="text-right">{labels.actions}</Table.HeaderCell>
-        </Table.Row>
-      </Table.Header>
+    <div className="rounded-xl border">
+      <div className="grid grid-cols-12 gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
+        <div className="col-span-5">Product</div>
+        <div className="col-span-2">Category</div>
+        <div className="col-span-1">Status</div>
+        <div className="col-span-1">Variants</div>
+        <div className="col-span-1">Inventory</div>
+        <div className="col-span-1">Updated</div>
+        <div className="col-span-1 text-right">Actions</div>
+      </div>
 
-      <Table.Body>
+      <div className="divide-y">
         {items.map((p) => (
-          <Table.Row key={p.id}>
-            <Table.Cell>
-              <div className="flex flex-col">
-                <span className="font-medium">{p.title}</span>
-                {p.handle ? (
-                  <span className="text-ui-fg-subtle text-xs">@{p.handle}</span>
-                ) : null}
+          <div
+            key={p.id}
+            className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-muted/40"
+          >
+            <div className="col-span-5">
+              <div className="font-medium">{p.title}</div>
+
+
+              <div className="text-xs text-muted-foreground">
+                {p.handle ? `@${p.handle}` : ""}
               </div>
-            </Table.Cell>
+            </div>
+            <div className="col-span-2 text-xs text-muted-foreground">
+              {p.categoryNames.length ? p.categoryNames.join(", ") : "—"}
+            </div>
 
-            <Table.Cell>
+            <div className="col-span-1">
               <ProductStatusBadge status={p.status} />
-            </Table.Cell>
+            </div>
 
-            <Table.Cell>{p.variantsCount}</Table.Cell>
 
-            <Table.Cell>
-              <InventoryBadge status={p.inventoryStatus} />
-            </Table.Cell>
+            <div className="col-span-1">{p.variantsCount}</div>
 
-            <Table.Cell>{new Date(p.updatedAt).toLocaleDateString()}</Table.Cell>
+            <div className="col-span-1">
+              <InventoryBadge status={p.stockAvailable} />
+            </div>
 
-            <Table.Cell className="text-right">
-              <DropdownMenu>
-                <DropdownMenu.Trigger asChild>
-                  <Button size="small" variant="secondary">
-                    <EllipsisHorizontal />
-                  </Button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item asChild>
-                    <Link href={`/${locale}/products/${p.id}`}>{labels.view}</Link>
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu>
-            </Table.Cell>
-          </Table.Row>
+            <div className="col-span-1 text-xs text-muted-foreground">
+              {new Date(p.updatedAt).toLocaleDateString()}
+            </div>
+
+            <div className="col-span-1 text-right">
+              <RowActionsMenu productId={p.id} />
+            </div>
+          </div>
         ))}
-      </Table.Body>
-    </Table>
+      </div>
+
+      {/* footer */}
+      <div className="flex flex-wrap items-center gap-3 border-t px-4 py-3 text-sm">
+        <div className="text-muted-foreground">
+          {total} items • Page {page}/{pageCount}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={limit}
+            onChange={(e) => onLimitChange(Number(e.target.value))}
+          >
+            {[10, 25, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}/page
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            className="h-9 rounded-md border px-3 text-sm disabled:opacity-50"
+            disabled={!canPrev}
+            onClick={() => onOffsetChange(Math.max(0, offset - limit))}
+          >
+            Prev
+          </button>
+
+          <button
+            type="button"
+            className="h-9 rounded-md border px-3 text-sm disabled:opacity-50"
+            disabled={!canNext}
+            onClick={() => onOffsetChange(offset + limit)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -1,0 +1,60 @@
+services:
+  admin:
+    image: node:20-bookworm-slim
+    container_name: ecom_admin
+    working_dir: /app
+
+    restart: unless-stopped
+    init: true
+
+    env_file:
+      - ../.env
+
+    environment:
+      NODE_ENV: development
+      PORT: ${ADMIN_PORT:-3002}
+      HOSTNAME: 0.0.0.0
+
+      # Browser tarafı: API'ye localhost'tan gider
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:${API_PORT:-3001}}
+
+    ports:
+      - "${ADMIN_PORT:-3002}:3002"
+
+    volumes:
+      # ✅ Zorunlu: gerçek admin repo path'i (absolute)
+      - ${ADMIN_REPO_PATH:?set ADMIN_REPO_PATH to your ecom-admin path}:/app
+
+      # ✅ node_modules container içinde kalsın
+      - /app/node_modules
+
+      # ✅ pnpm cache (opsiyonel ama iyi)
+      - admin_pnpm_store:/pnpm/store
+
+    command: >
+      sh -lc "
+        set -eu
+        cd /app
+
+        corepack enable
+        corepack prepare pnpm@10.28.0 --activate
+
+        pnpm config set store-dir /pnpm/store
+
+        test -f package.json || (echo 'ERR: /app/package.json not found' && ls -la /app && exit 1)
+
+        pnpm install
+        echo 'Starting Next dev...'
+        exec pnpm dev -p 3002
+      "
+
+    networks:
+      - ecom_net
+
+volumes:
+  admin_pnpm_store:
+
+networks:
+  ecom_net:
+    external: true
+    name: ecom_net

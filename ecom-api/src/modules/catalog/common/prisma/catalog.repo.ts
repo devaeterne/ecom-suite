@@ -5,6 +5,7 @@ import { includes } from "zod";
 type ListProductsArgs = {
   tenantId: string;
   q?: string;
+  status?: "draft" | "published" | "archived"; // ✅ eklendi
   categoryId?: string;
   collectionId?: string;
   offset: number;
@@ -190,6 +191,7 @@ export class CatalogRepo {
       tenantId,
       deletedAt: null,
       ...(publishedOnly ? { status: "published" } : {}),
+      ...(args.status ? { status: args.status } : {}),
       ...(q
         ? {
             OR: [
@@ -245,7 +247,55 @@ export class CatalogRepo {
       }),
     ]);
 
-    return { total, items };
+    // 1) VariantId listesi
+    const variantIds = Array.from(
+      new Set(
+        items.flatMap((p: any) =>
+          Array.isArray(p.variants) ? p.variants.map((v: any) => v.id) : []
+        )
+      )
+    );
+
+    // 2) Variant yoksa stok 0
+    if (variantIds.length === 0) {
+      return {
+        total,
+        items: items.map((p: any) => ({ ...p, stockAvailable: 0 })),
+      };
+    }
+
+    // 3) Inventory aggregate: available = sum(stocked) - sum(reserved)
+    const invAgg = await this.prisma.inventoryLevel.groupBy({
+      by: ["variantId"],
+      where: {
+        tenantId,
+        deletedAt: null,
+        variantId: { in: variantIds },
+      },
+      _sum: { stockedQuantity: true, reservedQuantity: true },
+    });
+
+    const availableByVariantId = new Map<string, number>(
+      invAgg.map((x: any) => [
+        x.variantId,
+        (x._sum.stockedQuantity ?? 0) - (x._sum.reservedQuantity ?? 0),
+      ])
+    );
+
+    // 4) Product bazında topla
+    const itemsWithStock = items.map((p: any) => {
+      const stockAvailable = Array.isArray(p.variants)
+        ? p.variants.reduce(
+            (acc: number, v: any) =>
+              acc + (availableByVariantId.get(v.id) ?? 0),
+            0
+          )
+        : 0;
+
+      return { ...p, stockAvailable };
+    });
+
+    return { total, items: itemsWithStock };
   }
 
   async getProductById(

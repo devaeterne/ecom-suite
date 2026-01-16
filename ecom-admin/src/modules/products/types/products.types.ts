@@ -8,8 +8,9 @@ export type AdminProductListItem = {
   status: ProductStatus;
   thumbnailUrl?: string;
   variantsCount: number;
-  inventoryStatus: InventoryStatus;
+  stockAvailable: number; // ✅ burada
   updatedAt: string; // ISO
+  categoryNames: string[];
 };
 
 export type AdminProductDetail = {

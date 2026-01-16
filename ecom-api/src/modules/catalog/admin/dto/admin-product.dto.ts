@@ -111,6 +111,27 @@ export class AdminProductListQueryDto {
   @IsString()
   q?: string;
 
+  @ApiPropertyOptional({ enum: ["draft", "published", "archived"] })
+  @IsOptional()
+  @IsIn(["draft", "published", "archived"])
+  status?: "draft" | "published" | "archived";
+
+  @ApiPropertyOptional({ format: "uuid" })
+  @IsOptional()
+  @IsUUID("4")
+  categoryId?: string;
+
+  @ApiPropertyOptional({ format: "uuid" })
+  @IsOptional()
+  @IsUUID("4")
+  collectionId?: string;
+
+  // inventory backend’de yoksa şimdilik opsiyonel kalsın
+  @ApiPropertyOptional({ enum: ["in_stock", "low", "out"] })
+  @IsOptional()
+  @IsIn(["in_stock", "low", "out"])
+  inventory?: "in_stock" | "low" | "out";
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

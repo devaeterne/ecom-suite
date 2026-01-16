@@ -278,15 +278,20 @@ export class CatalogAdminService {
     const { items, total } = await this.repo.listProducts({
       tenantId,
       q: q?.q,
-      categoryId: (q as any)?.categoryId,
-      collectionId: (q as any)?.collectionId,
+      status: q?.status, // ✅ eklendi
+      categoryId: q?.categoryId, // ✅ artık DTO’dan
+      collectionId: q?.collectionId,
       offset,
       limit,
       publishedOnly: false,
     });
 
     return {
-      items: items.map((x) => mapStoreProduct(x)),
+      items: items.map((x: any) => ({
+        ...mapStoreProduct(x),
+        stockAvailable:
+          typeof x.stockAvailable === "number" ? x.stockAvailable : 0,
+      })),
       pagination: { offset, limit, total },
     };
   }

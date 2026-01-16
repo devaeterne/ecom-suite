@@ -1,0 +1,39 @@
+# --- Dependencies ---
+node_modules
+.pnpm
+.pnp
+.pnp.js
+
+# --- Next.js build output ---
+.next
+out
+
+# --- Logs ---
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- VCS ---
+.git
+.gitignore
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+
+# --- Tests & docs ---
+__tests__
+coverage
+docs
+*.md
+
+# --- Env files (prod güvenlik) ---
+.env
+.env.*
+!.env.example
+
+# --- Misc ---
+*.log

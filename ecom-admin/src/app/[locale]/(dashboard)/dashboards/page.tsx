@@ -1,3 +1,5 @@
+//src/app/[locale]/(dashboard)/dashboard/page.tsx
+
 import { Container, Text } from "@medusajs/ui"
 import PageHeader from "@/components/page-header/PageHeader"
 import { Button } from "@medusajs/ui"
