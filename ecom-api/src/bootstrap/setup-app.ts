@@ -14,13 +14,29 @@ export async function setupApp(
   options?: { enableSwagger?: boolean }
 ) {
   // 1. CORS
+  const allowlist = new Set([
+    "http://localhost:3000",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+  ]);
+
   app.enableCors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002",
-    ],
+    origin: (origin, cb) => {
+      // curl/postman gibi origin olmayan istekler
+      if (!origin) return cb(null, true);
+      if (allowlist.has(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked: ${origin}`), false);
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "content-type",
+      "authorization",
+      "x-tenant-id",
+      "x-tenant-code",
+      "x-request-id",
+    ],
+    exposedHeaders: ["set-cookie"],
   });
 
   // 2. Cookie parser (raw body'den ÖNCE)

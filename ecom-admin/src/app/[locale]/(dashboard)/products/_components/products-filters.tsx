@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { apiFetch } from "@/src/lib/api/_client/http"
+import { useT } from "@/i18n/use-t"
+
 
 type Category = { id: string; name: string }
 type Collection = { id: string; title?: string; name?: string }
@@ -24,6 +26,8 @@ type Props = {
 }
 
 export function ProductsFilters({ value, onChange, onClear }: Props) {
+  const t = useT()
+
   // Options
   const [categories, setCategories] = useState<Category[]>([])
   const [collections, setCollections] = useState<Collection[]>([])
@@ -58,7 +62,7 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
       {/* Search */}
       <input
         className="h-9 w-72 rounded-md border bg-background px-3 text-sm"
-        placeholder="Search products…"
+        placeholder={t("products.search")}
         value={value.q}
         onChange={(e) => onChange({ q: e.target.value })}
       />
@@ -69,10 +73,10 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
         value={value.status}
         onChange={(e) => onChange({ status: e.target.value })}
       >
-        <option value="">Status (all)</option>
-        <option value="draft">Draft</option>
-        <option value="published">Published</option>
-        <option value="archived">Archived</option>
+        <option value="">{t("products.filters.statusAll")}</option>
+        <option value="draft">{t("pages.product_detail.status.draft")}</option>
+        <option value="published">{t("pages.product_detail.status.published")}</option>
+        <option value="archived">{t("pages.product_detail.status.archived")}</option>
       </select>
 
       {/* Category */}
@@ -81,7 +85,7 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
         value={value.categoryId}
         onChange={(e) => onChange({ categoryId: e.target.value })}
       >
-        <option value="">Category (all)</option>
+        <option value="">{t("products.filters.categoryAll")}</option>
         {categories.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -95,7 +99,7 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
         value={value.collectionId}
         onChange={(e) => onChange({ collectionId: e.target.value })}
       >
-        <option value="">Collection (all)</option>
+        <option value="">{t("products.filters.collectionAll")}</option>
         {collections.map((c) => (
           <option key={c.id} value={c.id}>
             {c.title ?? c.name ?? c.id}
@@ -108,13 +112,14 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
         className="h-9 rounded-md border bg-background px-2 text-sm"
         value={value.inventory}
         onChange={(e) => onChange({ inventory: e.target.value })}
-        title="Backend inventory filtrelemesi yoksa etkisiz kalır."
+        title={t("products.filters.inventoryHint")}
       >
-        <option value="">Stock (all)</option>
-        <option value="in_stock">In stock</option>
-        <option value="low">Low</option>
-        <option value="out">Out of stock</option>
+        <option value="">{t("products.filters.stockAll")}</option>
+        <option value="in_stock">{t("products.filters.inStock")}</option>
+        <option value="low">{t("products.filters.lowStock")}</option>
+        <option value="out">{t("products.filters.outOfStock")}</option>
       </select>
+
 
       {/* Limit */}
       <select
@@ -124,7 +129,7 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
       >
         {LIMITS.map((n) => (
           <option key={n} value={n}>
-            {n} / page
+            {n}
           </option>
         ))}
       </select>
@@ -134,8 +139,9 @@ export function ProductsFilters({ value, onChange, onClear }: Props) {
         className="ml-auto h-9 rounded-md border px-3 text-sm hover:bg-muted"
         onClick={onClear}
       >
-        Clear
+        {t("products.filters.clear")}
       </button>
+
     </div>
   )
 }

@@ -1,3 +1,4 @@
+// lib/api/_client/tenant.ts
 export const TENANT_ID_HEADER = "x-tenant-id";
 export const TENANT_CODE_HEADER = "x-tenant-code";
 
@@ -19,14 +20,17 @@ export function clearTenantContext() {
   window.localStorage.removeItem(LS_TENANT_CODE);
 }
 
+const isValid = (v: string | null) =>
+  !!v && v !== "undefined" && v !== "null" && v.trim().length > 0;
+
 export function getTenantHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {};
-  const tenantId = window.localStorage.getItem(LS_TENANT_ID) || "";
-  const tenantCode = window.localStorage.getItem(LS_TENANT_CODE) || "";
+  const tenantId = window.localStorage.getItem(LS_TENANT_ID);
+  const tenantCode = window.localStorage.getItem(LS_TENANT_CODE);
 
   const h: Record<string, string> = {};
-  if (tenantId) h[TENANT_ID_HEADER] = tenantId;
-  if (tenantCode) h[TENANT_CODE_HEADER] = tenantCode;
+  if (isValid(tenantId)) h[TENANT_ID_HEADER] = tenantId!;
+  if (isValid(tenantCode)) h[TENANT_CODE_HEADER] = tenantCode!;
   return h;
 }
 

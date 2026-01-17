@@ -1,24 +1,26 @@
-import type { AdminVariantListItem } from "../types/products.types";
+import type { AdminVariantListItem } from "@/src/modules/products/types/products.types";
 import { InventoryBadge } from "./inventory-badge";
+import { useT } from "@/i18n/use-t";
 
 export function ProductVariantsPanel({ variants }: { variants: AdminVariantListItem[] }) {
+  const t = useT();
   return (
     <div className="rounded-xl border">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
-          <h3 className="text-sm font-semibold">Variants</h3>
-          <p className="text-xs text-muted-foreground">Manage SKUs, pricing and inventory.</p>
+          <h3 className="text-sm font-semibold">{t("pages.product_detail.tabs.variants")}</h3>
+          <p className="text-xs text-muted-foreground">{t("products.variants.subtitle")}</p>
         </div>
         <button className="h-9 rounded-md border px-3 text-sm opacity-60" disabled>
-          Add variant
+          {t("products.variants.add")}
         </button>
       </div>
 
       <div className="grid grid-cols-12 gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
-        <div className="col-span-5">Variant</div>
-        <div className="col-span-3">SKU</div>
-        <div className="col-span-2">Price</div>
-        <div className="col-span-2">Inventory</div>
+        <div className="col-span-5">{t("products.variants.columns.variant")}</div>
+        <div className="col-span-3">{t("products.variants.columns.sku")}</div>
+        <div className="col-span-2">{t("products.variants.columns.price")}</div>
+        <div className="col-span-2">{t("products.variants.columns.inventory")}</div>
       </div>
 
       <div className="divide-y">

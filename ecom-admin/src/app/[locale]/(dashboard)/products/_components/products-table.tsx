@@ -1,21 +1,23 @@
-"use client"
+"use client";
 
-import type { AdminProductListItem } from "@/src/modules/products/types/products.types"
-import { ProductStatusBadge } from "./product-status-badge"
-import { InventoryBadge } from "./inventory-badge"
-import { RowActionsMenu } from "./row-actions-menu"
+import type { AdminProductListItem } from "@/src/modules/products/types/products.types";
+import { useT } from "@/i18n/use-t";
+import { ProductStatusBadge } from "./product-status-badge";
+import { InventoryBadge } from "./inventory-badge";
+import { RowActionsMenu } from "./row-actions-menu";
+import { useParams } from "next/navigation";
 
 type Props = {
-  items: AdminProductListItem[]
+  items: AdminProductListItem[];
 
   // pagination
-  offset: number
-  limit: number
-  total: number
+  offset: number;
+  limit: number;
+  total: number;
 
-  onOffsetChange: (nextOffset: number) => void
-  onLimitChange: (nextLimit: number) => void
-}
+  onOffsetChange: (nextOffset: number) => void;
+  onLimitChange: (nextLimit: number) => void;
+};
 
 export function ProductsTable({
   items,
@@ -25,68 +27,107 @@ export function ProductsTable({
   onOffsetChange,
   onLimitChange,
 }: Props) {
-  const page = Math.floor(offset / limit) + 1
-  const pageCount = Math.max(1, Math.ceil(total / limit))
+  const t = useT();
+  const params = useParams<{ locale: string }>();
+  const page = Math.floor(offset / limit) + 1;
+  const pageCount = Math.max(1, Math.ceil(total / limit));
+  const locale = params?.locale ?? "en";
 
-  const canPrev = offset > 0
-  const canNext = offset + limit < total
+  const canPrev = offset > 0;
+  const canNext = offset + limit < total;
+
+  function money(amount: number, currency: string) {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+    }).format(amount / 100);
+  }
 
   return (
     <div className="rounded-xl border">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="text-sm font-medium">
+          {t("products.ProductTableTitle")}
+        </div>
+
+        <button
+          className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          onClick={() => {
+            window.location.href = `/${document.documentElement.lang || "en"}/products/new`;
+          }}
+        >
+          <span className="text-base leading-none">+</span>
+          {t("common.new")}
+        </button>
+      </div>
       <div className="grid grid-cols-12 gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
-        <div className="col-span-5">Product</div>
-        <div className="col-span-2">Category</div>
-        <div className="col-span-1">Status</div>
-        <div className="col-span-1">Variants</div>
-        <div className="col-span-1">Inventory</div>
-        <div className="col-span-1">Updated</div>
-        <div className="col-span-1 text-right">Actions</div>
+        <div className="col-span-5">{t("products.columns.product")}</div>
+        <div className="col-span-2">{t("products.columns.category")}</div>
+        <div className="col-span-1">{t("products.columns.status")}</div>
+        <div className="col-span-1">{t("products.columns.variants")}</div>
+        <div className="col-span-1">{t("products.columns.inventory")}</div>
+        <div className="col-span-1">{t("products.columns.updated")}</div>
+        <div className="col-span-1 text-right">
+          {t("products.columns.actions")}
+        </div>
       </div>
 
       <div className="divide-y">
-        {items.map((p) => (
-          <div
-            key={p.id}
-            className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-muted/40"
-          >
-            <div className="col-span-5">
-              <div className="font-medium">{p.title}</div>
-
-
-              <div className="text-xs text-muted-foreground">
-                {p.handle ? `@${p.handle}` : ""}
-              </div>
+        {items.length === 0 ? (
+          <div className="px-4 py-10 text-center">
+            <div className="text-sm font-medium">
+              {t("products.empty.title")}
             </div>
-            <div className="col-span-2 text-xs text-muted-foreground">
-              {p.categoryNames.length ? p.categoryNames.join(", ") : "—"}
-            </div>
-
-            <div className="col-span-1">
-              <ProductStatusBadge status={p.status} />
-            </div>
-
-
-            <div className="col-span-1">{p.variantsCount}</div>
-
-            <div className="col-span-1">
-              <InventoryBadge status={p.stockAvailable} />
-            </div>
-
-            <div className="col-span-1 text-xs text-muted-foreground">
-              {new Date(p.updatedAt).toLocaleDateString()}
-            </div>
-
-            <div className="col-span-1 text-right">
-              <RowActionsMenu productId={p.id} />
+            <div className="mt-1 text-sm text-muted-foreground">
+              {t("products.empty.body")}
             </div>
           </div>
-        ))}
+        ) : (
+          items.map((p) => (
+            <div
+              key={p.id}
+              className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-muted/40"
+            >
+              <div className="col-span-5">
+                <div className="font-medium">{p.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {p.handle ? `@${p.handle}` : ""}
+                </div>
+              </div>
+
+              <div className="col-span-2 text-xs text-muted-foreground">
+                {p.categoryNames.length
+                  ? p.categoryNames.join(", ")
+                  : t("common.emptyDash")}
+              </div>
+
+              <div className="col-span-1">
+                <ProductStatusBadge status={p.status} />
+              </div>
+
+              <div className="col-span-1">{p.variantsCount}</div>
+
+              <div className="col-span-1">
+                <InventoryBadge status={p.stockAvailable} />
+              </div>
+
+              <div className="col-span-1 text-xs text-muted-foreground">
+                {new Date(p.updatedAt).toLocaleDateString(locale)}
+              </div>
+
+              <div className="col-span-1 text-right">
+                <RowActionsMenu productId={p.id} />
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* footer */}
       <div className="flex flex-wrap items-center gap-3 border-t px-4 py-3 text-sm">
         <div className="text-muted-foreground">
-          {total} items • Page {page}/{pageCount}
+          {total} {t("products.items")} • {t("products.page")} {page}/
+          {pageCount}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -97,7 +138,7 @@ export function ProductsTable({
           >
             {[10, 25, 50, 100].map((n) => (
               <option key={n} value={n}>
-                {n}/page
+                {n}
               </option>
             ))}
           </select>
@@ -108,7 +149,7 @@ export function ProductsTable({
             disabled={!canPrev}
             onClick={() => onOffsetChange(Math.max(0, offset - limit))}
           >
-            Prev
+            {t("products.pagination.prev")}
           </button>
 
           <button
@@ -117,10 +158,10 @@ export function ProductsTable({
             disabled={!canNext}
             onClick={() => onOffsetChange(offset + limit)}
           >
-            Next
+            {t("products.pagination.next")}
           </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

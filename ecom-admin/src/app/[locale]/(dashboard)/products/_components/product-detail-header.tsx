@@ -3,10 +3,12 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Text } from "@medusajs/ui"
+import { useT } from "@/i18n/use-t"
 
 import type { AdminProductDetail } from "../_types/products.types"
 
 export function ProductDetailHeader({ product }: { product: AdminProductDetail }) {
+  const t = useT()
   const params = useParams<{ locale: string }>()
   const locale = params?.locale ?? "en"
 
@@ -14,7 +16,7 @@ export function ProductDetailHeader({ product }: { product: AdminProductDetail }
     <div className="space-y-2">
       <div className="text-sm text-ui-fg-subtle">
         <Link className="hover:underline" href={`/${locale}/products`}>
-          Products
+          {t("topbar.title.products")}
         </Link>
         <span className="mx-2">/</span>
         <span>{product.title}</span>
@@ -32,16 +34,16 @@ export function ProductDetailHeader({ product }: { product: AdminProductDetail }
 
         <div className="flex items-center gap-2">
           <Link className="text-sm hover:underline" href={`/${locale}/products/${product.id}`}>
-            Overview
+            {t("pages.product_detail.tabs.overview")}
           </Link>
           <Link className="text-sm hover:underline" href={`/${locale}/products/${product.id}/variants`}>
-            Variants
+            {t("pages.product_detail.tabs.variants")}
           </Link>
           <Link className="text-sm hover:underline" href={`/${locale}/products/${product.id}/media`}>
-            Media
+            {t("pages.product_detail.tabs.media")}
           </Link>
           <Link className="text-sm hover:underline" href={`/${locale}/products/${product.id}/translations`}>
-            Translations
+            {t("pages.product_detail.tabs.translations")}
           </Link>
         </div>
       </div>

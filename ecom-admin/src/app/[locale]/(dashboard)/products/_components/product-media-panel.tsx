@@ -1,15 +1,17 @@
-import type { AdminMediaItem } from "../types/products.types";
+import type { AdminMediaItem } from "@/src/modules/products/types/products.types";
+import { useT } from "@/i18n/use-t";
 
 export function ProductMediaPanel({ media }: { media: AdminMediaItem[] }) {
+  const t = useT();
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Media</h3>
-          <p className="text-xs text-muted-foreground">Upload and reorder product images.</p>
+          <h3 className="text-sm font-semibold">{t("pages.product_detail.tabs.media")}</h3>
+          <p className="text-xs text-muted-foreground">{t("products.media.subtitle")}</p>
         </div>
         <button className="h-9 rounded-md border px-3 text-sm opacity-60" disabled>
-          Upload
+          {t("products.media.upload")}
         </button>
       </div>
 
@@ -23,7 +25,7 @@ export function ProductMediaPanel({ media }: { media: AdminMediaItem[] }) {
       </div>
 
       <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-        Reorder (drag & drop) will be enabled in Phase 2. For now, UI skeleton is locked.
+        {t("products.media.phaseNote")}
       </div>
     </div>
   );

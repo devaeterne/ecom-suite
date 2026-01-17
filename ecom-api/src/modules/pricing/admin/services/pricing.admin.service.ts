@@ -1,7 +1,10 @@
 // src/modules/pricing/admin/services/pricing.admin.service.ts
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { CreateVariantPriceDto } from "../dto/variant-price.dto";
+import {
+  CreateVariantPriceDto,
+  UpdateVariantPriceDto,
+} from "../dto/variant-price.dto";
 import type { Prisma } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -18,7 +21,7 @@ export class PricingAdminService {
   async addVariantPrice(
     tenantId: string,
     variantId: string,
-    dto: CreateVariantPriceDto
+    dto: CreateVariantPriceDto,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const variant = await tx.catalogProductVariant.findFirst({
@@ -85,6 +88,13 @@ export class PricingAdminService {
         },
       },
       orderBy: [{ createdAt: "desc" }],
+      include: {
+        priceSet: {
+          select: {
+            priceListId: true,
+          },
+        },
+      },
     });
   }
 
@@ -97,7 +107,7 @@ export class PricingAdminService {
       currencyCode: string;
       quantity: number;
       priceListId?: string | null; // ✅ NEW
-    }
+    },
   ): Promise<ResolvedUnitPrice | null> {
     const { tenantId, variantId, currencyCode, quantity } = args;
     const priceListId = args.priceListId ?? null;
@@ -167,5 +177,63 @@ export class PricingAdminService {
 
     if (!base) return null;
     return { amount: base.amount, compareAt: base.compareAt ?? null };
+  }
+  async updateVariantPrice(
+    tenantId: string,
+    variantId: string,
+    priceId: string,
+    dto: UpdateVariantPriceDto,
+  ) {
+    const price = await this.prisma.catalogMoneyAmount.findFirst({
+      where: {
+        id: priceId,
+        tenantId,
+        deletedAt: null,
+        priceSet: {
+          variantId,
+          tenantId,
+        },
+      },
+    });
+
+    if (!price) throw new NotFoundException("Price not found");
+
+    return this.prisma.catalogMoneyAmount.update({
+      where: { id: priceId },
+      data: {
+        amount: dto.amount ?? undefined,
+        compareAt: dto.compareAt ?? undefined,
+        currencyCode: dto.currencyCode ?? undefined,
+        isActive: dto.isActive ?? undefined,
+      },
+    });
+  }
+
+  async removeVariantPrice(
+    tenantId: string,
+    variantId: string,
+    priceId: string,
+  ) {
+    const price = await this.prisma.catalogMoneyAmount.findFirst({
+      where: {
+        id: priceId,
+        tenantId,
+        deletedAt: null,
+        priceSet: {
+          variantId,
+          tenantId,
+        },
+      },
+    });
+
+    if (!price) throw new NotFoundException("Price not found");
+
+    return this.prisma.catalogMoneyAmount.update({
+      where: { id: priceId },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+      },
+    });
   }
 }

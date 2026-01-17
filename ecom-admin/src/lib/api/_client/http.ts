@@ -58,13 +58,17 @@ export async function apiFetch<T = unknown>(
     : `${base}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const doRequest = async () => {
+    const method = options.method ?? "GET";
+
+    const headers = withTenantHeaders({
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers ?? {}),
+    });
+
     const res = await fetch(url, {
-      method: options.method ?? "GET",
-      headers: withTenantHeaders({
-        Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...(options.headers ?? {}),
-      }),
+      method,
+      headers,
       body:
         options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: options.signal,
@@ -77,6 +81,7 @@ export async function apiFetch<T = unknown>(
     const data = isJson
       ? await res.json().catch(() => null)
       : await res.text().catch(() => null);
+
     return { res, data };
   };
 
@@ -89,10 +94,10 @@ export async function apiFetch<T = unknown>(
 
   if (shouldTryRefresh) {
     try {
-      await AdminAuthApi.refresh();
+      await AdminAuthApi.refresh(); // bunun da credentials include kullandığından emin ol
       ({ res, data } = await doRequest());
-    } catch (e) {
-      // refresh patlarsa aşağıda normal error akacak
+    } catch {
+      // refresh patlarsa normal error akacak
     }
   }
 
@@ -108,6 +113,7 @@ export async function apiFetch<T = unknown>(
       (data as any)?.message ||
       (data as any)?.detail ||
       `Request failed with status ${res.status}`;
+
     throw new HttpError(message, res.status, data);
   }
 

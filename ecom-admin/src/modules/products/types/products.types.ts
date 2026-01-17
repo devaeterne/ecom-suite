@@ -1,6 +1,12 @@
 export type ProductStatus = "draft" | "published" | "archived";
 export type InventoryStatus = "in_stock" | "low" | "out";
 
+type ProductListPriceSummary = {
+  currencyCode: string;
+  amount: number; // best price
+  compareAt?: number | null; // regular (üstü çizili)
+};
+
 export type AdminProductListItem = {
   id: string;
   title: string;
@@ -11,6 +17,7 @@ export type AdminProductListItem = {
   stockAvailable: number; // ✅ burada
   updatedAt: string; // ISO
   categoryNames: string[];
+  price?: ProductListPriceSummary | null;
 };
 
 export type AdminProductDetail = {

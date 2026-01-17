@@ -1,7 +1,6 @@
 "use client"
 
 import { mockProductDetail } from "@/src/app/[locale]/(dashboard)/products/_mocks/products.mock"
-import { ProductDetailHeader } from "@/src/app/[locale]/(dashboard)/products/_components/product-detail-header"
 import { ProductOverviewPanel } from "@/src/app/[locale]/(dashboard)/products/_components/product-overview-panel"
 
 export default function ProductOverviewPage({
@@ -13,7 +12,6 @@ export default function ProductOverviewPage({
 
   return (
     <div className="space-y-4">
-      <ProductDetailHeader product={product} />
       <ProductOverviewPanel product={product} />
     </div>
   )

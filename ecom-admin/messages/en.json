@@ -3,6 +3,7 @@
     "name": "Ecom Admin",
     "subtitle": "Backoffice"
   },
+
   "nav": {
     "dashboards": "Dashboards",
     "products": "Products",
@@ -10,6 +11,7 @@
     "settings": "Settings",
     "inventory": "Inventory"
   },
+
   "topbar": {
     "scope": "Admin",
     "theme": {
@@ -28,88 +30,296 @@
       "account_settings": "Account settings"
     }
   },
+
+  "actions": {
+    "openRowMenu": "Open actions menu",
+    "view": "View",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirm": {
+      "deleteProduct": "Are you sure you want to delete this product?"
+    }
+  },
+
+  "errors": {
+    "productDeleteFailed": "Product could not be deleted.",
+    "productUpdateFailed": "Product update failed.",
+    "productNotFound": "Product not found."
+  },
+
   "pages": {
     "dashboards": {
       "subtitle": "High-level overview of the admin panel."
     },
-    "products": {
-      "subtitle": "Manage your catalog, pricing, and availability.",
+
+    "product_detail": {
+      "title": "Product",
+      "subtitle": "Manage details, variants, inventory, media, and translations.",
+      "variants_panel": {
+        "title": "Variants",
+        "subtitle": "Manage SKUs and pricing per variant.",
+        "columns": {
+          "variant": "Variant",
+          "sku": "SKU",
+          "price": "Price",
+          "inventory": "Inventory",
+          "actions": "Actions"
+        },
+        "actions": {
+          "save": "Save",
+          "saving": "Saving…"
+        },
+        "empty": {
+          "title": "No variants found"
+        }
+      },
+
+      "tabs": {
+        "overview": "Overview",
+        "variants": "Variants",
+        "inventory": "Inventory",
+        "media": "Media",
+        "translations": "Translations"
+      },
+
+      "mode": {
+        "view": "View",
+        "edit": "Edit"
+      },
+
       "actions": {
-        "new": "New product",
-        "import": "Import"
+        "edit": "Edit",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…",
+        "view": "View"
+      },
+
+      "sections": {
+        "organize": "Organization",
+        "content": "Content",
+        "status": "Status"
+      },
+
+      "fields": {
+        "title": "Title",
+        "handle": "Handle",
+        "status": "Status",
+        "description": "Description",
+        "categories": "Categories",
+        "collections": "Collections"
+      },
+
+      "status": {
+        "draft": "Draft",
+        "published": "Published",
+        "archived": "Archived"
+      },
+
+      "hints": {
+        "multiSelect": "Hold Ctrl/Cmd to select multiple items."
+      },
+
+      "empty": {
+        "notFound": "Product not found."
       }
     },
+
     "orders": {
       "subtitle": "Track orders, payments, and fulfillment status."
     },
+
     "settings": {
       "subtitle": "Configure your store and operational preferences.",
       "actions": {
         "save": "Save changes"
       }
     },
+
     "inventory": {
-    "overview": {
-      "title": "Inventory",
-      "subtitle": "Manage stock locations, availability, and reservations."
-    },
-    "locations": {
-      "title": "Locations",
-      "subtitle": "Create and manage warehouses, stores, and stock locations."
-    },
-    "location_detail": {
-      "title": "Location",
-      "subtitle": "View and manage inventory settings for this location."
-    },
-    "levels": {
-      "title": "Stock levels",
-      "subtitle": "Monitor available and reserved quantities per variant and location."
-    },
-    "reservations": {
-      "title": "Reservations",
-      "subtitle": "Track stock reserved by active and completed checkouts."
+      "overview": {
+        "title": "Inventory",
+        "subtitle": "Manage stock locations, availability, and reservations."
+      },
+      "locations": {
+        "title": "Locations",
+        "subtitle": "Create and manage warehouses, stores, and stock locations."
+      },
+      "location_detail": {
+        "title": "Location",
+        "subtitle": "View and manage inventory settings for this location."
+      },
+      "levels": {
+        "title": "Stock levels",
+        "subtitle": "Monitor available and reserved quantities per variant and location."
+      },
+      "reservations": {
+        "title": "Reservations",
+        "subtitle": "Track stock reserved by active and completed checkouts."
+      }
     }
-  }
   },
+  "pricing": {
+    "title": { "manage": "Manage prices" },
+    "actions": {
+      "managePrices": "Manage prices",
+      "add": "Add price"
+    },
+    "confirm": {
+      "deletePrice": "Are you sure you want to delete this price?"
+    },
+    "labels": {
+      "sku": "SKU",
+      "regular": "Regular price",
+      "best": "Best price",
+      "amount": "Amount",
+      "currency": "Currency",
+      "priceList": "Price list",
+      "active": "Status"
+    },
+    "columns": {
+      "label": "Label",
+      "amount": "Amount",
+      "compareAt": "Compare at",
+      "rules": "Rules"
+    },
+    "empty": "No prices yet.",
+    "priceList": {
+      "title": {
+        "quickCreate": "Price list"
+      },
+      "empty": "No prices yet.",
+
+      "placeholders": {
+        "title": "e.g. Black Friday"
+      },
+
+      "hints": {
+        "visibleInDropdown": "After creating, it will appear in the Price list dropdown.",
+        "manageSeparately": "Manage Separately",
+        "ForTheActions": "For the actions select one!"
+      },
+      "validation": {
+        "titleMin": "Title must be at least 2 characters."
+      },
+      "notifications": {
+        "created": "Price list created.",
+        "createFailed": "Price list could not be created.",
+        "loadFailed": "Failed to load.",
+        "deleted": "Deleted.",
+        "deleteFailed": "Delete failed."
+      },
+      "columns": {
+        "title": "Title",
+        "type": "Type",
+        "status": "Status",
+        "active": "Active",
+        "date": "Date Range"
+      },
+      "actions": {
+        "activate": "Activate",
+        "deactivate": "Deactivate",
+        "delete": "Delete",
+        "create": "Create",
+        "openManager": "Open Manager"
+      },
+      "confirm": {
+        "activate": "Selected price lists will be activated. Continue?",
+        "deactivate": "Selected price lists will be deactivated. Continue?",
+        "delete": "Selected price lists will be permanently deleted. Continue?"
+      }
+    }
+  },
+
   "products": {
     "search": "Search products...",
-    "filters": "Filters",
+    "filtersLabel": "Filters",
+    "ProductTableTitle": "Product Table",
+    "overview": {
+      "organizeHint": "Category / Collection / Tags will be connected after API integration."
+    },
+    "variants": {
+      "subtitle": "Manage SKUs, pricing and inventory.",
+      "add": "Add variant"
+    },
+    "media": {
+      "subtitle": "Upload and reorder product images.",
+      "upload": "Upload",
+      "phaseNote": "Reorder (drag & drop) will be enabled in Phase 2. For now, UI skeleton is locked."
+    },
+    "translations": {
+      "subtitle": "Manage product content per locale.",
+      "fields": {
+        "subtitle": "Subtitle"
+      },
+      "phaseNote": "Phase 1: UI shell locked. Phase 4: API adaptation layer will persist translations."
+    },
+    "todo": {
+      "variants": "This section will be enabled after API integration.",
+      "inventory": "This section will be enabled after API integration.",
+      "media": "This section will be enabled after API integration.",
+      "translations": "This section will be enabled after API integration."
+    },
+    "actions": {
+      "openViewTab": "Open view tab",
+      "goVariantsForInventory": "Go to Variants (for inventory)"
+    },
+    "filters": {
+      "statusAll": "Status (all)",
+      "categoryAll": "Category (all)",
+      "collectionAll": "Collection (all)",
+      "stockAll": "Stock (all)",
+      "inStock": "In stock",
+      "lowStock": "Low",
+      "outOfStock": "Out of stock",
+      "clear": "Clear",
+      "inventoryHint": "If backend inventory filtering isn't implemented, this filter has no effect."
+    },
+
     "columns": {
       "product": "Product",
+      "category": "Category",
       "status": "Status",
       "variants": "Variants",
       "inventory": "Inventory",
       "updated": "Updated",
-      "actions": "Actions"
+      "actions": "Actions",
+      "variant": "Variant",
+      "sku": "SKU",
+      "price": "Price"
     },
-    "status": {
-      "active": "Active",
-      "draft": "Draft"
-    },
-    
-    "row": {
-      "edit": "Edit",
-      "duplicate": "Duplicate",
-      "archive": "Archive"
-    },
+
+    "items": "items",
+    "page": "Page",
+
     "empty": {
       "title": "No products found",
       "body": "Try adjusting your search or filters."
     },
+
     "pagination": {
       "prev": "Previous",
       "next": "Next"
     }
   },
+
   "common": {
-    "actions": {
-      "view": "View"
-    }
+    "loading": "Loading…",
+    "save": "Save",
+    "saving": "Saving…",
+    "emptyDash": "—",
+    "close": "Close",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "active": "Active",
+    "inactive": "Inactive",
+    "new": "New"
   },
+
   "orders": {
     "title": "Orders",
     "subtitle": "Track orders, payments, and fulfillment status.",
-
     "search": "Search orders...",
     "filters": "Filters",
 
@@ -158,9 +368,7 @@
         "shipping": "Shipping",
         "timeline": "Timeline"
       },
-      "timeline":{
-        "title":"TimeLine"
-      },
+
       "fields": {
         "order_id": "Order ID",
         "status": "Status",
@@ -170,55 +378,15 @@
         "total": "Total"
       },
 
-      "kpi": {
-        "total": "Total",
-        "payment": "Payment",
-        "fulfillment": "Fulfillment",
-        "items": "Items"
-      },
-
       "badges": {
         "paid": "Paid",
         "unpaid": "Unpaid",
         "fulfilled": "Fulfilled",
         "unfulfilled": "Unfulfilled"
-      },
-
-      "items": {
-        "title": "Items",
-        "columns": {
-          "item": "Item",
-          "sku": "SKU",
-          "qty": "Qty",
-          "unit_price": "Unit price",
-          "total": "Total"
-        }
-      },
-
-      "payment": {
-        "title": "Payment",
-        "method": "Method",
-        "status": "Status",
-        "transaction": "Transaction",
-        "paid_at": "Paid at"
-      },
-
-      "shipping": {
-        "title": "Shipping",
-        "method": "Method",
-        "address": "Address",
-        "tracking": "Tracking",
-        "status": "Status"
-      },
-
-      "actions": {
-        "back": "Back to orders",
-        "refund": "Refund",
-        "cancel": "Cancel order",
-        "resend_invoice": "Resend invoice"
       }
     }
   },
+
   "settings": {
     "tabs": {
       "general": "General",
@@ -226,6 +394,7 @@
       "tax": "Tax",
       "notifications": "Notifications"
     },
+
     "general": {
       "title": "Store details",
       "subtitle": "Basic information used across the admin panel.",
@@ -233,6 +402,7 @@
       "email": "Support email",
       "phone": "Support phone"
     },
+
     "localization": {
       "title": "Localization",
       "subtitle": "Language, currency and formatting preferences.",
@@ -240,19 +410,28 @@
       "default_currency": "Default currency",
       "timezone": "Timezone"
     },
+
     "tax": {
       "title": "Tax settings",
       "subtitle": "Configure tax behavior for your store.",
       "inclusive": "Prices include tax",
       "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
     },
+
     "notifications": {
       "title": "Notifications",
       "subtitle": "Control which events trigger notifications.",
       "orders": "Order updates",
-      "low_stock": "Low stock alerts"
+      "low_stock": "Low stock alerts",
+      "saved": "Changes saved.",
+      "saveFailed": "Save failed.",
+      "loadFailed": "Failed to load data.",
+      "deleted": "Deleted.",
+      "deleteFailed": "Delete failed.",
+      "invalidAmount": "Invalid amount."
     }
   },
+
   "auth": {
     "login": {
       "title": "Sign in",
@@ -264,5 +443,10 @@
       "error": "Invalid email or password."
     },
     "logout": "Logout"
+  },
+  "notifications": {
+    "saved": "Changes saved.",
+    "saveFailed": "Save failed.",
+    "delete": "Deleted"
   }
 }

@@ -10,6 +10,8 @@ import { ProductsTable } from "./_components/products-table"
 
 import { apiFetch } from "@/src/lib/api/_client/http"
 import { withQuery } from "@/src/lib/api/_client/query"
+import { useT } from "@/i18n/use-t"
+
 
 // types
 import type { AdminProductListItem } from "@/src/modules/products/types/products.types"
@@ -41,6 +43,7 @@ function mapApiToListItem(p: any): AdminProductListItem {
 }
 
 export default function ProductsPage() {
+  const t = useT()
   const router = useRouter()
   const searchParams = useSearchParams()
   const params = useParams<{ locale: string }>()
@@ -132,7 +135,9 @@ export default function ProductsPage() {
       />
 
       {loading ? (
-        <div className="rounded-xl border p-6 text-sm text-muted-foreground">Loading…</div>
+        <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+          {t("common.loading")}
+        </div>
       ) : (
         <ProductsTable
           items={items}
@@ -143,6 +148,7 @@ export default function ProductsPage() {
           onLimitChange={(nextLimit) => setQuery({ limit: nextLimit, offset: 0 })}
         />
       )}
+
     </div>
   )
 }
