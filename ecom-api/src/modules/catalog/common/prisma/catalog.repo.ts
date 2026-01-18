@@ -61,20 +61,42 @@ export class CatalogRepo {
     return n > 0;
   }
 
-  async listCategories(tenantId: string, localeCode?: string) {
+  async listCategories(
+    tenantId: string,
+    opts?: { localeCode?: string; q?: string; isActive?: boolean },
+  ) {
+    const localeCode = opts?.localeCode;
+    const q = opts?.q?.trim();
+    const isActive = opts?.isActive;
+
     return this.prisma.productCategory.findMany({
-      where: { tenantId, isActive: true },
+      where: {
+        tenantId,
+        ...(typeof isActive === "boolean" ? { isActive } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { handle: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
       orderBy: [{ rank: "asc" }, { createdAt: "asc" }],
-      ...(localeCode
-        ? {
-            include: {
+
+      // ✅ include tek yerde: overwrite yok
+      include: {
+        _count: { select: { products: true } },
+
+        ...(localeCode
+          ? {
               productCategoryTranslations: {
                 where: { tenantId, localeCode },
                 take: 1,
               },
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     });
   }
 
@@ -103,7 +125,12 @@ export class CatalogRepo {
 
   async adminCreateCategory(
     tenantId: string,
-    data: { name: string; handle: string; parentId?: string | null },
+    data: {
+      name: string;
+      handle: string;
+      parentId?: string | null;
+      isActive?: boolean;
+    },
   ) {
     return this.prisma.productCategory.create({
       data: {
@@ -111,6 +138,7 @@ export class CatalogRepo {
         name: data.name,
         handle: data.handle,
         parentId: data.parentId ?? null,
+        isActive: data.isActive ?? true, // ✅ ekle
       },
     });
   }

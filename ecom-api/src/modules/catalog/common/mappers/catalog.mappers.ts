@@ -1,4 +1,7 @@
-import { StoreCategoryDto } from "@/modules/catalog/common/dto/category.dto";
+import {
+  StoreCategoryDto,
+  AdminCategoryDto,
+} from "@/modules/catalog/common/dto/category.dto";
 import { StoreCollectionDto } from "@/modules/catalog/common/dto/collection.dto";
 import { StoreProductDto } from "@/modules/catalog/common/dto/product.dto";
 
@@ -17,7 +20,7 @@ type ProductTranslation = {
 function pickLocalized<T extends { localeCode: string }>(
   items: T[] | undefined | null,
   requested?: string | null,
-  fallback?: string | null
+  fallback?: string | null,
 ): T | null {
   const arr = items ?? [];
   if (!arr.length) return null;
@@ -33,11 +36,14 @@ function pickLocalized<T extends { localeCode: string }>(
   return arr[0] ?? null;
 }
 
-export function mapCategory(row: any, localeCode?: string): StoreCategoryDto {
+export function mapCategory(
+  row: any,
+  localeCode?: string,
+): StoreCategoryDto | AdminCategoryDto {
   const t = pickLocalized<CategoryTranslation>(
     row.translations,
     localeCode,
-    "en"
+    "en",
   );
 
   return {
@@ -45,7 +51,19 @@ export function mapCategory(row: any, localeCode?: string): StoreCategoryDto {
     name: t?.title ?? row.name,
     handle: row.handle,
     parentId: row.parentId ?? null,
-  };
+
+    // ✅ admin + store ortak alan
+    isActive: !!row.isActive,
+    productCount: Number(row?._count?.products ?? 0),
+
+    // admin tarafı isterse kullanır
+    createdAt: row.createdAt
+      ? new Date(row.createdAt).toISOString()
+      : undefined,
+    updatedAt: row.updatedAt
+      ? new Date(row.updatedAt).toISOString()
+      : undefined,
+  } as any;
 }
 
 export function mapCollection(row: any): StoreCollectionDto {
@@ -58,12 +76,12 @@ export function mapCollection(row: any): StoreCollectionDto {
 
 export function mapStoreProduct(
   row: any,
-  localeCode?: string
+  localeCode?: string,
 ): StoreProductDto {
   const t = pickLocalized<ProductTranslation>(
     row.translations,
     localeCode,
-    "en"
+    "en",
   );
 
   return {

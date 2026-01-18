@@ -1,3 +1,4 @@
+// src/lib/api/product/categories.ts
 import { apiFetch } from "@/src/lib/api/_client/http";
 import { withQuery } from "@/src/lib/api/_client/query";
 
@@ -7,38 +8,15 @@ export type Category = {
   handle: string;
   parentId: string | null;
   isActive?: boolean;
-  productCount?: number;
-  createdAt?: string;
-  updatedAt?: string;
+  productCount?: number; // ✅
 };
-
-export type CategorySortBy =
-  | "createdAt"
-  | "updatedAt"
-  | "name"
-  | "handle"
-  | "productCount";
-export type SortDir = "asc" | "desc";
 
 type ListParams = {
   q?: string;
   view?: "flat" | "tree";
   isActive?: boolean;
-
   limit?: number;
   offset?: number;
-
-  sortBy?: CategorySortBy;
-  sortDir?: SortDir;
-};
-
-type ListResponse = {
-  items: Category[];
-  pagination?: {
-    offset: number;
-    limit: number;
-    total: number;
-  };
 };
 
 function toCategory(c: any): Category {
@@ -54,39 +32,27 @@ function toCategory(c: any): Category {
         : typeof c?._count?.products === "number"
           ? c._count.products
           : 0,
-    createdAt: c?.createdAt ? String(c.createdAt) : undefined,
-    updatedAt: c?.updatedAt ? String(c.updatedAt) : undefined,
   };
 }
 
 export const CategoriesApi = {
-  async list(params: ListParams = {}): Promise<ListResponse> {
+  async list(params: ListParams = {}) {
+    // isActive backend’de destekleniyorsa gönder; desteklenmiyorsa UI filtreleriz
     const path = withQuery("/api/admin/categories", params as any);
     const r = await apiFetch<any>(path, { method: "GET" });
 
-    const rawItems: any[] =
+    const items: any[] =
       r?.items ?? r?.data ?? r?.categories ?? (Array.isArray(r) ? r : []);
 
-    const items = rawItems.map(toCategory);
+    const mapped = items.map(toCategory);
 
-    // backend filterlemese bile UI güvenlik filtresi (opsiyonel)
+    // Eğer backend isActive filtrelemiyorsa (yine de güvenli)
     const filtered =
       typeof params.isActive === "boolean"
-        ? items.filter((x) => !!x.isActive === params.isActive)
-        : items;
+        ? mapped.filter((x) => !!x.isActive === params.isActive)
+        : mapped;
 
-    const pagination =
-      r?.pagination && typeof r.pagination === "object"
-        ? {
-            offset: Number(r.pagination.offset ?? params.offset ?? 0),
-            limit: Number(
-              r.pagination.limit ?? params.limit ?? filtered.length ?? 0,
-            ),
-            total: Number(r.pagination.total ?? filtered.length ?? 0),
-          }
-        : undefined;
-
-    return { items: filtered, pagination };
+    return { items: filtered };
   },
 
   async get(id: string) {

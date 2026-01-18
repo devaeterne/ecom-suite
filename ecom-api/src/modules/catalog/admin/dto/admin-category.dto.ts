@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsUUID, Length, IsIn } from "class-validator";
+import {
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  IsIn,
+  IsBoolean,
+} from "class-validator";
+import { Transform } from "class-transformer";
 
 export class AdminCreateCategoryDto {
   @IsString()
@@ -12,6 +20,10 @@ export class AdminCreateCategoryDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class AdminUpdateCategoryDto {
@@ -28,6 +40,10 @@ export class AdminUpdateCategoryDto {
   @IsOptional()
   @IsUUID()
   parentId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 export class AdminCategoryListQueryDto {
   @IsOptional()
@@ -37,4 +53,14 @@ export class AdminCategoryListQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === true || value === false) return value;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return undefined; // gelmediyse
+  })
+  @IsBoolean()
+  isActive?: boolean;
 }

@@ -326,157 +326,210 @@
       "next": "Next"
     }
   },
-
-  "common": {
-    "sections": {
-      "catalog": "Catalog",
-      "sales": "Sales",
-      "operations": "Operations",
-      "system": "System"
+  "categories": {
+    "search": "Search categories...",
+    "empty": "No categories found.",
+    "actions": {
+      "new": "New category",
+      "search": "Search",
+      "clear": "Clear"
     },
-    "loading": "Loading…",
-    "save": "Save",
-    "saving": "Saving…",
-    "emptyDash": "—",
-    "close": "Close",
-    "cancel": "Cancel",
-    "edit": "Edit",
-    "delete": "Delete",
-    "active": "Active",
-    "inactive": "Inactive",
-    "new": "New"
-  },
-
-  "orders": {
-    "title": "Orders",
-    "subtitle": "Track orders, payments, and fulfillment status.",
-    "search": "Search orders...",
-    "filters": "Filters",
-
+    "delete": {
+      "title": "Delete category",
+      "subtitle": "This action cannot be undone. The category will be permanently removed. If the category is currently in use, deletion will not be allowed."
+    },
     "columns": {
-      "order": "Order",
-      "customer": "Customer",
-      "status": "Status",
-      "total": "Total",
-      "date": "Date",
-      "actions": "Actions"
+      "title": "Title",
+      "handle": "Handle",
+      "active": "Status",
+      "actions": "Actions",
+      "count": "Product Count"
     },
 
-    "status": {
-      "pending": "Pending",
-      "paid": "Paid",
-      "fulfilled": "Fulfilled",
-      "canceled": "Canceled",
-      "refunded": "Refunded"
+    "fields": {
+      "title": "Title",
+      "handle": "Handle",
+      "active": "Active"
     },
-
-    "row": {
-      "view": "View",
-      "refund": "Refund",
-      "cancel": "Cancel"
+    "placeholders": {
+      "title": "e.g. Electronics",
+      "handle": "e.g. electronics"
     },
-
-    "empty": {
-      "title": "No orders found",
-      "body": "Try adjusting your search or filters."
+    "hints": {
+      "title": "Displayed to admins and used for organization.",
+      "handle": "URL-safe identifier (slug)."
     },
-
-    "pagination": {
-      "prev": "Previous",
-      "next": "Next"
+    "new": {
+      "title": "New category",
+      "subtitle": "Create a new category for organizing products."
     },
-
-    "detail": {
-      "title": "Order details",
-      "subtitle": "Review items, payments, and fulfillment status.",
-
+    "edit": {
+      "title": "Edit category",
+      "subtitle": "Update category details and status."
+    },
+    "filters": {
+      "statusAll": "Status (all)"
+    },
+    "confirm": {
+      "deleteTitle": "Delete category",
+      "deleteBody": "This category will be permanently deleted. Continue?"
+    },
+    "notificationsCat": {
+      "saveFailed": "Category could not be saved.",
+      "deleteFailed": "Category could not be deleted.",
+      "toggleFailed": "Status update failed."
+    },
+    "common": {
       "sections": {
-        "summary": "Summary",
+        "catalog": "Catalog",
+        "sales": "Sales",
+        "operations": "Operations",
+        "system": "System"
+      },
+      "loading": "Loading…",
+      "save": "Save",
+      "saving": "Saving…",
+      "emptyDash": "—",
+      "close": "Close",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "active": "Active",
+      "inactive": "Inactive",
+      "new": "New"
+    },
+
+    "orders": {
+      "title": "Orders",
+      "subtitle": "Track orders, payments, and fulfillment status.",
+      "search": "Search orders...",
+      "filters": "Filters",
+
+      "columns": {
+        "order": "Order",
         "customer": "Customer",
-        "items": "Items",
-        "payment": "Payment",
-        "shipping": "Shipping",
-        "timeline": "Timeline"
-      },
-
-      "fields": {
-        "order_id": "Order ID",
         "status": "Status",
-        "created_at": "Created at",
-        "customer_name": "Customer",
-        "customer_email": "Email",
-        "total": "Total"
+        "total": "Total",
+        "date": "Date",
+        "actions": "Actions"
       },
 
-      "badges": {
+      "status": {
+        "pending": "Pending",
         "paid": "Paid",
-        "unpaid": "Unpaid",
         "fulfilled": "Fulfilled",
-        "unfulfilled": "Unfulfilled"
+        "canceled": "Canceled",
+        "refunded": "Refunded"
+      },
+
+      "row": {
+        "view": "View",
+        "refund": "Refund",
+        "cancel": "Cancel"
+      },
+
+      "empty": {
+        "title": "No orders found",
+        "body": "Try adjusting your search or filters."
+      },
+
+      "pagination": {
+        "prev": "Previous",
+        "next": "Next"
+      },
+
+      "detail": {
+        "title": "Order details",
+        "subtitle": "Review items, payments, and fulfillment status.",
+
+        "sections": {
+          "summary": "Summary",
+          "customer": "Customer",
+          "items": "Items",
+          "payment": "Payment",
+          "shipping": "Shipping",
+          "timeline": "Timeline"
+        },
+
+        "fields": {
+          "order_id": "Order ID",
+          "status": "Status",
+          "created_at": "Created at",
+          "customer_name": "Customer",
+          "customer_email": "Email",
+          "total": "Total"
+        },
+
+        "badges": {
+          "paid": "Paid",
+          "unpaid": "Unpaid",
+          "fulfilled": "Fulfilled",
+          "unfulfilled": "Unfulfilled"
+        }
       }
-    }
-  },
-
-  "settings": {
-    "tabs": {
-      "general": "General",
-      "localization": "Localization",
-      "tax": "Tax",
-      "notifications": "Notifications"
     },
 
-    "general": {
-      "title": "Store details",
-      "subtitle": "Basic information used across the admin panel.",
-      "name": "Store name",
-      "email": "Support email",
-      "phone": "Support phone"
+    "settings": {
+      "tabs": {
+        "general": "General",
+        "localization": "Localization",
+        "tax": "Tax",
+        "notifications": "Notifications"
+      },
+
+      "general": {
+        "title": "Store details",
+        "subtitle": "Basic information used across the admin panel.",
+        "name": "Store name",
+        "email": "Support email",
+        "phone": "Support phone"
+      },
+
+      "localization": {
+        "title": "Localization",
+        "subtitle": "Language, currency and formatting preferences.",
+        "default_language": "Default language",
+        "default_currency": "Default currency",
+        "timezone": "Timezone"
+      },
+
+      "tax": {
+        "title": "Tax settings",
+        "subtitle": "Configure tax behavior for your store.",
+        "inclusive": "Prices include tax",
+        "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
+      },
+
+      "notifications": {
+        "title": "Notifications",
+        "subtitle": "Control which events trigger notifications.",
+        "orders": "Order updates",
+        "low_stock": "Low stock alerts",
+        "saved": "Changes saved.",
+        "saveFailed": "Save failed.",
+        "loadFailed": "Failed to load data.",
+        "deleted": "Deleted.",
+        "deleteFailed": "Delete failed.",
+        "invalidAmount": "Invalid amount."
+      }
     },
 
-    "localization": {
-      "title": "Localization",
-      "subtitle": "Language, currency and formatting preferences.",
-      "default_language": "Default language",
-      "default_currency": "Default currency",
-      "timezone": "Timezone"
+    "auth": {
+      "login": {
+        "title": "Sign in",
+        "subtitle": "Use your admin credentials to access the backoffice.",
+        "email": "Email",
+        "password": "Password",
+        "submit": "Sign in",
+        "loading": "Signing in...",
+        "error": "Invalid email or password."
+      },
+      "logout": "Logout"
     },
-
-    "tax": {
-      "title": "Tax settings",
-      "subtitle": "Configure tax behavior for your store.",
-      "inclusive": "Prices include tax",
-      "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
-    },
-
     "notifications": {
-      "title": "Notifications",
-      "subtitle": "Control which events trigger notifications.",
-      "orders": "Order updates",
-      "low_stock": "Low stock alerts",
       "saved": "Changes saved.",
       "saveFailed": "Save failed.",
-      "loadFailed": "Failed to load data.",
-      "deleted": "Deleted.",
-      "deleteFailed": "Delete failed.",
-      "invalidAmount": "Invalid amount."
+      "delete": "Deleted"
     }
-  },
-
-  "auth": {
-    "login": {
-      "title": "Sign in",
-      "subtitle": "Use your admin credentials to access the backoffice.",
-      "email": "Email",
-      "password": "Password",
-      "submit": "Sign in",
-      "loading": "Signing in...",
-      "error": "Invalid email or password."
-    },
-    "logout": "Logout"
-  },
-  "notifications": {
-    "saved": "Changes saved.",
-    "saveFailed": "Save failed.",
-    "delete": "Deleted"
   }
 }

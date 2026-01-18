@@ -314,8 +314,23 @@ export class CatalogAdminService {
   async listCategories(tenantId: string, q: AdminCategoryListQueryDto) {
     const view = (q?.view ?? "flat") as "flat" | "tree";
 
-    const rows = await this.repo.listCategories(tenantId);
-    const mapped = rows.map((r) => mapCategory(r));
+    // ✅ query string -> boolean normalize
+    const raw = (q as any)?.isActive;
+    const isActive =
+      raw === undefined || raw === null
+        ? undefined
+        : raw === true || raw === "true"
+          ? true
+          : raw === false || raw === "false"
+            ? false
+            : undefined;
+
+    const rows = await this.repo.listCategories(tenantId, {
+      q: q?.q,
+      isActive, // ✅ artık boolean/undefined
+    });
+
+    const mapped = rows.map((r: any) => mapCategory(r));
 
     if (view === "flat") return { items: mapped };
 

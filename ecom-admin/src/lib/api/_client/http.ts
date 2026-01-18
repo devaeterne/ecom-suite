@@ -39,6 +39,14 @@ export type RequestOptions = {
   credentials?: RequestCredentials;
 };
 
+function toAbsUrl(path: string) {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+
+  const base = getApiBaseUrl();
+  if (path.startsWith("/")) return `${base}${path}`;
+  return `${base}/${path}`;
+}
+
 function isIdempotent(method?: HttpMethod) {
   const m = (method ?? "GET").toUpperCase();
   return m === "GET" || m === "HEAD" || m === "OPTIONS";
@@ -50,12 +58,9 @@ function isRefreshUrl(url: string) {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
-  const base = getApiBaseUrl();
-  const url = path.startsWith("http")
-    ? path
-    : `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+  const url = toAbsUrl(path);
 
   const doRequest = async () => {
     const method = options.method ?? "GET";

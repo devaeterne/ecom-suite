@@ -54,6 +54,13 @@ function tenantIdFrom(req: AppRequest): string {
   return requireTenantId(req as any);
 }
 
+function parseOptionalBool(v: unknown): boolean | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (v === true || v === "true") return true;
+  if (v === false || v === "false") return false;
+  return undefined;
+}
+
 @ApiTags("Catalog (Admin)")
 @ApiCookieAuth("adminAccessCookie")
 @Controller("admin")
@@ -93,9 +100,25 @@ export class CatalogAdminController {
   async listCategories(
     @Req() req: AppRequest,
     @Query() q: AdminCategoryListQueryDto,
+    @Query("isActive") isActiveRaw?: string, // 👈 string gelir
   ) {
     const tenantId = tenantIdFrom(req);
-    return this.service.listCategories(tenantId, q);
+    const isActive = parseOptionalBool(isActiveRaw);
+
+    console.log(
+      "[LIST] q =",
+      q,
+      "isActiveRaw =",
+      isActiveRaw,
+      "parsed =",
+      isActive,
+    );
+
+    return this.service.listCategories(tenantId, {
+      view: q?.view,
+      q: q?.q,
+      isActive,
+    });
   }
 
   @Get("categories/:id")
