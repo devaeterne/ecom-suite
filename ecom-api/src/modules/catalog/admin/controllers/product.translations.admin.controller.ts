@@ -21,6 +21,10 @@ import {
   AdminUpdateProductTranslationDto,
 } from "@/modules/catalog/admin/dto/admin.product.translation.dto";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/products")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class ProductTranslationsAdminController {
@@ -28,7 +32,7 @@ export class ProductTranslationsAdminController {
 
   @Get("/:id/translations")
   async list(@Req() req: Request, @Param("id") productId: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.list(tenantId, productId);
   }
 
@@ -36,9 +40,9 @@ export class ProductTranslationsAdminController {
   async create(
     @Req() req: Request,
     @Param("id") productId: string,
-    @Body() dto: AdminCreateProductTranslationDto
+    @Body() dto: AdminCreateProductTranslationDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.create(tenantId, productId, dto);
   }
 
@@ -47,9 +51,9 @@ export class ProductTranslationsAdminController {
     @Req() req: Request,
     @Param("id") productId: string,
     @Param("localeCode") localeCode: string,
-    @Body() dto: AdminUpdateProductTranslationDto
+    @Body() dto: AdminUpdateProductTranslationDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.update(tenantId, productId, localeCode, dto);
   }
 
@@ -57,9 +61,9 @@ export class ProductTranslationsAdminController {
   async remove(
     @Req() req: Request,
     @Param("id") productId: string,
-    @Param("localeCode") localeCode: string
+    @Param("localeCode") localeCode: string,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.delete(tenantId, productId, localeCode);
   }
 }

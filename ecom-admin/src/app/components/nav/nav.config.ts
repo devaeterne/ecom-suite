@@ -3,6 +3,7 @@ export type NavItem = {
   labelKey: string;
   titleKey: string;
   subtitleKey?: string;
+  children?: NavItem[];
 };
 
 export const NAV: NavItem[] = [
@@ -12,12 +13,48 @@ export const NAV: NavItem[] = [
     titleKey: "topbar.title.dashboard",
     subtitleKey: "pages.dashboards.subtitle",
   },
+
+  // ✅ Yeni şemsiye: Catalog
   {
-    href: "/products",
-    labelKey: "nav.products",
-    titleKey: "topbar.title.products",
-    subtitleKey: "pages.products.subtitle",
+    href: "/catalog",
+    labelKey: "nav.catalog",
+    titleKey: "topbar.title.catalog",
+    subtitleKey: "pages.catalog.subtitle",
+    children: [
+      {
+        href: "/products",
+        labelKey: "nav.products",
+        titleKey: "topbar.title.products",
+        subtitleKey: "pages.products.subtitle",
+      },
+      {
+        href: "/categories",
+        labelKey: "nav.categories",
+        titleKey: "topbar.title.categories",
+        subtitleKey: "pages.categories.subtitle",
+      },
+      {
+        href: "/collections",
+        labelKey: "nav.collections",
+        titleKey: "topbar.title.collections",
+        subtitleKey: "pages.collections.subtitle",
+      },
+      {
+        href: "/price-lists",
+        labelKey: "nav.price_lists",
+        titleKey: "topbar.title.price_lists",
+        subtitleKey: "pages.price_lists.subtitle",
+      },
+
+      {
+        href: "/tags",
+        labelKey: "nav.tags",
+        titleKey: "topbar.title.tags",
+        subtitleKey: "pages.tags.subtitle",
+      },
+    ],
   },
+
   {
     href: "/orders",
     labelKey: "nav.orders",
@@ -39,12 +76,22 @@ export const NAV: NavItem[] = [
 ];
 
 function matchesPath(pathname: string, href: string) {
-  // pathname örnek: "/en/products/123" -> locale strip'i Topbar/Sidebar tarafında zaten yapıyorsun
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+function flattenNav(items: NavItem[]): NavItem[] {
+  const out: NavItem[] = [];
+  for (const i of items) {
+    out.push(i);
+    if (i.children?.length) out.push(...flattenNav(i.children));
+  }
+  return out;
+}
+
 export function getTitleKeyFromPath(pathname: string) {
-  const hit = [...NAV]
+  const flat = flattenNav(NAV);
+
+  const hit = [...flat]
     .sort((a, b) => b.href.length - a.href.length)
     .find((i) => matchesPath(pathname, i.href));
 
@@ -52,7 +99,9 @@ export function getTitleKeyFromPath(pathname: string) {
 }
 
 export function getPageMetaFromPath(pathname: string) {
-  const hit = [...NAV]
+  const flat = flattenNav(NAV);
+
+  const hit = [...flat]
     .sort((a, b) => b.href.length - a.href.length)
     .find((i) => matchesPath(pathname, i.href));
 

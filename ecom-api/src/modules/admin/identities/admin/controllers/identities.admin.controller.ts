@@ -8,6 +8,7 @@ import {
   Req,
   UseGuards,
   HttpCode,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
@@ -17,6 +18,12 @@ import { IdentityCreateDto } from "@/modules/admin/identities/common/dto/identit
 import { IdentityPatchDto } from "@/modules/admin/identities/common/dto/identity-patch.dto";
 import { presentIdentity } from "@/modules/admin/identities/common/mappers/identity.presenter";
 
+function requireTenantId(req: any): string {
+  const tenantId = req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId;
+  if (!tenantId) throw new UnauthorizedException("Tenant context missing");
+  return String(tenantId);
+}
+
 @Controller("admin/identities")
 @UseGuards(AdminAuthGuard, PermissionGuard)
 export class IdentitiesAdminController {
@@ -25,34 +32,36 @@ export class IdentitiesAdminController {
   @Get()
   @RequirePermission("admin:identities:read")
   async list(@Req() req: any) {
-    const items = await this.svc.list(req.tenant.id);
+    const tenantId = requireTenantId(req);
+    const items = await this.svc.list(tenantId);
     return items.map(presentIdentity);
   }
 
   @Post()
-  @HttpCode(200)
+  @HttpCode(200) // P1: 201
   @RequirePermission("admin:identities:create")
   async create(@Req() req: any, @Body() dto: IdentityCreateDto) {
-    const u = await this.svc.create(req.tenant.id, dto);
+    const tenantId = requireTenantId(req);
+    const u = await this.svc.create(tenantId, dto);
     return presentIdentity(u);
   }
 
-  // Şimdilik create ile koru (seed’de update yok, hızlı geçiş)
   @Patch(":id")
-  @RequirePermission("admin:identities:create")
+  @RequirePermission("admin:identities:create") // P1: identities:update
   async patch(
     @Req() req: any,
     @Param("id") id: string,
-    @Body() dto: IdentityPatchDto
+    @Body() dto: IdentityPatchDto,
   ) {
-    const u = await this.svc.patch(req.tenant.id, id, dto);
+    const tenantId = requireTenantId(req);
+    const u = await this.svc.patch(tenantId, id, dto);
     return presentIdentity(u);
   }
 
-  // Şimdilik create ile koru (seed’de invite yok)
   @Post(":id/invite")
-  @RequirePermission("admin:identities:write")
+  @RequirePermission("admin:identities:write") // P1: identities:invite
   async invite(@Req() req: any, @Param("id") userId: string) {
-    return this.svc.invite(req.tenant.id, userId);
+    const tenantId = requireTenantId(req);
+    return this.svc.invite(tenantId, userId);
   }
 }

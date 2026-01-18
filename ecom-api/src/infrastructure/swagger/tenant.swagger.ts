@@ -6,4 +6,8 @@ export const ApiTenantHeader = () =>
     required: true,
     description:
       "Tenant scope header. UUID (tenantId) or tenant code (e.g. 'acme'). Required by TenantHeaderGuard.",
+    schema: {
+      type: "string",
+      example: "acme",
+    },
   });

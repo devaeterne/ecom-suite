@@ -1,3 +1,4 @@
+// src/modules/sessions/common/prisma/sessions.repo.ts
 import { Injectable, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import crypto from "crypto";
@@ -38,6 +39,20 @@ export function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex"); // 64 char
 }
 
+const SESSION_SELECT = {
+  id: true,
+  tenantId: true,
+  identityId: true,
+  typ: true,
+  tokenHash: true,
+  expiresAt: true,
+  revokedAt: true,
+  familyId: true,
+  rotatedToHash: true,
+  rotatedFromHash: true,
+  reuseDetectedAt: true,
+} as const;
+
 @Injectable()
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -50,6 +65,7 @@ export class SessionsRepository {
     const { tokenHash, typ } = params;
     return this.prisma.session.findFirst({
       where: { tokenHash, typ },
+      select: SESSION_SELECT,
     });
   }
 
@@ -63,6 +79,7 @@ export class SessionsRepository {
         revokedAt: null,
         expiresAt: { gt: now },
       },
+      select: SESSION_SELECT,
     });
   }
 
@@ -94,6 +111,7 @@ export class SessionsRepository {
       data: { revokedAt: now },
     });
   }
+
   async findByIdForTenant(params: { tenantId: string; sessionId: string }) {
     const { tenantId, sessionId } = params;
 
@@ -102,6 +120,7 @@ export class SessionsRepository {
       select: { id: true, identityId: true, revokedAt: true },
     });
   }
+
   async listActiveByIdentity(params: {
     tenantId: string;
     identityId: string;
@@ -122,6 +141,7 @@ export class SessionsRepository {
       },
       take,
       orderBy: { createdAt: orderBy },
+      select: SESSION_SELECT,
     });
   }
 
@@ -245,7 +265,7 @@ export class SessionsRepository {
           if (res.count !== 1) {
             // stale token / already rotated / expired / revoked
             throw new ForbiddenException(
-              "invalid or already-used refresh token"
+              "invalid or already-used refresh token",
             );
           }
 

@@ -1,3 +1,5 @@
+// src/modules/admin/tenant/admin/controllers/tenant.admin.controller.ts
+
 import {
   Body,
   Controller,
@@ -16,30 +18,20 @@ import { TenantService } from "@/modules/admin/tenant/admin/services/tenant.serv
 import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
 import { presentTenant } from "@/modules/admin/tenant/common/mappers/tenant.presenter";
 
-export function getTenantId(req: any): string {
-  // AdminAuthGuard sonrası bunlar dolu olur:
-  const fromToken = req?.user?.tenantId;
-  if (fromToken) return fromToken;
-
-  const fromCtx = req?.tenant?.id ?? req?.tenantId;
-  if (fromCtx) return fromCtx;
-
-  const h = req?.headers ?? {};
-  const fromHeader =
-    h["x-tenant-id"] ??
-    h["x-tenantid"] ??
-    h["x-tenant"] ??
-    h["X-Tenant-Id"] ??
-    h["X-Tenant"] ??
-    null;
-
-  if (fromHeader) return String(fromHeader);
-
-  throw new ForbiddenException("Tenant or user context missing");
+/**
+ * Admin tarafında tenantId kaynağı:
+ * - AdminAuthGuard (ve/veya tenant middleware/guard) tenant context'i set eder.
+ * - Controller'da header parse ederek yeni bir surface açmayalım.
+ */
+export function requireAdminTenantId(req: any): string {
+  const tenantId = req?.tenant?.id ?? req?.user?.tenantId ?? req?.tenantId;
+  if (!tenantId) {
+    throw new ForbiddenException("Tenant context missing");
+  }
+  return String(tenantId);
 }
 
 @Controller("admin/tenants")
-// ✅ RBAC isteyen admin endpoint’lerde AdminAuthGuard kullan
 @UseGuards(AdminAuthGuard, PermissionGuard)
 export class TenantAdminController {
   constructor(private readonly svc: TenantService) {}
@@ -47,7 +39,7 @@ export class TenantAdminController {
   @Get("me")
   @RequirePermission("admin:tenant:read")
   async me(@Req() req: any) {
-    const tenantId = getTenantId(req);
+    const tenantId = requireAdminTenantId(req);
     const t = await this.svc.getMe(tenantId);
     return presentTenant(t);
   }
@@ -55,7 +47,7 @@ export class TenantAdminController {
   @Patch("me")
   @RequirePermission("admin:tenant:update")
   async patchMe(@Req() req: any, @Body() dto: TenantMePatchDto) {
-    const tenantId = getTenantId(req);
+    const tenantId = requireAdminTenantId(req);
     const t = await this.svc.patchMe(tenantId, dto);
     return presentTenant(t);
   }

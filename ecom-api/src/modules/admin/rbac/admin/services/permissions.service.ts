@@ -17,6 +17,17 @@ export class PermissionsService implements OnModuleInit {
    * - Permission.key unique olduğu için upsert ile güvenli
    * - tenantId = null (global) tutuyoruz
    */
+  async listForTenant(tenantId: string) {
+    // global (tenantId: null) + tenant-specific (tenantId)
+    return this.prisma.permission.findMany({
+      where: {
+        deletedAt: null,
+        OR: [{ tenantId: null }, { tenantId }],
+      },
+      orderBy: { key: "asc" },
+    });
+  }
+
   async ensureSeeded() {
     for (const p of SEED_PERMISSIONS) {
       await this.prisma.permission.upsert({

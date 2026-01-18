@@ -8,6 +8,10 @@ import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { AdminReplaceProductCategoriesDto } from "@/modules/catalog/admin/dto/admin.product.categories.dto";
 import { ProductCategoriesAdminService } from "@/modules/catalog/admin/services/product.categories.admin.service";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/products")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class ProductCategoriesAdminController {
@@ -17,13 +21,20 @@ export class ProductCategoriesAdminController {
   async replaceCategories(
     @Req() req: Request,
     @Param("id") productId: string,
-    @Body() dto: AdminReplaceProductCategoriesDto
+    @Body() dto: AdminReplaceProductCategoriesDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
+
+    const categoryIds = Array.from(
+      new Set(
+        (dto.categoryIds ?? []).map((x) => String(x).trim()).filter(Boolean),
+      ),
+    );
+
     return this.service.replaceCategories({
       tenantId,
       productId,
-      categoryIds: dto.categoryIds ?? [],
+      categoryIds,
     });
   }
 }

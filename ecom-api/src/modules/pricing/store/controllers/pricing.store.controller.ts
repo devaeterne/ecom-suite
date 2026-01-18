@@ -1,15 +1,10 @@
-// src/modules/pricing/store/controllers/pricing.store.controller.ts
-import { Body, Controller, Get, Post, Query, Req, Res } from "@nestjs/common";
+import { Controller, Get, Query, Req, Res, Post, Body } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { PricingStoreService } from "../services/pricing.store.service";
-import { getTenantIdOrThrow } from "@/modules/cart/common/policies/tenant.policy";
-import { PrismaService } from "@/prisma/prisma.service";
+import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
+import { baseCookieOptions } from "@/infrastructure/http/cookies";
 
-import {
-  getCartId,
-  setCartCookie,
-} from "@/modules/cart/common/policies/cart.cookies";
 import {
   getPriceListId,
   PRICE_LIST_COOKIE,
@@ -21,35 +16,25 @@ export class SetCartPriceListDto {
 
 function setPriceListCookie(res: Response, priceListId: string | null) {
   if (!priceListId) {
-    res.clearCookie(PRICE_LIST_COOKIE, { path: "/" });
+    res.clearCookie(PRICE_LIST_COOKIE, baseCookieOptions());
     return;
   }
 
-  res.cookie(PRICE_LIST_COOKIE, priceListId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false, // prod: true
-    path: "/",
-  });
+  res.cookie(PRICE_LIST_COOKIE, priceListId, baseCookieOptions());
 }
 
-@Controller("/api/store")
+@Controller("/store")
 export class PricingStoreController {
   constructor(private readonly pricing: PricingStoreService) {}
 
-  /**
-   * Debug: unit price çöz
-   * GET /api/store/pricing/variant-price?variantId=...&currencyCode=EUR&quantity=3
-   * Header optional: x-price-list-id
-   */
   @Get("/pricing/variant-price")
   async resolveVariantPrice(
     @Req() req: Request,
     @Query("variantId") variantId: string,
     @Query("currencyCode") currencyCode = "EUR",
-    @Query("quantity") quantityRaw = "1"
+    @Query("quantity") quantityRaw = "1",
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const priceListId = getPriceListId(req);
     const quantity = Math.max(1, Number(quantityRaw || 1));
 
@@ -62,24 +47,21 @@ export class PricingStoreController {
         currencyCode,
         quantity,
         priceListId,
-      }
+      },
     );
 
     return { priceListId, unit };
   }
 
-  /**
-   * POST /api/store/cart/price-list  { priceListId: "..." | null }
-   * - cart cookie yoksa da cookie set eder (cart oluşunca devreye girer)
-   * - cart varsa metadata'ya da iliştirir (opsiyonel, ama faydalı)
-   */
+  // Bu blok şu an comment içinde; açacaksan burada dursun:
+  /*
   @Post("/cart/price-list")
   async setCartPriceList(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Body() dto: SetCartPriceListDto
+    @Body() dto: SetCartPriceListDto,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
 
     setPriceListCookie(res, dto.priceListId ?? null);
@@ -91,10 +73,11 @@ export class PricingStoreController {
     await this.pricing.attachPriceListToCart(
       tenantId,
       cartId,
-      dto.priceListId ?? null
+      dto.priceListId ?? null,
     );
 
     setCartCookie(res, cartId);
     return { ok: true, cartId, priceListId: dto.priceListId ?? null };
   }
+  */
 }

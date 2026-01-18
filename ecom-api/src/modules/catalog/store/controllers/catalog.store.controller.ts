@@ -4,9 +4,10 @@ import { Request } from "express";
 import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { CatalogStoreService } from "@/modules/catalog/store/services/catalog.store.service";
 import { PaginationQueryDto } from "@/modules/catalog/common/dto/pagination.dto";
+import { StoreAuthGuard } from "@/infrastructure/auth/guards/store-auth.guard";
 
 @Controller("/store")
-@UseGuards(TenantHeaderGuard)
+@UseGuards(TenantHeaderGuard, StoreAuthGuard)
 export class CatalogStoreController {
   constructor(private readonly service: CatalogStoreService) {}
 
@@ -15,7 +16,7 @@ export class CatalogStoreController {
     const tenantId = (req as any).tenantId as string;
     return this.service.listCategories(
       tenantId,
-      tree === "1" || tree === "true"
+      tree === "1" || tree === "true",
     );
   }
 
@@ -43,7 +44,7 @@ export class CatalogStoreController {
     @Query() pag: PaginationQueryDto,
     @Query("q") q?: string,
     @Query("categoryId") categoryId?: string,
-    @Query("collectionId") collectionId?: string
+    @Query("collectionId") collectionId?: string,
   ) {
     const tenantId = (req as any).tenantId as string;
     return this.service.listProducts(tenantId, {

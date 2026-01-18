@@ -10,6 +10,12 @@ import { PrismaService } from "@/prisma/prisma.service";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { RoleScope } from "@prisma/client";
 
+function requireTenantId(req: any): string {
+  const tenantId = req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId;
+  if (!tenantId) throw new UnauthorizedException("Missing tenant context");
+  return String(tenantId);
+}
+
 @Controller("admin/rbac")
 @UseGuards(AdminAuthGuard)
 export class RbacBootstrapAdminController {
@@ -21,13 +27,10 @@ export class RbacBootstrapAdminController {
       throw new ForbiddenException("Bootstrap disabled in production");
     }
 
-    const tenantId: string | undefined = req.tenant?.id ?? req.user?.tenantId;
-    if (!tenantId) throw new UnauthorizedException("Missing tenant context");
+    const tenantId = requireTenantId(req);
 
-    // Guard sonrası req.user.id = userId olmalı
     let userId: string | undefined = req.user?.id;
 
-    // Safety: eğer guard eskiyse veya farklı akış varsa identityId'den resolve et
     if (!userId) {
       const identityId: string | undefined =
         req.user?.sub ?? req.user?.identityId;
@@ -43,7 +46,6 @@ export class RbacBootstrapAdminController {
       userId = ident.userId;
     }
 
-    // 1) Ensure Owner role
     let owner = await this.prisma.role.findFirst({
       where: { tenantId, name: "owner", deletedAt: null },
     });
@@ -60,24 +62,22 @@ export class RbacBootstrapAdminController {
       });
     }
 
-    // 2) Read global permissions
     const perms = await this.prisma.permission.findMany({
       where: { tenantId: null, deletedAt: null },
       select: { id: true, key: true },
       orderBy: { key: "asc" },
     });
 
-    // 3) Read existing links (including soft-deleted)
-    const existing = await this.prisma.rolePermissionLink.findMany({
-      where: { tenantId, roleId: owner.id },
-      select: { id: true, permissionId: true, deletedAt: true },
-    });
-
-    const existingByPermId = new Map(existing.map((l) => [l.permissionId, l]));
-
-    // 4) Transaction: undelete existing links, create missing links, ensure user role
     await this.prisma.$transaction(async (tx) => {
-      // 4a) ensure each permission link active
+      const existing = await tx.rolePermissionLink.findMany({
+        where: { tenantId, roleId: owner!.id },
+        select: { id: true, permissionId: true, deletedAt: true },
+      });
+
+      const existingByPermId = new Map(
+        existing.map((l) => [l.permissionId, l]),
+      );
+
       for (const p of perms) {
         const link = existingByPermId.get(p.id);
 
@@ -100,7 +100,6 @@ export class RbacBootstrapAdminController {
         }
       }
 
-      // 4b) ensure user has Owner role
       await tx.userRoleLink.upsert({
         where: {
           tenantId_userId_roleId: {

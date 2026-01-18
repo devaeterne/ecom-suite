@@ -1,5 +1,5 @@
-// src/modules/orders/store/controllers/orders.store.controller.ts
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -7,7 +7,6 @@ import {
   Query,
   Req,
   UseGuards,
-  Body,
 } from "@nestjs/common";
 
 import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
@@ -18,7 +17,7 @@ import { ListOrdersQueryDto } from "@/modules/orders/store/dto/list-orders.query
 import { CreateOrderFromCheckoutDto } from "@/modules/orders/store/dto/create-order-from-checkout.dto";
 
 @UseGuards(StoreAccessGuard)
-@Controller("store/orders")
+@Controller("/store/orders")
 export class OrdersStoreController {
   constructor(private readonly svc: OrdersStoreService) {}
 
@@ -27,15 +26,15 @@ export class OrdersStoreController {
     return this.svc.list(req, query);
   }
 
-  @Get(":id")
+  @Get("/:id")
   detail(@Req() req: StoreAuthContext, @Param("id") id: string) {
     return this.svc.detail(req, id);
   }
 
-  @Post("from-checkout")
+  @Post("/from-checkout")
   createFromCheckout(
     @Req() req: StoreAuthContext,
-    @Body() dto: CreateOrderFromCheckoutDto
+    @Body() dto: CreateOrderFromCheckoutDto,
   ) {
     return this.svc.createFromCheckout(req, dto);
   }

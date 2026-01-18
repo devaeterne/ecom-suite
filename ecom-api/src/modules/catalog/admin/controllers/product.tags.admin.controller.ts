@@ -8,18 +8,23 @@ import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { AdminReplaceProductTagsDto } from "@/modules/catalog/admin/dto/admin.product.tag.dto";
 import { ProductTagsAdminService } from "@/modules/catalog/admin/services/product.tags.admin.service";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/products")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class ProductTagsAdminController {
   constructor(private readonly service: ProductTagsAdminService) {}
 
-  @Post("/:id/tags")
+  @Post("/:productId/tags")
   async replaceTags(
     @Req() req: Request,
-    @Param("id") productId: string,
-    @Body() dto: AdminReplaceProductTagsDto
+    @Param("productId") productId: string,
+    @Body() dto: AdminReplaceProductTagsDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
+
     return this.service.replaceTags({
       tenantId,
       productId,

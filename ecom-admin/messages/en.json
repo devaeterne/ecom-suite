@@ -6,10 +6,15 @@
 
   "nav": {
     "dashboards": "Dashboards",
+    "catalog": "Catalog",
     "products": "Products",
+    "categories": "Categories",
+    "collections": "Collections",
+    "price_lists": "Price lists",
+    "tags": "Tags",
     "orders": "Orders",
-    "settings": "Settings",
-    "inventory": "Inventory"
+    "inventory": "Inventory",
+    "settings": "Settings"
   },
 
   "topbar": {
@@ -20,10 +25,15 @@
     },
     "title": {
       "dashboard": "Dashboard",
+      "catalog": "Catalog",
       "products": "Products",
+      "categories": "Categories",
+      "collections": "Collections",
+      "price_lists": "Price lists",
       "orders": "Orders",
+      "inventory": "Inventory",
       "settings": "Settings",
-      "inventory": "Inventory"
+      "tags": "Tags"
     },
     "menu": {
       "profile": "Profile",
@@ -51,7 +61,21 @@
     "dashboards": {
       "subtitle": "High-level overview of the admin panel."
     },
-
+    "catalog": {
+      "subtitle": "Manage products, categories, collections and pricing from a single place."
+    },
+    "categories": {
+      "title": "Categories",
+      "subtitle": "Organize products using hierarchical categories."
+    },
+    "collections": {
+      "title": "Collections",
+      "subtitle": "Group products into curated collections."
+    },
+    "price_lists": {
+      "title": "Price lists",
+      "subtitle": "Manage conditional and campaign-based pricing."
+    },
     "product_detail": {
       "title": "Product",
       "subtitle": "Manage details, variants, inventory, media, and translations.",
@@ -304,6 +328,12 @@
   },
 
   "common": {
+    "sections": {
+      "catalog": "Catalog",
+      "sales": "Sales",
+      "operations": "Operations",
+      "system": "System"
+    },
     "loading": "Loading…",
     "save": "Save",
     "saving": "Saving…",

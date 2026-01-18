@@ -17,7 +17,7 @@ export function getTenantHeaderValue(req: Request): string | null {
 export function isUuidLike(v: string): boolean {
   // 8-4-4-4-12
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    v
+    v,
   );
 }
 
@@ -35,11 +35,5 @@ export function requireTenantId(req: any): string {
     throw new BadRequestException("Tenant context missing");
   }
 
-  return tenantId;
-}
-// örnek implementasyon (sende zaten benzeri vardır)
-export function getTenantIdOrThrow(req: any): string {
-  const tenantId = req?.tenant?.id ?? req?.tenantId; // projendeki standarda göre
-  if (!tenantId) throw new Error("Tenant not resolved on request");
   return tenantId;
 }

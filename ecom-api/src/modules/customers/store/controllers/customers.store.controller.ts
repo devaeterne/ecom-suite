@@ -1,4 +1,3 @@
-// src/modules/customers/store/controllers/customers.store.controller.ts
 import {
   Body,
   Controller,
@@ -19,7 +18,7 @@ import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access
 import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 
 @UseGuards(StoreAccessGuard)
-@Controller("store/customers")
+@Controller("/store/customers")
 export class CustomersStoreController {
   constructor(private readonly svc: CustomersStoreService) {}
 
@@ -47,7 +46,7 @@ export class CustomersStoreController {
   updateAddress(
     @Req() req: StoreAuthContext,
     @Param("id") id: string,
-    @Body() dto: UpsertAddressDto
+    @Body() dto: UpsertAddressDto,
   ) {
     return this.svc.updateAddress(req, id, dto);
   }

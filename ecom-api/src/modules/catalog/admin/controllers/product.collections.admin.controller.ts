@@ -8,6 +8,10 @@ import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { AdminReplaceProductCollectionsDto } from "@/modules/catalog/admin/dto/admin.product.collections.dto";
 import { ProductCollectionsAdminService } from "@/modules/catalog/admin/services/product.collections.admin.service";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/products")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class ProductCollectionsAdminController {
@@ -17,13 +21,20 @@ export class ProductCollectionsAdminController {
   async replaceCollections(
     @Req() req: Request,
     @Param("id") productId: string,
-    @Body() dto: AdminReplaceProductCollectionsDto
+    @Body() dto: AdminReplaceProductCollectionsDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
+
+    const collectionIds = Array.from(
+      new Set(
+        (dto.collectionIds ?? []).map((x) => String(x).trim()).filter(Boolean),
+      ),
+    );
+
     return this.service.replaceCollections({
       tenantId,
       productId,
-      collectionIds: dto.collectionIds ?? [],
+      collectionIds,
     });
   }
 }

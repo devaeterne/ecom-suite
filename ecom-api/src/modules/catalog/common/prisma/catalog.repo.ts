@@ -1,57 +1,42 @@
+// src/modules/catalog/common/prisma/catalog.repo.ts
 import { Injectable } from "@nestjs/common";
+import { Prisma, ProductStatus } from "@prisma/client";
 import { PrismaService } from "@/prisma/prisma.service";
-import { includes } from "zod";
+
+type LocaleFallback = {
+  requested?: string | null;
+  fallback?: string | null; // e.g. "en"
+};
 
 type ListProductsArgs = {
   tenantId: string;
   q?: string;
-  status?: "draft" | "published" | "archived"; // ✅ eklendi
+  status?: ProductStatus; // "draft" | "published" | "archived"
   categoryId?: string;
   collectionId?: string;
   offset: number;
   limit: number;
   publishedOnly: boolean;
+
   locale?: LocaleFallback;
-  includeTags?: boolean; // ✅ yeni
-  includeCollections?: boolean; // ✅ opsiyonel
-  includeCategoryTranslations?: boolean; // ✅ opsiyonel ama işini kolaylaştırır
-  includeProductTranslations?: boolean; // ✅
+
+  includeTags?: boolean;
+  includeCollections?: boolean;
+  includeCategoryTranslations?: boolean;
+  includeProductTranslations?: boolean;
 };
 
-type LocaleFallback = {
-  requested?: string | null;
-  fallback?: string | null; // örn: "en"
-};
-
-function toLocaleIn(
+function uniqLocales(
   requested?: string | null,
-  fallback?: string | null
+  fallback?: string | null,
 ): string[] {
   return Array.from(
     new Set(
       [requested, fallback].filter(
-        (x): x is string => typeof x === "string" && x.trim().length > 0
-      )
-    )
+        (x): x is string => typeof x === "string" && x.trim().length > 0,
+      ),
+    ),
   );
-}
-
-// Basit fallback zinciri: requested -> fallback -> base
-function pickLocalized<T extends { localeCode: string }>(
-  items: T[],
-  requested?: string | null,
-  fallback?: string | null
-): T | null {
-  if (!items?.length) return null;
-  if (requested) {
-    const hit = items.find((x) => x.localeCode === requested);
-    if (hit) return hit;
-  }
-  if (fallback) {
-    const hit = items.find((x) => x.localeCode === fallback);
-    if (hit) return hit;
-  }
-  return items[0] ?? null;
 }
 
 @Injectable()
@@ -63,11 +48,12 @@ export class CatalogRepo {
   }
 
   // =========================================================
-  // Categories (ProductCategory)  ✅ deletedAt YOK -> HARD DELETE
+  // Categories (ProductCategory) — HARD DELETE
   // =========================================================
+
   async hasCategoryChildren(
     tenantId: string,
-    categoryId: string
+    categoryId: string,
   ): Promise<boolean> {
     const n = await this.prisma.productCategory.count({
       where: { tenantId, parentId: categoryId },
@@ -83,7 +69,7 @@ export class CatalogRepo {
         ? {
             include: {
               productCategoryTranslations: {
-                where: { tenantId, localeCode }, // ✅ direkt string
+                where: { tenantId, localeCode },
                 take: 1,
               },
             },
@@ -98,9 +84,16 @@ export class CatalogRepo {
     });
   }
 
+  async getCategoryParentRef(tenantId: string, id: string) {
+    return this.prisma.productCategory.findFirst({
+      where: { tenantId, id },
+      select: { id: true, parentId: true },
+    });
+  }
+
   async isCategoryInUse(
     tenantId: string,
-    categoryId: string
+    categoryId: string,
   ): Promise<boolean> {
     const n = await this.prisma.productCategoryLink.count({
       where: { tenantId, categoryId },
@@ -110,7 +103,7 @@ export class CatalogRepo {
 
   async adminCreateCategory(
     tenantId: string,
-    data: { name: string; handle: string; parentId?: string | null }
+    data: { name: string; handle: string; parentId?: string | null },
   ) {
     return this.prisma.productCategory.create({
       data: {
@@ -119,13 +112,6 @@ export class CatalogRepo {
         handle: data.handle,
         parentId: data.parentId ?? null,
       },
-    });
-  }
-  // ✅ minimal select: cycle guard için
-  async getCategoryParentRef(tenantId: string, id: string) {
-    return this.prisma.productCategory.findFirst({
-      where: { tenantId, id },
-      select: { id: true, parentId: true },
     });
   }
 
@@ -138,34 +124,41 @@ export class CatalogRepo {
       parentId?: string | null;
       rank?: number;
       isActive?: boolean;
-      metadata?: any;
-    }
+      metadata?: Prisma.InputJsonValue | null;
+    },
   ) {
     return this.prisma.productCategory.update({
       where: { tenantId_id: { tenantId, id } },
       data: {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.handle !== undefined ? { handle: data.handle } : {}),
-        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
         ...(data.rank !== undefined ? { rank: data.rank } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-        ...(data.metadata !== undefined ? { metadata: data.metadata } : {}),
+        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
+        ...(data.metadata !== undefined
+          ? {
+              metadata: (data.metadata === null
+                ? Prisma.JsonNull
+                : data.metadata) as any,
+            }
+          : {}),
       },
     });
   }
 
   async adminDeleteCategory(tenantId: string, id: string) {
+    // tenant-safe
     return this.prisma.productCategory.delete({
       where: { tenantId_id: { tenantId, id } },
     });
   }
 
   // =========================================================
-  // Products (CatalogProduct) ✅ deletedAt VAR -> SOFT DELETE
+  // Products (CatalogProduct) — SOFT DELETE
   // =========================================================
 
   async listProducts(
-    args: ListProductsArgs
+    args: ListProductsArgs,
   ): Promise<{ items: any[]; total: number }> {
     const {
       tenantId,
@@ -183,11 +176,12 @@ export class CatalogRepo {
       locale,
     } = args;
 
-    const requested = locale?.requested ?? null;
-    const fallback = locale?.fallback ?? null;
-    const localeIn = toLocaleIn(requested, fallback);
+    const localeIn = uniqLocales(
+      locale?.requested ?? null,
+      locale?.fallback ?? null,
+    );
 
-    const where: any = {
+    const where: Prisma.CatalogProductWhereInput = {
       tenantId,
       deletedAt: null,
       ...(publishedOnly ? { status: "published" } : {}),
@@ -206,12 +200,12 @@ export class CatalogRepo {
         : {}),
     };
 
-    const include: any = {
+    const include: Prisma.CatalogProductInclude = {
       variants: true,
       categories: {
         include: {
-          category: {
-            ...(includeCategoryTranslations && localeIn.length
+          category:
+            includeCategoryTranslations && localeIn.length
               ? {
                   include: {
                     productCategoryTranslations: {
@@ -219,8 +213,7 @@ export class CatalogRepo {
                     },
                   },
                 }
-              : {}),
-          },
+              : true,
         },
       },
       ...(includeCollections
@@ -247,16 +240,14 @@ export class CatalogRepo {
       }),
     ]);
 
-    // 1) VariantId listesi
     const variantIds = Array.from(
       new Set(
         items.flatMap((p: any) =>
-          Array.isArray(p.variants) ? p.variants.map((v: any) => v.id) : []
-        )
-      )
+          Array.isArray(p.variants) ? p.variants.map((v: any) => v.id) : [],
+        ),
+      ),
     );
 
-    // 2) Variant yoksa stok 0
     if (variantIds.length === 0) {
       return {
         total,
@@ -264,7 +255,6 @@ export class CatalogRepo {
       };
     }
 
-    // 3) Inventory aggregate: available = sum(stocked) - sum(reserved)
     const invAgg = await this.prisma.inventoryLevel.groupBy({
       by: ["variantId"],
       where: {
@@ -279,16 +269,15 @@ export class CatalogRepo {
       invAgg.map((x: any) => [
         x.variantId,
         (x._sum.stockedQuantity ?? 0) - (x._sum.reservedQuantity ?? 0),
-      ])
+      ]),
     );
 
-    // 4) Product bazında topla
     const itemsWithStock = items.map((p: any) => {
       const stockAvailable = Array.isArray(p.variants)
         ? p.variants.reduce(
             (acc: number, v: any) =>
               acc + (availableByVariantId.get(v.id) ?? 0),
-            0
+            0,
           )
         : 0;
 
@@ -302,11 +291,12 @@ export class CatalogRepo {
     tenantId: string,
     id: string,
     publishedOnly: boolean,
-    locale?: LocaleFallback
+    locale?: LocaleFallback,
   ) {
-    const requested = locale?.requested ?? null;
-    const fallback = locale?.fallback ?? null;
-    const localeIn = toLocaleIn(requested, fallback);
+    const localeIn = uniqLocales(
+      locale?.requested ?? null,
+      locale?.fallback ?? null,
+    );
 
     return this.prisma.catalogProduct.findFirst({
       where: {
@@ -372,7 +362,7 @@ export class CatalogRepo {
         barcode?: string | null;
         isActive?: boolean;
       }>;
-    }
+    },
   ) {
     const categoryIds = data.categoryIds ?? [];
     const collectionIds = data.collectionIds ?? [];
@@ -387,8 +377,9 @@ export class CatalogRepo {
           subtitle: data.subtitle ?? null,
           description: data.description ?? null,
           status: (data.status as any) ?? "draft",
-          publishedAt: (data.status === "published" ? this.now() : null) as any,
+          publishedAt: data.status === "published" ? this.now() : null,
         },
+        select: { id: true },
       });
 
       if (categoryIds.length) {
@@ -413,8 +404,6 @@ export class CatalogRepo {
         });
       }
 
-      // ✅ VARIANTS: create (deterministic)
-      // Policy: variants yoksa default 1 tane aç (testler için stabil)
       const toCreate =
         variants.length > 0
           ? variants
@@ -454,34 +443,39 @@ export class CatalogRepo {
       status: "draft" | "published";
       categoryIds: string[];
       collectionIds: string[];
-    }>
+    }>,
   ) {
     const categoryIds = data.categoryIds ?? null; // null => dokunma
     const collectionIds = data.collectionIds ?? null; // null => dokunma
 
     await this.prisma.$transaction(async (tx) => {
+      // ✅ tenant-safe update
       await tx.catalogProduct.update({
-        where: { id },
+        where: { tenantId_id: { tenantId, id } },
         data: {
-          title: data.title ?? undefined,
-          handle: data.handle ?? undefined,
-          subtitle: data.subtitle ?? undefined,
-          description: data.description ?? undefined,
-          rank: data.rank ?? undefined,
-          seoTitle: data.seoTitle ?? undefined,
-          seoDescription: data.seoDescription ?? undefined,
-          searchKeywords: data.searchKeywords ?? undefined,
-          status: (data.status as any) ?? undefined,
-          publishedAt:
-            data.status === "published"
-              ? this.now()
-              : data.status === "draft"
-              ? null
-              : undefined,
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.handle !== undefined ? { handle: data.handle } : {}),
+          ...(data.subtitle !== undefined ? { subtitle: data.subtitle } : {}),
+          ...(data.description !== undefined
+            ? { description: data.description }
+            : {}),
+          ...(data.rank !== undefined ? { rank: data.rank } : {}),
+          ...(data.seoTitle !== undefined ? { seoTitle: data.seoTitle } : {}),
+          ...(data.seoDescription !== undefined
+            ? { seoDescription: data.seoDescription }
+            : {}),
+          ...(data.searchKeywords !== undefined
+            ? { searchKeywords: data.searchKeywords }
+            : {}),
+          ...(data.status !== undefined ? { status: data.status as any } : {}),
+          ...(data.status === "published"
+            ? { publishedAt: this.now() }
+            : data.status === "draft"
+              ? { publishedAt: null }
+              : {}),
         },
       });
 
-      // ✅ categories replace-set (sadece categoryIds gönderildiyse)
       if (categoryIds !== null) {
         await tx.productCategoryLink.deleteMany({
           where: { tenantId, productId: id },
@@ -498,7 +492,6 @@ export class CatalogRepo {
         }
       }
 
-      // ✅ collections replace-set (sadece collectionIds gönderildiyse)
       if (collectionIds !== null) {
         await tx.productCollectionLink.deleteMany({
           where: { tenantId, productId: id },
@@ -521,31 +514,22 @@ export class CatalogRepo {
 
   async adminPublishProduct(tenantId: string, id: string) {
     await this.prisma.catalogProduct.update({
-      where: { id },
-      data: {
-        status: "published",
-        publishedAt: this.now(),
-      },
+      where: { tenantId_id: { tenantId, id } },
+      data: { status: "published", publishedAt: this.now() },
     });
-
     return this.getProductById(tenantId, id, false);
   }
 
   async adminUnpublishProduct(tenantId: string, id: string) {
     await this.prisma.catalogProduct.update({
-      where: { id },
-      data: {
-        status: "draft",
-        publishedAt: null,
-      },
+      where: { tenantId_id: { tenantId, id } },
+      data: { status: "draft", publishedAt: null },
     });
-
     return this.getProductById(tenantId, id, false);
   }
 
   async adminSoftDeleteProduct(tenantId: string, id: string) {
     await this.prisma.$transaction(async (tx) => {
-      // Link cleanup: category/collection/tag (silme conflict’lerini kaldırır)
       await tx.productCategoryLink.deleteMany({
         where: { tenantId, productId: id },
       });
@@ -555,13 +539,10 @@ export class CatalogRepo {
       await tx.productTagLink.deleteMany({
         where: { tenantId, productId: id },
       });
-
-      // (Opsiyonel) ürün media link’leri de temizlik
       await tx.productMedia.deleteMany({ where: { tenantId, productId: id } });
 
-      // Soft delete product
       await tx.catalogProduct.update({
-        where: { id },
+        where: { tenantId_id: { tenantId, id } },
         data: { deletedAt: this.now(), status: "draft", publishedAt: null },
       });
     });
@@ -570,20 +551,36 @@ export class CatalogRepo {
   }
 
   // =========================================================
-  // Variants (CatalogProductVariant) ✅ deletedAt YOK -> HARD DELETE
+  // Variants (CatalogProductVariant) — HARD DELETE
   // =========================================================
 
   async getProductVariants(
     tenantId: string,
     productId: string,
-    publishedOnly: boolean
+    _publishedOnly: boolean,
   ) {
-    // publishedOnly burada şimdilik kullanılmıyor; ileride product.status check ile entegre edilebilir
     return this.prisma.catalogProductVariant.findMany({
       where: { tenantId, productId, isActive: true },
       orderBy: [{ rank: "asc" }, { createdAt: "asc" }],
     });
   }
+
+  async getVariantById(tenantId: string, id: string) {
+    return this.prisma.catalogProductVariant.findFirst({
+      where: { tenantId, id },
+    });
+  }
+
+  async getVariantInventoryLevels(tenantId: string, variantId: string) {
+    return this.prisma.inventoryLevel.findMany({
+      where: { tenantId, variantId },
+      include: {
+        location: { select: { id: true, name: true, isDefault: true } },
+      },
+      orderBy: [{ createdAt: "asc" }],
+    });
+  }
+
   async getVariantInventorySnapshot(tenantId: string, variantId: string) {
     const levels = await this.prisma.inventoryLevel.findMany({
       where: { tenantId, variantId, deletedAt: null },
@@ -603,7 +600,6 @@ export class CatalogRepo {
     });
 
     const locById = new Map(locations.map((l) => [l.id, l]));
-
     const defaultLocationId = locations.find((l) => l.isDefault)?.id ?? null;
 
     return {
@@ -618,30 +614,15 @@ export class CatalogRepo {
     };
   }
 
-  async getVariantById(tenantId: string, id: string) {
-    return this.prisma.catalogProductVariant.findFirst({
-      where: { tenantId, id },
-    });
-  }
-  async getVariantInventoryLevels(tenantId: string, variantId: string) {
-    return this.prisma.inventoryLevel.findMany({
-      where: { tenantId, variantId },
-      include: {
-        location: { select: { id: true, name: true, isDefault: true } },
-      },
-      orderBy: [{ createdAt: "asc" }],
-    });
-  }
   async replaceProductCategories(
     tenantId: string,
     productId: string,
-    categoryIds: string[]
+    categoryIds: string[],
   ) {
     await this.prisma.$transaction(async (tx) => {
       await tx.productCategoryLink.deleteMany({
         where: { tenantId, productId },
       });
-
       if (categoryIds.length) {
         await tx.productCategoryLink.createMany({
           data: categoryIds.map((categoryId) => ({
@@ -653,7 +634,6 @@ export class CatalogRepo {
         });
       }
     });
-
     return this.getProductById(tenantId, productId, false);
   }
 
@@ -666,8 +646,8 @@ export class CatalogRepo {
       barcode?: string | null;
       rank?: number;
       isActive?: boolean;
-      metadata?: any;
-    }
+      metadata?: Prisma.JsonValue;
+    },
   ) {
     return this.prisma.catalogProductVariant.create({
       data: {
@@ -677,8 +657,8 @@ export class CatalogRepo {
         sku: data.sku ?? null,
         barcode: data.barcode ?? null,
         rank: data.rank ?? 0,
-        isActive: data.isActive ?? true, // ✅ store testleri için default true mantıklı
-        metadata: data.metadata ?? {},
+        isActive: data.isActive ?? true,
+        metadata: (data.metadata ?? {}) as any,
       },
     });
   }
@@ -692,8 +672,8 @@ export class CatalogRepo {
       barcode?: string | null;
       rank?: number;
       isActive?: boolean;
-      metadata?: any;
-    }
+      metadata?: Prisma.JsonValue;
+    },
   ) {
     return this.prisma.catalogProductVariant.update({
       where: { tenantId_id: { tenantId, id } },
@@ -703,7 +683,9 @@ export class CatalogRepo {
         ...(data.barcode !== undefined ? { barcode: data.barcode } : {}),
         ...(data.rank !== undefined ? { rank: data.rank } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
-        ...(data.metadata !== undefined ? { metadata: data.metadata } : {}),
+        ...(data.metadata !== undefined
+          ? { metadata: data.metadata as any }
+          : {}),
       },
     });
   }
@@ -717,19 +699,22 @@ export class CatalogRepo {
       }),
       this.prisma.inventoryLevel.count({ where: { tenantId, variantId } }),
     ]);
-
     return cartN + orderN + invResN + invLevelN > 0;
   }
 
   async adminDeleteVariant(tenantId: string, id: string) {
-    // FK riskini azalt: önce variant-option linklerini temizle
-    await this.prisma.productVariantOptionValue.deleteMany({
-      where: { tenantId, variantId: id },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productVariantOptionValue.deleteMany({
+        where: { tenantId, variantId: id },
+      });
+
+      // ✅ tenant-safe delete
+      await tx.catalogProductVariant.delete({
+        where: { tenantId_id: { tenantId, id } },
+      });
     });
 
-    return this.prisma.catalogProductVariant.delete({
-      where: { id },
-    });
+    return { ok: true };
   }
 
   // =========================================================
@@ -750,7 +735,6 @@ export class CatalogRepo {
   }
 
   async isOptionInUse(tenantId: string, optionId: string): Promise<boolean> {
-    // Option silmeden önce değer var mı kontrolü (kurumsal: önce cleanup endpoint’i yazılmadan silme yok)
     const n = await this.prisma.productOptionValue.count({
       where: { tenantId, optionId },
     });
@@ -759,7 +743,7 @@ export class CatalogRepo {
 
   async isOptionValueInUse(
     tenantId: string,
-    optionValueId: string
+    optionValueId: string,
   ): Promise<boolean> {
     const n = await this.prisma.productVariantOptionValue.count({
       where: { tenantId, optionValueId },
@@ -770,7 +754,7 @@ export class CatalogRepo {
   async adminCreateOption(
     tenantId: string,
     productId: string,
-    data: { title: string }
+    data: { title: string },
   ) {
     return this.prisma.productOption.create({
       data: { tenantId, productId, title: data.title },
@@ -781,7 +765,7 @@ export class CatalogRepo {
   async adminAddOptionValue(
     tenantId: string,
     optionId: string,
-    data: { value: string }
+    data: { value: string },
   ) {
     return this.prisma.productOptionValue.create({
       data: { tenantId, optionId, value: data.value },
@@ -789,20 +773,30 @@ export class CatalogRepo {
   }
 
   async adminDeleteOption(tenantId: string, optionId: string) {
-    await this.prisma.productOptionValue.deleteMany({
-      where: { tenantId, optionId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productOptionValue.deleteMany({ where: { tenantId, optionId } });
+
+      // ✅ tenant-safe delete
+      await tx.productOption.delete({
+        where: { tenantId_id: { tenantId, id: optionId } },
+      });
     });
-    return this.prisma.productOption.delete({ where: { id: optionId } });
+
+    return { ok: true };
   }
 
   async adminDeleteOptionValue(tenantId: string, optionValueId: string) {
-    return this.prisma.productOptionValue.delete({
-      where: { id: optionValueId },
+    // ✅ tenant-safe delete
+    await this.prisma.productOptionValue.delete({
+      where: { tenantId_id: { tenantId, id: optionValueId } },
     });
+    return { ok: true };
   }
+
   // =========================================================
-  // Collections (ProductCollection)  — Store tarafı bunu kullanıyor
+  // Collections (ProductCollection)
   // =========================================================
+
   async listCollections(tenantId: string) {
     return this.prisma.productCollection.findMany({
       where: { tenantId },

@@ -14,7 +14,7 @@ type Panel = "admin" | "store";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    v
+    v,
   );
 }
 
@@ -35,13 +35,16 @@ function detectPanel(req: any): Panel | undefined {
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly tokenService: TokenService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<any>();
 
     const panel = detectPanel(req);
+    if (!panel) {
+      throw new UnauthorizedException("Unknown auth panel for this route");
+    }
     const auth = req.headers?.authorization as string | undefined;
 
     let token: string | undefined;
@@ -54,11 +57,10 @@ export class AuthGuard implements CanActivate {
 
     if (!token) {
       const cookies = (req.cookies as any) ?? {};
-      if (panel === "admin") token = cookies[COOKIE_NAMES.adminAccess];
-      else if (panel === "store") token = cookies[COOKIE_NAMES.storeAccess];
-      else
-        token =
-          cookies[COOKIE_NAMES.adminAccess] ?? cookies[COOKIE_NAMES.storeAccess];
+      token =
+        panel === "admin"
+          ? cookies[COOKIE_NAMES.adminAccess]
+          : cookies[COOKIE_NAMES.storeAccess];
       if (token) source = "cookie";
     }
 
@@ -82,7 +84,7 @@ export class AuthGuard implements CanActivate {
   private async hydrateAdminContext(
     req: any,
     payload: any,
-    source?: "header" | "cookie"
+    source?: "header" | "cookie",
   ) {
     const identityId = payload?.sub as string | undefined;
     const rawTenant = payload?.tenantId as string | undefined;
@@ -126,7 +128,7 @@ export class AuthGuard implements CanActivate {
   private hydrateStoreContext(
     req: any,
     payload: any,
-    source?: "header" | "cookie"
+    source?: "header" | "cookie",
   ) {
     const sub = payload?.sub as string | undefined;
 

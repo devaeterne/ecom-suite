@@ -21,6 +21,10 @@ import {
   AdminUpdateCategoryTranslationDto,
 } from "@/modules/catalog/admin/dto/admin.category.translations.dto";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/categories")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class CategoryTranslationsAdminController {
@@ -28,7 +32,7 @@ export class CategoryTranslationsAdminController {
 
   @Get("/:id/translations")
   async list(@Req() req: Request, @Param("id") categoryId: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.list(tenantId, categoryId);
   }
 
@@ -36,9 +40,9 @@ export class CategoryTranslationsAdminController {
   async create(
     @Req() req: Request,
     @Param("id") categoryId: string,
-    @Body() dto: AdminCreateCategoryTranslationDto
+    @Body() dto: AdminCreateCategoryTranslationDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.create(tenantId, categoryId, dto);
   }
 
@@ -47,9 +51,9 @@ export class CategoryTranslationsAdminController {
     @Req() req: Request,
     @Param("id") categoryId: string,
     @Param("localeCode") localeCode: string,
-    @Body() dto: AdminUpdateCategoryTranslationDto
+    @Body() dto: AdminUpdateCategoryTranslationDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.update(tenantId, categoryId, localeCode, dto);
   }
 
@@ -57,9 +61,9 @@ export class CategoryTranslationsAdminController {
   async remove(
     @Req() req: Request,
     @Param("id") categoryId: string,
-    @Param("localeCode") localeCode: string
+    @Param("localeCode") localeCode: string,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.delete(tenantId, categoryId, localeCode);
   }
 }

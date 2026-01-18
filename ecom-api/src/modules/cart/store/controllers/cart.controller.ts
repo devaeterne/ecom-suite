@@ -11,6 +11,8 @@ import {
   Res,
 } from "@nestjs/common";
 import { Request, Response } from "express";
+import { env } from "@/config/env";
+import { baseCookieOptions } from "@/infrastructure/http/cookies"; // export etmen lazım
 
 import { STORE_CART_COOKIE } from "@/modules/cart/common/constants/cart.constants";
 import {
@@ -19,7 +21,7 @@ import {
   ApplyCouponDto,
   SetShippingMethodDto,
 } from "@/modules/cart/store/dto/cart.dto";
-import { getTenantIdOrThrow } from "@/modules/cart/common/policies/cart.tenancy";
+import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { StoreCartService } from "@/modules/cart/store/services/cart.service";
 import { cartToResponseDto } from "@/modules/cart/common/mappers/cart.mappers";
 
@@ -28,6 +30,16 @@ import {
   setPriceListCookie,
 } from "@/modules/cart/common/policies/pricing-context";
 import { PricingStoreService } from "@/modules/pricing/store/services/pricing.store.service";
+import { UseGuards } from "@nestjs/common";
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+
+function setCartCookie(res: Response, cartId: string) {
+  res.cookie(
+    STORE_CART_COOKIE,
+    cartId,
+    baseCookieOptions({ maxAge: 1000 * 60 * 60 * 24 * 30 }),
+  );
+}
 
 function getCartId(req: Request): string | null {
   const anyReq = req as any;
@@ -38,32 +50,23 @@ function getCartId(req: Request): string | null {
   return v && typeof v === "string" ? v : null;
 }
 
-function setCartCookie(res: Response, cartId: string) {
-  res.cookie(STORE_CART_COOKIE, cartId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false, // prod: true
-    path: "/",
-    maxAge: 1000 * 60 * 60 * 24 * 30,
-  });
-}
-
 type SetCartPriceListDto = { priceListId: string | null };
 
 @Controller("/store/cart")
+@UseGuards(TenantHeaderGuard)
 export class StoreCartController {
   constructor(
     private readonly carts: StoreCartService,
-    private readonly pricingStore: PricingStoreService
+    private readonly pricingStore: PricingStoreService,
   ) {}
 
   @Post()
   async create(
     @Req() req: Request,
     @Body() dto: CreateCartDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
 
     const cart = await this.carts.createCart(tenantId, { email: dto.email });
     setCartCookie(res, cart.id);
@@ -74,9 +77,9 @@ export class StoreCartController {
   @Get()
   async current(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
 
     const { cart } = await this.carts.getOrCreateCurrentCart(tenantId, cartId);
@@ -89,9 +92,9 @@ export class StoreCartController {
   async addLineItem(
     @Req() req: Request,
     @Body() dto: AddLineItemDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
 
     // price list context cookie’den gelir
@@ -106,7 +109,7 @@ export class StoreCartController {
         tenantId,
         cart.id,
         dto,
-        { priceListId } // ✅ ctx
+        { priceListId }, // ✅ ctx
       );
 
       return { cart: cartToResponseDto(updated) };
@@ -116,7 +119,7 @@ export class StoreCartController {
       tenantId,
       cartId,
       dto,
-      { priceListId } // ✅ ctx
+      { priceListId }, // ✅ ctx
     );
 
     setCartCookie(res, updated.id);
@@ -132,9 +135,9 @@ export class StoreCartController {
   async setCartPriceList(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Body() dto: SetCartPriceListDto
+    @Body() dto: SetCartPriceListDto,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
 
     // route param cartId > cookie cartId
     const cartId =
@@ -150,7 +153,7 @@ export class StoreCartController {
     await this.pricingStore.attachPriceListToCart(
       tenantId,
       cartId,
-      dto.priceListId ?? null
+      dto.priceListId ?? null,
     );
 
     setCartCookie(res, cartId);
@@ -162,9 +165,9 @@ export class StoreCartController {
   async deleteLineItem(
     @Req() req: Request,
     @Param("id") id: string,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
     if (!cartId) throw new BadRequestException("Missing cart cookie");
 
@@ -178,9 +181,9 @@ export class StoreCartController {
   async applyCoupon(
     @Req() req: Request,
     @Body() dto: ApplyCouponDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
     if (!cartId) throw new BadRequestException("Missing cart cookie");
 
@@ -193,9 +196,9 @@ export class StoreCartController {
   @Delete("/coupon")
   async removeCoupon(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
     if (!cartId) throw new BadRequestException("Missing cart cookie");
 
@@ -217,16 +220,16 @@ export class StoreCartController {
   async shippingMethod(
     @Req() req: Request,
     @Body() dto: SetShippingMethodDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const tenantId = getTenantIdOrThrow(req);
+    const tenantId = requireTenantId(req);
     const cartId = getCartId(req);
     if (!cartId) throw new BadRequestException("Missing cart cookie");
 
     const updated = await this.carts.setShippingMethod(
       tenantId,
       cartId,
-      dto.shippingOptionId
+      dto.shippingOptionId,
     );
     setCartCookie(res, updated.id);
 

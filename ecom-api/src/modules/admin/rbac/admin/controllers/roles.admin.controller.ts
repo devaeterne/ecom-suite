@@ -16,7 +16,10 @@ import { RolePermissionsDto } from "@/modules/admin/rbac/common/dto/role-permiss
 import { RoleCreateDto } from "@/modules/admin/rbac/common/dto/role-create.dto";
 import { RolePatchDto } from "@/modules/admin/rbac/common/dto/role-patch.dto";
 
-@Controller("admin/roles")
+function tenantId(req: any) {
+  return req.tenant?.id ?? req.tenantId ?? req.user?.tenantId;
+}
+@Controller("/admin/roles")
 @UseGuards(AdminAuthGuard, PermissionGuard)
 export class RolesAdminController {
   constructor(private readonly rolesService: RolesService) {}
@@ -38,7 +41,7 @@ export class RolesAdminController {
   async patch(
     @Req() req: any,
     @Param("id") id: string,
-    @Body() dto: RolePatchDto
+    @Body() dto: RolePatchDto,
   ) {
     return this.rolesService.updateRole(req.tenant.id, id, dto);
   }
@@ -48,7 +51,7 @@ export class RolesAdminController {
   async setPermissions(
     @Req() req: any,
     @Param("id") id: string,
-    @Body() dto: RolePermissionsDto
+    @Body() dto: RolePermissionsDto,
   ) {
     return this.rolesService.setRolePermissions(req.tenant.id, id, dto);
   }

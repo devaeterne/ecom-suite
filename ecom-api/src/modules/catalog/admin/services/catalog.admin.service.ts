@@ -1,26 +1,25 @@
+// src/modules/catalog/admin/services/catalog.admin.service.ts
+
 import {
-  ConflictException,
   BadRequestException,
+  ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
-  HttpException,
 } from "@nestjs/common";
-import { Request } from "express";
+import { ProductMediaRole } from "@prisma/client";
 
+import { PrismaService } from "@/prisma";
 import { CatalogRepo } from "@/modules/catalog/common/prisma/catalog.repo";
+import { ProductMediaRepository } from "@/modules/catalog/common/prisma/product.media.repo";
+
 import {
   mapCategory,
   mapStoreProduct,
 } from "@/modules/catalog/common/mappers/catalog.mappers";
+
 import { AdminCategoryListQueryDto } from "../dto/admin-category.dto";
 import { AdminProductListQueryDto } from "../dto/admin-product.dto";
-import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
-
-import { ProductMediaRepository } from "@/modules/catalog/common/prisma/product.media.repo";
-import { PrismaService } from "@/prisma";
-import { ProductMediaRole, Prisma } from "@prisma/client";
-
-const SINGLETON_ROLES = new Set<ProductMediaRole>(["HERO", "THUMBNAIL"]);
 
 type CategoryTreeNode = {
   id: string;
@@ -28,6 +27,8 @@ type CategoryTreeNode = {
   parentId: string | null;
   children: CategoryTreeNode[];
 };
+
+const SINGLETON_ROLES = new Set<ProductMediaRole>(["HERO", "THUMBNAIL"]);
 const MAX_CATEGORY_DEPTH = 100;
 
 @Injectable()
@@ -35,13 +36,43 @@ export class CatalogAdminService {
   constructor(
     private readonly repo: CatalogRepo,
     private readonly productMediaRepo: ProductMediaRepository,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
   ) {}
+
+  // ------------------------------------------------------------
+  // Helpers (tenant-safe)
+  // ------------------------------------------------------------
+
+  private buildCategoryTree(
+    flat: Array<{ id: string; name: string; parentId: string | null }>,
+  ): CategoryTreeNode[] {
+    const byId = new Map<string, CategoryTreeNode>();
+    const roots: CategoryTreeNode[] = [];
+
+    for (const c of flat) {
+      byId.set(c.id, {
+        id: c.id,
+        name: c.name,
+        parentId: c.parentId,
+        children: [],
+      });
+    }
+
+    for (const node of byId.values()) {
+      if (node.parentId && byId.has(node.parentId)) {
+        byId.get(node.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots;
+  }
 
   private async assertNoCategoryCycle(
     tenantId: string,
     categoryId: string,
-    newParentId: string | null | undefined
+    newParentId: string | null | undefined,
   ) {
     if (newParentId === undefined) return; // parentId patch edilmemiş
     if (newParentId === null) return; // root’a taşınıyor
@@ -55,41 +86,65 @@ export class CatalogAdminService {
     if (!cursor) throw new NotFoundException("Parent category not found");
 
     let depth = 0;
+
     while (cursor?.parentId) {
       depth++;
       if (depth > MAX_CATEGORY_DEPTH) {
         throw new ConflictException("Category depth exceeded (possible cycle)");
       }
+
       if (cursor.parentId === categoryId) {
         throw new ConflictException(
-          "Cycle detected: cannot move under descendant"
+          "Cycle detected: cannot move under descendant",
         );
       }
+
       cursor = await this.repo.getCategoryParentRef(tenantId, cursor.parentId);
       if (!cursor) break;
     }
   }
 
-  // -------------------------
+  private normalizeListLimit(v: any, fallback = 50, max = 200) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.min(Math.floor(n), max);
+  }
+
+  private normalizeListOffset(v: any) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+  }
+
+  private toRole(v: any, fallback: ProductMediaRole = "GALLERY") {
+    const r = String(v ?? fallback).toUpperCase();
+    if (r === "HERO" || r === "THUMBNAIL" || r === "GALLERY")
+      return r as ProductMediaRole;
+    throw new BadRequestException("Invalid media role");
+  }
+
+  // ------------------------------------------------------------
   // Categories (write)
-  // -------------------------
+  // ------------------------------------------------------------
+
   async createCategory(tenantId: string, dto: any) {
-    if (dto.parentId) {
+    if (dto?.parentId) {
       const parent = await this.repo.getCategoryById(tenantId, dto.parentId);
       if (!parent) throw new NotFoundException("Parent category not found");
     }
+
     const row = await this.repo.adminCreateCategory(tenantId, dto);
-    return mapCategory(row);
+    return { category: mapCategory(row) };
   }
 
   async updateCategory(tenantId: string, id: string, dto: any) {
     const existing = await this.repo.getCategoryById(tenantId, id);
     if (!existing) throw new NotFoundException("Category not found");
 
-    await this.assertNoCategoryCycle(tenantId, id, dto.parentId);
+    await this.assertNoCategoryCycle(tenantId, id, dto?.parentId);
 
     const row = await this.repo.adminUpdateCategory(tenantId, id, dto);
-    return mapCategory(row);
+    return { category: mapCategory(row) };
   }
 
   async adminDeleteCategory(tenantId: string, id: string) {
@@ -106,12 +161,13 @@ export class CatalogAdminService {
     return { ok: true };
   }
 
-  // -------------------------
+  // ------------------------------------------------------------
   // Products (write)
-  // -------------------------
+  // ------------------------------------------------------------
+
   async createProduct(tenantId: string, dto: any) {
     const row = await this.repo.adminCreateProduct(tenantId, dto);
-    return mapStoreProduct(row);
+    return { product: mapStoreProduct(row) };
   }
 
   async updateProduct(tenantId: string, id: string, dto: any) {
@@ -119,7 +175,7 @@ export class CatalogAdminService {
     if (!existing) throw new NotFoundException("Product not found");
 
     const row = await this.repo.adminUpdateProduct(tenantId, id, dto);
-    return mapStoreProduct(row);
+    return { product: mapStoreProduct(row) };
   }
 
   async publishProduct(tenantId: string, id: string) {
@@ -127,7 +183,7 @@ export class CatalogAdminService {
     if (!existing) throw new NotFoundException("Product not found");
 
     const row = await this.repo.adminPublishProduct(tenantId, id);
-    return mapStoreProduct(row);
+    return { product: mapStoreProduct(row) };
   }
 
   async unpublishProduct(tenantId: string, id: string) {
@@ -135,7 +191,7 @@ export class CatalogAdminService {
     if (!existing) throw new NotFoundException("Product not found");
 
     const row = await this.repo.adminUnpublishProduct(tenantId, id);
-    return mapStoreProduct(row);
+    return { product: mapStoreProduct(row) };
   }
 
   async deleteProduct(tenantId: string, id: string) {
@@ -146,25 +202,24 @@ export class CatalogAdminService {
     return { ok: true };
   }
 
-  // -------------------------
-  // Variant detail
-  // -------------------------
-  async getVariantDetail(req: Request, variantId: string) {
-    const tenantId = requireTenantId(req as any);
+  // ------------------------------------------------------------
+  // Variant detail (tenant-safe)
+  // ------------------------------------------------------------
 
+  async getVariantDetail(tenantId: string, variantId: string) {
     const variant = await this.repo.getVariantById(tenantId, variantId);
     if (!variant) throw new NotFoundException("Variant not found");
 
     const product = await this.repo.getProductById(
       tenantId,
       variant.productId,
-      false
+      false,
     );
     if (!product) throw new NotFoundException("Product not found");
 
     const inventory = await this.repo.getVariantInventorySnapshot(
       tenantId,
-      variantId
+      variantId,
     );
 
     return {
@@ -175,21 +230,26 @@ export class CatalogAdminService {
     };
   }
 
-  // -------------------------
-  // Variants (write) — HARD DELETE
-  // -------------------------
+  // ------------------------------------------------------------
+  // Variants (write) — HARD DELETE (tenant-safe)
+  // ------------------------------------------------------------
+
   async createVariant(tenantId: string, productId: string, dto: any) {
     const p = await this.repo.getProductById(tenantId, productId, false);
     if (!p) throw new NotFoundException("Product not found");
 
-    return this.repo.adminCreateVariant(tenantId, productId, dto);
+    return {
+      variant: await this.repo.adminCreateVariant(tenantId, productId, dto),
+    };
   }
 
   async updateVariant(tenantId: string, variantId: string, dto: any) {
     const existing = await this.repo.getVariantById(tenantId, variantId);
     if (!existing) throw new NotFoundException("Variant not found");
 
-    return this.repo.adminUpdateVariant(tenantId, variantId, dto);
+    return {
+      variant: await this.repo.adminUpdateVariant(tenantId, variantId, dto),
+    };
   }
 
   async deleteVariant(tenantId: string, variantId: string) {
@@ -203,21 +263,26 @@ export class CatalogAdminService {
     return { ok: true };
   }
 
-  // -------------------------
-  // Options (write)
-  // -------------------------
+  // ------------------------------------------------------------
+  // Options (write) — tenant-safe
+  // ------------------------------------------------------------
+
   async createOption(tenantId: string, productId: string, dto: any) {
     const p = await this.repo.getProductById(tenantId, productId, false);
     if (!p) throw new NotFoundException("Product not found");
 
-    return this.repo.adminCreateOption(tenantId, productId, dto);
+    return {
+      option: await this.repo.adminCreateOption(tenantId, productId, dto),
+    };
   }
 
   async addOptionValue(tenantId: string, optionId: string, dto: any) {
     const opt = await this.repo.getOptionById(tenantId, optionId);
     if (!opt) throw new NotFoundException("Option not found");
 
-    return this.repo.adminAddOptionValue(tenantId, optionId, dto);
+    return {
+      optionValue: await this.repo.adminAddOptionValue(tenantId, optionId, dto),
+    };
   }
 
   async deleteOption(tenantId: string, optionId: string) {
@@ -242,11 +307,11 @@ export class CatalogAdminService {
     return { ok: true };
   }
 
-  // -------------------------
-  // READ (Commit A)
-  // -------------------------
-  async listCategories(req: Request, q: AdminCategoryListQueryDto) {
-    const tenantId = requireTenantId(req as any);
+  // ------------------------------------------------------------
+  // READ (tenant-safe)
+  // ------------------------------------------------------------
+
+  async listCategories(tenantId: string, q: AdminCategoryListQueryDto) {
     const view = (q?.view ?? "flat") as "flat" | "tree";
 
     const rows = await this.repo.listCategories(tenantId);
@@ -263,23 +328,21 @@ export class CatalogAdminService {
     return { items: this.buildCategoryTree(flat) };
   }
 
-  async getCategory(req: Request, id: string) {
-    const tenantId = requireTenantId(req as any);
+  async getCategory(tenantId: string, id: string) {
     const row = await this.repo.getCategoryById(tenantId, id);
     if (!row) throw new NotFoundException("Category not found");
     return { category: mapCategory(row) };
   }
 
-  async listProducts(req: Request, q: AdminProductListQueryDto) {
-    const tenantId = requireTenantId(req as any);
-    const limit = q?.limit ?? 50;
-    const offset = q?.offset ?? 0;
+  async listProducts(tenantId: string, q: AdminProductListQueryDto) {
+    const limit = this.normalizeListLimit(q?.limit, 50, 200);
+    const offset = this.normalizeListOffset(q?.offset);
 
     const { items, total } = await this.repo.listProducts({
       tenantId,
       q: q?.q,
-      status: q?.status, // ✅ eklendi
-      categoryId: q?.categoryId, // ✅ artık DTO’dan
+      status: q?.status,
+      categoryId: q?.categoryId,
       collectionId: q?.collectionId,
       offset,
       limit,
@@ -296,65 +359,39 @@ export class CatalogAdminService {
     };
   }
 
-  async getProduct(req: Request, id: string) {
-    const tenantId = requireTenantId(req as any);
+  async getProduct(tenantId: string, id: string) {
     const row = await this.repo.getProductById(tenantId, id, false);
     if (!row) throw new NotFoundException("Product not found");
     return { product: mapStoreProduct(row) };
   }
 
-  async listVariantsByProduct(req: Request, productId: string) {
-    const tenantId = requireTenantId(req as any);
+  async listVariantsByProduct(tenantId: string, productId: string) {
     const p = await this.repo.getProductById(tenantId, productId, false);
     if (!p) throw new NotFoundException("Product not found");
 
     const variants = await this.repo.getProductVariants(
       tenantId,
       productId,
-      false
+      false,
     );
     return { items: variants };
   }
 
-  private buildCategoryTree(
-    flat: Array<{ id: string; name: string; parentId: string | null }>
-  ): CategoryTreeNode[] {
-    const byId = new Map<string, CategoryTreeNode>();
-    const roots: CategoryTreeNode[] = [];
+  // ------------------------------------------------------------
+  // MEDIA (tenant-safe, deterministic)
+  // ------------------------------------------------------------
 
-    for (const c of flat) {
-      byId.set(c.id, {
-        id: c.id,
-        name: c.name,
-        parentId: c.parentId,
-        children: [],
-      });
-    }
-    for (const node of byId.values()) {
-      if (node.parentId && byId.has(node.parentId)) {
-        byId.get(node.parentId)!.children.push(node);
-      } else {
-        roots.push(node);
-      }
-    }
-    return roots;
-  }
-
-  // -------------------------
-  // MEDIA
-  // -------------------------
-
-  /**
-   * Ürün medyalarını role bazında “view model” şeklinde döndürür:
-   * - thumbnail (0/1)
-   * - hero (0/1)
-   * - gallery (0..n) rank asc
-   * - items (tam liste)
-   */
   async listProductMedia(tenantId: string, productId: string) {
+    // Ürün var mı? (tenant-scope)
+    const product = await this.prisma.catalogProduct.findUnique({
+      where: { tenantId_id: { tenantId, id: productId } },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException("Product not found");
+
     const items = await this.productMediaRepo.listByProduct(
       tenantId,
-      productId
+      productId,
     );
 
     const thumbnail = items.find((x) => x.role === "THUMBNAIL") ?? null;
@@ -366,55 +403,57 @@ export class CatalogAdminService {
     return { thumbnail, hero, gallery, items };
   }
 
-  /**
-   * Media attach:
-   * - role default: GALLERY
-   * - HERO/THUMBNAIL: replace semantics (eskiyi sil, yenisini ekle)
-   * - rank:
-   *   - GALLERY rank yoksa max+1
-   *   - diğer roller rank yoksa 0
-   */
   async attachProductMedia(tenantId: string, productId: string, dto: any) {
-    const role = (dto.role ?? "GALLERY") as ProductMediaRole;
-    const isActive = dto.isActive ?? true;
-    const metadata = dto.metadata ?? {};
-    const fileId = dto.fileId as string;
+    const fileId = String(dto?.fileId ?? "").trim();
+    if (!fileId) throw new BadRequestException("fileId is required");
+
+    const role = this.toRole(dto?.role, "GALLERY");
+    const isActive = dto?.isActive ?? true;
+    const metadata = dto?.metadata ?? {};
+    const rankInput = dto?.rank;
 
     return this.prisma.$transaction(async (tx) => {
-      // file var mı? (FK zaten var ama daha iyi hata mesajı)
-      const file = await tx.fileObject.findUnique({
-        where: { tenantId_id: { tenantId, id: fileId } },
-        select: { id: true },
-      });
-      if (!file) throw new NotFoundException("File not found");
-
-      // ürün var mı? (FK var ama mesaj için iyi)
+      // Ürün tenant-scope kontrol
       const product = await tx.catalogProduct.findUnique({
         where: { tenantId_id: { tenantId, id: productId } },
         select: { id: true },
       });
       if (!product) throw new NotFoundException("Product not found");
 
+      // File tenant-scope kontrol
+      const file = await tx.fileObject.findUnique({
+        where: { tenantId_id: { tenantId, id: fileId } },
+        select: { id: true },
+      });
+      if (!file) throw new NotFoundException("File not found");
+
+      // Singleton role replace
       if (SINGLETON_ROLES.has(role)) {
         await this.productMediaRepo.deleteRoleSingleton(
           tx,
           tenantId,
           productId,
-          role
+          role,
         );
       }
 
-      let rank = dto.rank as number | undefined;
-      if (role === "GALLERY" && (rank === undefined || rank === null)) {
-        const maxRank = await this.productMediaRepo.getMaxGalleryRank(
-          tx,
-          tenantId,
-          productId
-        );
-        rank = maxRank + 1;
-      }
-      if (role !== "GALLERY" && (rank === undefined || rank === null)) {
-        rank = 0;
+      // Rank resolve (deterministic)
+      let rank: number;
+      if (role === "GALLERY") {
+        const n = Number(rankInput);
+        if (Number.isFinite(n)) {
+          rank = Math.max(0, Math.floor(n));
+        } else {
+          const maxRank = await this.productMediaRepo.getMaxGalleryRank(
+            tx,
+            tenantId,
+            productId,
+          );
+          rank = maxRank + 1;
+        }
+      } else {
+        const n = Number(rankInput);
+        rank = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
       }
 
       try {
@@ -429,8 +468,7 @@ export class CatalogAdminService {
         });
 
         return { media: created };
-      } catch (e: any) {
-        // P2002 unique violation vs → 409
+      } catch (_e: any) {
         throw new ConflictException("Media constraint conflict");
       }
     });
@@ -439,118 +477,137 @@ export class CatalogAdminService {
   async updateProductMedia(
     tenantId: string,
     productId: string,
-    id: string,
-    dto: any
+    mediaId: string,
+    dto: any,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.productMedia.findFirst({
-        where: { tenantId, id },
+        where: { tenantId, id: mediaId },
+        select: { id: true, productId: true, role: true, rank: true },
       });
+
       if (!existing || existing.productId !== productId) {
         throw new NotFoundException("Media not found");
       }
 
-      const nextRole = (dto.role ?? existing.role) as ProductMediaRole;
+      const nextRole = this.toRole(
+        dto?.role ?? existing.role,
+        existing.role as ProductMediaRole,
+      );
 
-      // Role singleton’a geçiyorsa replace semantics:
+      // Singleton role’a geçişte replace semantics
       if (SINGLETON_ROLES.has(nextRole) && nextRole !== existing.role) {
         await this.productMediaRepo.deleteRoleSingleton(
           tx,
           tenantId,
           productId,
-          nextRole
+          nextRole,
         );
       }
 
-      // rank kuralı: GALLERY dışı rank yoksa 0’a çek
-      let nextRank = dto.rank as number | undefined;
-      if (nextRank === undefined && nextRole !== "GALLERY") nextRank = 0;
+      // Rank kuralı (deterministic)
+      let nextRank: number | undefined = undefined;
+      if (dto?.rank !== undefined) {
+        const n = Number(dto.rank);
+        if (!Number.isFinite(n))
+          throw new BadRequestException("rank must be a number");
+        nextRank = Math.max(0, Math.floor(n));
+      } else if (nextRole !== "GALLERY") {
+        nextRank = 0;
+      }
 
       try {
         const updated = await this.productMediaRepo.updateById(
           tx,
           tenantId,
           productId,
-          id,
+          mediaId,
           {
             role: nextRole,
             rank: nextRank,
-            isActive: dto.isActive,
-            metadata: dto.metadata,
-          }
+            isActive: dto?.isActive,
+            metadata: dto?.metadata,
+          },
         );
 
         if (!updated) throw new NotFoundException("Media not found");
         return { media: updated };
-      } catch (e: any) {
+      } catch (_e: any) {
         throw new ConflictException("Media constraint conflict");
       }
     });
   }
 
-  async deleteProductMedia(tenantId: string, productId: string, id: string) {
+  async deleteProductMedia(
+    tenantId: string,
+    productId: string,
+    mediaId: string,
+  ) {
     const res = await this.prisma.productMedia.deleteMany({
-      where: { tenantId, productId, id },
+      where: { tenantId, productId, id: mediaId },
     });
+
     if (res.count === 0) throw new NotFoundException("Media not found");
     return { ok: true };
   }
 
-  /**
-   * Reorder sadece GALLERY için.
-   * orderedIds: ürünün GALLERY media id’lerinin yeni sırası
-   */
   async reorderProductMedia(tenantId: string, productId: string, dto: any) {
-    if (!dto || !Array.isArray(dto.orderedIds)) {
+    const orderedIds = dto?.orderedIds;
+
+    if (!Array.isArray(orderedIds)) {
       throw new BadRequestException("orderedIds must be an array");
     }
 
-    const orderedIds: string[] = dto.orderedIds;
+    const ids = orderedIds.map((x: any) => String(x)).filter(Boolean);
 
-    // duplicate guard (kurumsal kalite: deterministik)
-    const uniq = Array.from(new Set(orderedIds));
-    if (uniq.length !== orderedIds.length) {
-      throw new BadRequestException("orderedIds contains duplicates");
-    }
-    if (orderedIds.length === 0) {
+    if (ids.length === 0) {
       throw new BadRequestException("orderedIds is required");
+    }
+
+    const uniq = Array.from(new Set(ids));
+    if (uniq.length !== ids.length) {
+      throw new BadRequestException("orderedIds contains duplicates");
     }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        // Ürün tenant-scope kontrol
+        const product = await tx.catalogProduct.findUnique({
+          where: { tenantId_id: { tenantId, id: productId } },
+          select: { id: true },
+        });
+        if (!product) throw new NotFoundException("Product not found");
+
         const rows = await tx.productMedia.findMany({
-          where: { tenantId, productId, id: { in: orderedIds } },
+          where: { tenantId, productId, id: { in: ids } },
           select: { id: true, role: true },
         });
 
-        if (rows.length !== orderedIds.length) {
+        if (rows.length !== ids.length) {
           throw new BadRequestException(
-            "orderedIds contains invalid media ids"
+            "orderedIds contains invalid media ids",
           );
         }
+
         if (rows.some((r) => r.role !== "GALLERY")) {
           throw new BadRequestException("Only GALLERY items can be reordered");
         }
 
-        // rank update (bulk + deterministic)
+        // rank update (deterministic)
         await Promise.all(
-          orderedIds.map((id, idx) =>
+          ids.map((id, idx) =>
             tx.productMedia.updateMany({
               where: { tenantId, productId, id },
               data: { rank: idx },
-            })
-          )
+            }),
+          ),
         );
 
         return { ok: true };
       });
     } catch (e: any) {
-      // ✅ kural hataları (400/404) maskelenmesin
+      // Kural hataları maskelenmesin
       if (e instanceof HttpException) throw e;
-
-      // burada log bas (stack + prisma code)
-      // this.logger.error({ err: e, tenantId, productId, orderedIds }, "reorder failed");
-
       throw new ConflictException("Reorder failed");
     }
   }

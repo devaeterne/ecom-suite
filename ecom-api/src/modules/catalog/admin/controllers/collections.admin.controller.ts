@@ -23,6 +23,9 @@ import {
 } from "@/modules/catalog/admin/dto/admin.collection.dto";
 
 import { CollectionsAdminService } from "@/modules/catalog/admin/services/collections.admin.service";
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
 
 @Controller("/admin/collections")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
@@ -31,19 +34,19 @@ export class CollectionsAdminController {
 
   @Post()
   async create(@Req() req: Request, @Body() dto: AdminCreateCollectionDto) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.create(tenantId, dto);
   }
 
   @Get()
   async list(@Req() req: Request, @Query() q: AdminListCollectionsQueryDto) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.list(tenantId, q);
   }
 
   @Get("/:id")
   async get(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.getById(tenantId, id);
   }
 
@@ -51,15 +54,15 @@ export class CollectionsAdminController {
   async update(
     @Req() req: Request,
     @Param("id") id: string,
-    @Body() dto: AdminUpdateCollectionDto
+    @Body() dto: AdminUpdateCollectionDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.update(tenantId, id, dto);
   }
 
   @Delete("/:id")
   async remove(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.delete(tenantId, id);
   }
 }

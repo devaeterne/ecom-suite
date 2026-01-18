@@ -10,7 +10,7 @@ import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    v
+    v,
   );
 }
 
@@ -18,7 +18,7 @@ function isUuid(v: string) {
 export class AdminAuthGuard implements CanActivate {
   constructor(
     private readonly tokenService: TokenService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -47,7 +47,9 @@ export class AdminAuthGuard implements CanActivate {
 
     const identityId = payload?.sub as string | undefined;
     const rawTenant = payload?.tenantId as string | undefined;
-
+    if (payload?.typ && payload.typ !== "admin") {
+      throw new UnauthorizedException("Invalid token type");
+    }
     if (!identityId || !rawTenant) {
       throw new UnauthorizedException("Invalid token payload");
     }
@@ -55,7 +57,7 @@ export class AdminAuthGuard implements CanActivate {
     // tenant normalize: uuid değilse tenant.code üzerinden id resolve
     let tenantId = rawTenant;
     if (!isUuid(tenantId)) {
-      const t = await this.prisma.tenant.findFirst({
+      const t = await this.prisma.tenant.findUnique({
         where: { code: tenantId },
         select: { id: true },
       });

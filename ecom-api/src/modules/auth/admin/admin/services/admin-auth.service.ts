@@ -1,3 +1,4 @@
+// src/modules/auth/admin/admin/services/admin-auth.service.ts
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 import {
@@ -29,7 +30,7 @@ export class AdminAuthService {
     private readonly prisma: PrismaService,
     private readonly sessionsRepo: SessionsRepository,
     private readonly tokenService: TokenService,
-    private readonly audit: AuthAuditLogService
+    private readonly audit: AuthAuditLogService,
   ) {}
 
   private async enforceSessionLimit(tenantId: string, identityId: string) {
@@ -51,7 +52,7 @@ export class AdminAuthService {
     tenantId: string,
     email: string,
     password: string,
-    meta: ReqMeta = {}
+    meta: ReqMeta = {},
   ): Promise<LoginResult> {
     const identity = await this.prisma.authIdentity.findFirst({
       where: {
@@ -81,7 +82,7 @@ export class AdminAuthService {
     }
 
     const expiresAt = new Date(
-      Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
+      Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
     );
     const familyId = randomUUID();
 
@@ -105,7 +106,7 @@ export class AdminAuthService {
         typ: "admin",
         identityId: identity.id,
       },
-      env.ACCESS_TOKEN_TTL_SECONDS
+      env.ACCESS_TOKEN_TTL_SECONDS,
     );
 
     await this.audit.log(identity.tenantId, {
@@ -127,12 +128,48 @@ export class AdminAuthService {
       tokenHash,
       typ: "admin",
     });
-    if (!session)
+    if (!session) {
       throw new UnauthorizedException(ADMIN_AUTH_ERRORS.SESSION_INVALID);
+    }
 
-    // reuse detected -> global revoke
+    /**
+     * revokedAt varsa:
+     * - bu bazen "gerçek reuse" (token çalındı) olabilir
+     * - bazen de "paralel refresh" (stale request) olabilir
+     *
+     * rotatedToHash + yakın zamanda revoke => paralel refresh toleransı
+     */
     if (session.revokedAt) {
+      const rotatedToHash = (session as any).rotatedToHash as
+        | string
+        | null
+        | undefined;
+      const revokedAtMs = session.revokedAt?.getTime?.() ?? 0;
+      const recentlyRotated = revokedAtMs && Date.now() - revokedAtMs < 10_000; // 10s window
+
+      if (rotatedToHash && recentlyRotated) {
+        // Concurrency / late request: hard revoke yok.
+        await this.audit.log(session.tenantId, {
+          action: AUDIT.SESSION_REFRESH, // veya ayrı bir action istersen: SESSION_REFRESH_STALE
+          actorIdentityId: session.identityId,
+          success: false,
+          reason: "STALE_REFRESH_AFTER_ROTATE",
+          ip: meta.ip ?? null,
+          userAgent: meta.userAgent ?? null,
+          meta: {
+            typ: "admin",
+            sessionId: session.id,
+            familyId: session.familyId,
+            rotatedToHash,
+          },
+        });
+
+        throw new UnauthorizedException(ADMIN_AUTH_ERRORS.SESSION_INVALID);
+      }
+
+      // Gerçek reuse: mark + revoke all
       await this.sessionsRepo.markReuse(session.id);
+
       await this.sessionsRepo.revokeAllByIdentity({
         tenantId: session.tenantId,
         identityId: session.identityId,
@@ -162,7 +199,7 @@ export class AdminAuthService {
     }
 
     const newExpiresAt = new Date(
-      Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000
+      Date.now() + env.REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
     );
 
     const { rawToken: newRefreshRaw } =
@@ -185,7 +222,7 @@ export class AdminAuthService {
         typ: "admin",
         identityId: session.identityId,
       },
-      env.ACCESS_TOKEN_TTL_SECONDS
+      env.ACCESS_TOKEN_TTL_SECONDS,
     );
 
     await this.audit.log(session.tenantId, {

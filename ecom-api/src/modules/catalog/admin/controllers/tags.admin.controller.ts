@@ -24,6 +24,10 @@ import {
 
 import { TagsAdminService } from "@/modules/catalog/admin/services/tags.admin.service";
 
+function tenant(req: Request) {
+  return requireTenantId(req as any);
+}
+
 @Controller("/admin/tags")
 @UseGuards(AdminAuthGuard, TenantHeaderGuard)
 export class TagsAdminController {
@@ -31,19 +35,19 @@ export class TagsAdminController {
 
   @Post()
   async create(@Req() req: Request, @Body() dto: AdminCreateTagDto) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.create(tenantId, dto);
   }
 
   @Get()
   async list(@Req() req: Request, @Query() q: AdminListTagsQueryDto) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.list(tenantId, q);
   }
 
   @Get("/:id")
   async get(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.getById(tenantId, id);
   }
 
@@ -51,15 +55,15 @@ export class TagsAdminController {
   async update(
     @Req() req: Request,
     @Param("id") id: string,
-    @Body() dto: AdminUpdateTagDto
+    @Body() dto: AdminUpdateTagDto,
   ) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.update(tenantId, id, dto);
   }
 
   @Delete("/:id")
   async remove(@Req() req: Request, @Param("id") id: string) {
-    const tenantId = requireTenantId(req as any);
+    const tenantId = tenant(req);
     return this.service.delete(tenantId, id);
   }
 }

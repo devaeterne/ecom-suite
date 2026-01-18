@@ -7,12 +7,18 @@ import {
   Query,
   Req,
   UseGuards,
+  UnauthorizedException,
 } from "@nestjs/common";
 import type { StoreAuthContext } from "@/modules/auth/store/common/types/store-request";
 import { StoreAccessGuard } from "@/modules/auth/store/store/guards/store-access.guard";
 
 import { StoreInventoryService } from "@/modules/inventory/store/services/inventory.service";
 import { ReserveStockDto, ReleaseStockDto } from "../dto/inventory.dto";
+
+function requireTenantId(req: StoreAuthContext) {
+  if (!req.tenantId) throw new UnauthorizedException("Tenant context missing");
+  return req.tenantId;
+}
 
 @UseGuards(StoreAccessGuard)
 @Controller("/store/checkouts")
@@ -23,11 +29,10 @@ export class StoreInventoryController {
   async reserve(
     @Req() req: StoreAuthContext,
     @Param("id") checkoutId: string,
-    @Body() dto: ReserveStockDto
+    @Body() dto: ReserveStockDto,
   ) {
-    // guard contract
-    const tenantId = req.tenantId!;
-    const customerId = req.customerId; // şimdilik kullanmıyoruz ama audit için iyi olur
+    const tenantId = requireTenantId(req);
+    const _customerId = req.customerId; // opsiyonel: audit
 
     return this.inventory.reserveForCheckout(tenantId, checkoutId, {
       locationId: dto.locationId,
@@ -39,10 +44,10 @@ export class StoreInventoryController {
   async release(
     @Req() req: StoreAuthContext,
     @Param("id") checkoutId: string,
-    @Body() dto: ReleaseStockDto
+    @Body() dto: ReleaseStockDto,
   ) {
-    const tenantId = req.tenantId!;
-    const customerId = req.customerId;
+    const tenantId = requireTenantId(req);
+    const _customerId = req.customerId;
 
     return this.inventory.releaseForCheckout(tenantId, checkoutId, {
       locationId: dto.locationId,
@@ -53,9 +58,9 @@ export class StoreInventoryController {
   async stockStatus(
     @Req() req: StoreAuthContext,
     @Param("id") checkoutId: string,
-    @Query("locationId") locationId?: string
+    @Query("locationId") locationId?: string,
   ) {
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
     return this.inventory.getStockStatus(tenantId, checkoutId, { locationId });
   }
 }

@@ -1,3 +1,5 @@
+// src/modules/auth/admin/admin/controllers/admin-auth.controller.ts
+
 import {
   Body,
   Controller,
@@ -12,7 +14,6 @@ import {
   HttpCode,
 } from "@nestjs/common";
 import {
-  ApiBearerAuth,
   ApiCookieAuth,
   ApiBody,
   ApiOkResponse,
@@ -46,6 +47,7 @@ function getReqMeta(req: FastifyRequest) {
 
   const userAgent =
     (req.headers["user-agent"] as string | undefined) ?? undefined;
+
   return { ip, userAgent };
 }
 
@@ -55,8 +57,10 @@ function pickIdentityAndTenant(user: any) {
     (user?.identityId as string | undefined) ??
     (user?.sub as string | undefined);
 
-  if (!tenantId || !identityId)
+  if (!tenantId || !identityId) {
     throw new UnauthorizedException("Invalid auth context");
+  }
+
   return { tenantId, identityId };
 }
 
@@ -67,7 +71,7 @@ export class AdminAuthController {
     private readonly service: AdminAuthService,
     private readonly rl: AuthRateLimitService,
     private readonly audit: AuthAuditLogService,
-    private readonly activeTenant: ActiveTenantService
+    private readonly activeTenant: ActiveTenantService,
   ) {}
 
   @Post("login")
@@ -77,7 +81,7 @@ export class AdminAuthController {
   async login(
     @Body() dto: AdminLoginDto,
     @Req() req: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AdminAuthResponseDto> {
     const meta = getReqMeta(req);
     const tenantId = await this.activeTenant.getTenantId();
@@ -92,7 +96,7 @@ export class AdminAuthController {
           identityKey: dto.email?.toLowerCase() ?? null,
         },
         10,
-        5 * 60
+        5 * 60,
       );
     } catch (e) {
       if (
@@ -121,59 +125,74 @@ export class AdminAuthController {
       tenantId,
       dto.email,
       dto.password,
-      meta
+      meta,
     );
 
+    // Cookie-first auth: access + refresh cookie set
     reply.setCookie(
       COOKIE_NAMES.adminAccess,
       accessToken,
-      adminAccessCookieOptions()
+      adminAccessCookieOptions(),
     );
     reply.setCookie(
       COOKIE_NAMES.adminRefresh,
       refreshRaw,
-      adminRefreshCookieOptions()
+      adminRefreshCookieOptions(),
     );
 
+    // UI tarafı isterse accessToken'ı memory'de tutabilir; asıl kaynak cookie
     return { accessToken };
   }
 
   @Post("refresh")
   @HttpCode(200)
   @ApiOkResponse({ type: AdminAuthResponseDto })
+  // Dokümantasyon standardı: tek auth scheme (adminAccessCookie)
+  @ApiCookieAuth("adminAccessCookie")
   async refresh(
     @Req() req: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<AdminAuthResponseDto> {
     const meta = getReqMeta(req);
 
     const refreshRaw = (req.cookies as any)?.[COOKIE_NAMES.adminRefresh];
     if (!refreshRaw) throw new UnauthorizedException("Missing refresh cookie");
 
-    const { accessToken, refreshRaw: newRefresh } = await this.service.refresh(
-      refreshRaw,
-      meta
-    );
+    try {
+      const { accessToken, refreshRaw: newRefresh } =
+        await this.service.refresh(refreshRaw, meta);
 
-    reply.setCookie(
-      COOKIE_NAMES.adminAccess,
-      accessToken,
-      adminAccessCookieOptions()
-    );
-    reply.setCookie(
-      COOKIE_NAMES.adminRefresh,
-      newRefresh,
-      adminRefreshCookieOptions()
-    );
+      reply.setCookie(
+        COOKIE_NAMES.adminAccess,
+        accessToken,
+        adminAccessCookieOptions(),
+      );
+      reply.setCookie(
+        COOKIE_NAMES.adminRefresh,
+        newRefresh,
+        adminRefreshCookieOptions(),
+      );
 
-    return { accessToken };
+      return { accessToken };
+    } catch (e: any) {
+      // Refresh invalid/reuse => cookie temizle, client login'e düşsün
+      reply.clearCookie(
+        COOKIE_NAMES.adminRefresh,
+        clearAdminRefreshCookieOptions(),
+      );
+      reply.clearCookie(
+        COOKIE_NAMES.adminAccess,
+        clearAdminAccessCookieOptions(),
+      );
+      throw e;
+    }
   }
 
   @Post("logout")
   @HttpCode(200)
   async logout(
     @Req() req: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply
+    @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const meta = getReqMeta(req);
 
@@ -182,11 +201,11 @@ export class AdminAuthController {
 
     reply.clearCookie(
       COOKIE_NAMES.adminRefresh,
-      clearAdminRefreshCookieOptions()
+      clearAdminRefreshCookieOptions(),
     );
     reply.clearCookie(
       COOKIE_NAMES.adminAccess,
-      clearAdminAccessCookieOptions()
+      clearAdminAccessCookieOptions(),
     );
 
     return { ok: true };
@@ -198,7 +217,7 @@ export class AdminAuthController {
   @ApiCookieAuth("adminAccessCookie")
   async logoutAll(
     @Req() req: FastifyRequest & { user: any },
-    @Res({ passthrough: true }) reply: FastifyReply
+    @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const { tenantId, identityId } = pickIdentityAndTenant((req as any).user);
 
@@ -206,11 +225,11 @@ export class AdminAuthController {
 
     reply.clearCookie(
       COOKIE_NAMES.adminRefresh,
-      clearAdminRefreshCookieOptions()
+      clearAdminRefreshCookieOptions(),
     );
     reply.clearCookie(
       COOKIE_NAMES.adminAccess,
-      clearAdminAccessCookieOptions()
+      clearAdminAccessCookieOptions(),
     );
 
     return { ok: true };
