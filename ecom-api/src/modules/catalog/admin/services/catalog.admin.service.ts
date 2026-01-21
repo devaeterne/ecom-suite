@@ -11,10 +11,10 @@ import { ProductMediaRole } from "@prisma/client";
 
 import { PrismaService } from "@/prisma";
 import { TenantEntitlementsService } from "@/infrastructure/entitlements/tenant-entitlements.service";
+import { limitExceeded } from "@/infrastructure/errors/domain.errors";
+
 import { CatalogRepo } from "@/modules/catalog/common/prisma/catalog.repo";
 import { ProductMediaRepository } from "@/modules/catalog/common/prisma/product.media.repo";
-import { assertProductLimitOrThrow } from "@/modules/catalog/common/policies/product-limit.policy";
-import { assertMediaLimitOrThrow } from "@/modules/catalog/common/policies/product-media.policy";
 
 import {
   mapCategory,
@@ -23,7 +23,6 @@ import {
 
 import { AdminCategoryListQueryDto } from "../dto/admin-category.dto";
 import { AdminProductListQueryDto } from "../dto/admin-product.dto";
-import { limitExceeded } from "@/infrastructure/errors/domain.errors";
 
 type CategoryTreeNode = {
   id: string;
@@ -35,6 +34,20 @@ type CategoryTreeNode = {
 const SINGLETON_ROLES = new Set<ProductMediaRole>(["HERO", "THUMBNAIL"]);
 const MAX_CATEGORY_DEPTH = 100;
 
+type ProductStatus = "draft" | "published" | "archived";
+
+function asStatus(v: any): ProductStatus | null {
+  const s = String(v ?? "").toLowerCase();
+  if (s === "draft" || s === "published" || s === "archived") return s;
+  return null;
+}
+
+function asInt(v: any, fallback = 0) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.floor(n);
+}
+
 @Injectable()
 export class CatalogAdminService {
   constructor(
@@ -43,17 +56,33 @@ export class CatalogAdminService {
     private readonly prisma: PrismaService,
     private readonly entitlementsSvc: TenantEntitlementsService,
   ) {}
-  private async assertProductStatusLimit(
-    tenantId: string,
-    targetStatus: "draft" | "published" | "archived",
-    delta = 1,
-  ) {
+
+  // ------------------------------------------------------------
+  // Entitlements helpers (single source of truth)
+  // ------------------------------------------------------------
+
+  private async getLimitsAndUsage(tenantId: string) {
+    // entitlementsSvc.resolve() -> { entitlements, usage }
     const { entitlements, usage } =
       await this.entitlementsSvc.resolve(tenantId);
-    const limit = Number(entitlements?.limits?.productsPerStatus ?? 0);
-    if (!Number.isFinite(limit) || limit <= 0) return; // limit yoksa enforce etme
+    const limits = entitlements?.limits ?? {};
+    const u = usage ?? {};
+    return { limits, usage: u };
+  }
 
-    const current = Number(usage?.productsByStatus?.[targetStatus] ?? 0);
+  private async assertProductStatusLimit(
+    tenantId: string,
+    targetStatus: ProductStatus,
+    delta = 1,
+  ) {
+    const { limits, usage } = await this.getLimitsAndUsage(tenantId);
+
+    // limit yoksa enforce etme
+    const limit = asInt(limits?.productsPerStatus, 0);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+
+    const current = asInt(usage?.productsByStatus?.[targetStatus], 0);
+
     if (current + delta > limit) {
       throw limitExceeded({
         resource: "catalog_product",
@@ -65,33 +94,34 @@ export class CatalogAdminService {
     }
   }
 
-  private async assertMediaLimitAfterOptionalSingletonReplace(
+  private async assertMediaLimitBeforeInsert(
     tx: any,
     tenantId: string,
     productId: string,
-    role: ProductMediaRole,
   ) {
-    const { entitlements } = await this.entitlementsSvc.resolve(tenantId);
-    const limit = Number(entitlements?.limits?.mediaPerProduct ?? 0);
+    const { limits } = await this.getLimitsAndUsage(tenantId);
+
+    const limit = asInt(limits?.mediaPerProduct, 0);
     if (!Number.isFinite(limit) || limit <= 0) return;
 
-    const count = await tx.productMedia.count({
+    const current = await tx.productMedia.count({
       where: { tenantId, productId },
     });
 
-    if (count + 1 > limit) {
-      // singleton role’da replace çalışıyorsa count zaten düşmüş olmalı
+    // insert öncesi +1
+    if (current + 1 > limit) {
       throw limitExceeded({
         resource: "product_media",
         limit,
-        current: count,
+        current,
         tenantId,
         productId,
       });
     }
   }
+
   // ------------------------------------------------------------
-  // Helpers (tenant-safe)
+  // Generic helpers (tenant-safe)
   // ------------------------------------------------------------
 
   private buildCategoryTree(
@@ -132,7 +162,6 @@ export class CatalogAdminService {
       throw new BadRequestException("parentId cannot be the category itself");
     }
 
-    // parent var mı?
     let cursor = await this.repo.getCategoryParentRef(tenantId, newParentId);
     if (!cursor) throw new NotFoundException("Parent category not found");
 
@@ -217,56 +246,26 @@ export class CatalogAdminService {
   // ------------------------------------------------------------
 
   async createProduct(tenantId: string, dto: any) {
-    await assertProductLimitOrThrow({
-      prisma: this.prisma as any,
-      tenantId,
-      status: "draft",
-    });
     const handle = String(dto?.handle ?? "").trim();
     if (!handle) throw new BadRequestException("handle is required");
 
     const exists = await this.repo.productHandleExists(tenantId, handle);
     if (exists) throw new ConflictException("Product handle already exists");
 
-    const targetStatus = String(dto?.status ?? "draft") as
-      | "draft"
-      | "published"
-      | "archived";
-    if (
-      targetStatus === "draft" ||
-      targetStatus === "published" ||
-      targetStatus === "archived"
-    ) {
-      await this.assertProductStatusLimit(tenantId, targetStatus, 1);
-    }
+    const targetStatus = asStatus(dto?.status ?? "draft");
+    if (!targetStatus) throw new BadRequestException("Invalid product status");
+
+    // ✅ tek enforcement: hedef status
+    await this.assertProductStatusLimit(tenantId, targetStatus, 1);
 
     const row = await this.repo.adminCreateProduct(tenantId, dto);
     return { product: mapStoreProduct(row) };
   }
 
   async updateProduct(tenantId: string, id: string, dto: any) {
-    // PR-4: status değişiyorsa hedef status için limit kontrolü
-
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
-    if (dto?.status !== undefined) {
-      const nextStatus = String(dto.status).toLowerCase();
-      const prevStatus = String((existing as any).status ?? "").toLowerCase();
 
-      if (
-        (nextStatus === "draft" ||
-          nextStatus === "published" ||
-          nextStatus === "archived") &&
-        nextStatus !== prevStatus
-      ) {
-        await assertProductLimitOrThrow({
-          prisma: this.prisma as any,
-          tenantId,
-          status: nextStatus as any,
-          excludeProductId: id, // mevcut ürünü sayımdan hariç tut
-        });
-      }
-    }
     if (dto?.handle !== undefined) {
       const handle = String(dto?.handle ?? "").trim();
       if (!handle) throw new BadRequestException("handle is required");
@@ -274,55 +273,41 @@ export class CatalogAdminService {
       const exists = await this.repo.productHandleExists(tenantId, handle, id);
       if (exists) throw new ConflictException("Product handle already exists");
     }
-    // status transition limit enforcement
+
     if (dto?.status !== undefined) {
-      const prev = String((existing as any).status ?? "");
-      const next = String(dto.status ?? "");
-      const isKnown = (s: string) =>
-        s === "draft" || s === "published" || s === "archived";
-      if (isKnown(next) && next !== prev) {
-        await this.assertProductStatusLimit(tenantId, next as any, 1);
+      const prev = asStatus((existing as any).status);
+      const next = asStatus(dto.status);
+
+      if (!next) throw new BadRequestException("Invalid product status");
+
+      // status değişiyorsa hedef status için +1 kontrolü
+      if (prev && next !== prev) {
+        await this.assertProductStatusLimit(tenantId, next, 1);
       }
     }
+
     const row = await this.repo.adminUpdateProduct(tenantId, id, dto);
     return { product: mapStoreProduct(row) };
   }
 
   async publishProduct(tenantId: string, id: string) {
-    await assertProductLimitOrThrow({
-      prisma: this.prisma as any,
-      tenantId,
-      status: "published",
-      excludeProductId: id,
-    });
-
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
 
-    // only enforce if transition -> published
-    const prev = String((existing as any).status ?? "");
+    const prev = asStatus((existing as any).status);
     if (prev !== "published") {
       await this.assertProductStatusLimit(tenantId, "published", 1);
     }
+
     const row = await this.repo.adminPublishProduct(tenantId, id);
     return { product: mapStoreProduct(row) };
   }
 
   async unpublishProduct(tenantId: string, id: string) {
-    await assertProductLimitOrThrow({
-      prisma: this.prisma as any,
-      tenantId,
-      status: "draft",
-      excludeProductId: id,
-    });
-
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
-    // unpublish -> draft limit
-    const prev = String((existing as any).status ?? "");
-    if (prev !== "draft") {
-      await this.assertProductStatusLimit(tenantId, "draft", 1);
-    }
+
+    // ✅ öneri: unpublish’ı quota ile kilitleme (operasyonel olarak daha doğru)
     const row = await this.repo.adminUnpublishProduct(tenantId, id);
     return { product: mapStoreProduct(row) };
   }
@@ -447,7 +432,6 @@ export class CatalogAdminService {
   async listCategories(tenantId: string, q: AdminCategoryListQueryDto) {
     const view = (q?.view ?? "flat") as "flat" | "tree";
 
-    // ✅ query string -> boolean normalize
     const raw = (q as any)?.isActive;
     const isActive =
       raw === undefined || raw === null
@@ -460,11 +444,10 @@ export class CatalogAdminService {
 
     const rows = await this.repo.listCategories(tenantId, {
       q: q?.q,
-      isActive, // ✅ artık boolean/undefined
+      isActive,
     });
 
     const mapped = rows.map((r: any) => mapCategory(r));
-
     if (view === "flat") return { items: mapped };
 
     const flat = mapped.map((c: any) => ({
@@ -526,11 +509,10 @@ export class CatalogAdminService {
   }
 
   // ------------------------------------------------------------
-  // MEDIA (tenant-safe, deterministic)
+  // MEDIA (tenant-safe, deterministic) — single enforcement
   // ------------------------------------------------------------
 
   async listProductMedia(tenantId: string, productId: string) {
-    // Ürün var mı? (tenant-scope)
     const product = await this.prisma.catalogProduct.findUnique({
       where: { tenantId_id: { tenantId, id: productId } },
       select: { id: true },
@@ -552,8 +534,6 @@ export class CatalogAdminService {
   }
 
   async attachProductMedia(tenantId: string, productId: string, dto: any) {
-    // PR-4: media limit enforcement (her ürün için 1 görsel)
-
     const fileId = String(dto?.fileId ?? "").trim();
     if (!fileId) throw new BadRequestException("fileId is required");
 
@@ -563,21 +543,19 @@ export class CatalogAdminService {
     const rankInput = dto?.rank;
 
     return this.prisma.$transaction(async (tx) => {
-      // Ürün tenant-scope kontrol
       const product = await tx.catalogProduct.findUnique({
         where: { tenantId_id: { tenantId, id: productId } },
         select: { id: true },
       });
       if (!product) throw new NotFoundException("Product not found");
 
-      // File tenant-scope kontrol
       const file = await tx.fileObject.findUnique({
         where: { tenantId_id: { tenantId, id: fileId } },
         select: { id: true },
       });
       if (!file) throw new NotFoundException("File not found");
 
-      // Singleton role replace
+      // singleton replace önce yapılır (count düşebilir)
       if (SINGLETON_ROLES.has(role)) {
         await this.productMediaRepo.deleteRoleSingleton(
           tx,
@@ -586,20 +564,11 @@ export class CatalogAdminService {
           role,
         );
       }
-      // ✅ PR-2: media limit enforcement (singleton replace sonrası kontrol)
-      await this.assertMediaLimitAfterOptionalSingletonReplace(
-        tx,
-        tenantId,
-        productId,
-        role,
-      );
-      await assertMediaLimitOrThrow({
-        prisma: tx as any,
-        tenantId,
-        productId,
-      });
 
-      // Rank resolve (deterministic)
+      // ✅ tek enforcement: insert öncesi (transaction içinde)
+      await this.assertMediaLimitBeforeInsert(tx, tenantId, productId);
+
+      // rank (deterministic)
       let rank: number;
       if (role === "GALLERY") {
         const n = Number(rankInput);
@@ -657,7 +626,8 @@ export class CatalogAdminService {
         existing.role as ProductMediaRole,
       );
 
-      // Singleton role’a geçişte replace semantics
+      // singleton role’a geçişte replace semantics
+      // (update sayıyı artırmaz; limit check gerekmez)
       if (SINGLETON_ROLES.has(nextRole) && nextRole !== existing.role) {
         await this.productMediaRepo.deleteRoleSingleton(
           tx,
@@ -667,7 +637,6 @@ export class CatalogAdminService {
         );
       }
 
-      // Rank kuralı (deterministic)
       let nextRank: number | undefined = undefined;
       if (dto?.rank !== undefined) {
         const n = Number(dto.rank);
@@ -733,7 +702,6 @@ export class CatalogAdminService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Ürün tenant-scope kontrol
         const product = await tx.catalogProduct.findUnique({
           where: { tenantId_id: { tenantId, id: productId } },
           select: { id: true },
@@ -755,7 +723,6 @@ export class CatalogAdminService {
           throw new BadRequestException("Only GALLERY items can be reordered");
         }
 
-        // rank update (deterministic)
         await Promise.all(
           ids.map((id, idx) =>
             tx.productMedia.updateMany({
@@ -768,11 +735,11 @@ export class CatalogAdminService {
         return { ok: true };
       });
     } catch (e: any) {
-      // Kural hataları maskelenmesin
       if (e instanceof HttpException) throw e;
       throw new ConflictException("Reorder failed");
     }
   }
+
   async productHandleExists(
     tenantId: string,
     handle: string,

@@ -1,5 +1,7 @@
-import { ConflictException } from "@nestjs/common";
+// src/modules/catalog/common/policies/product-media.policy.ts
+
 import type { PrismaClient } from "@prisma/client";
+import { limitExceeded } from "@/infrastructure/errors/domain.errors";
 import { resolveTenantLimits } from "./product-limit.policy";
 
 function asInt(v: any, fallback: number) {
@@ -11,10 +13,7 @@ function asInt(v: any, fallback: number) {
 const DEFAULT_MEDIA_LIMIT = 1;
 
 /**
- * PR-4: “Her ürün için 1 görsel” enforcement
- * Not:
- * - Eğer productMedia tablosunda deletedAt varsa onu da filtreleyebilirsin.
- * - Şimdilik mevcut kodunda deleteMany ile hard delete var gibi → deletedAt yok varsayıyorum.
+ * “Her ürün için 1 görsel” enforcement
  */
 export async function assertMediaLimitOrThrow(input: {
   prisma: PrismaClient;
@@ -31,10 +30,12 @@ export async function assertMediaLimitOrThrow(input: {
   });
 
   if (current >= limit) {
-    throw new ConflictException({
-      code: "media_limit_exceeded",
-      message: "Media limit reached for this product",
-      details: { limit, current, productId },
+    throw limitExceeded({
+      resource: "product_media",
+      limit,
+      current,
+      tenantId,
+      productId,
     });
   }
 }
