@@ -13,6 +13,8 @@ import { PrismaService } from "@/prisma";
 import { TenantEntitlementsService } from "@/infrastructure/entitlements/tenant-entitlements.service";
 import { CatalogRepo } from "@/modules/catalog/common/prisma/catalog.repo";
 import { ProductMediaRepository } from "@/modules/catalog/common/prisma/product.media.repo";
+import { assertProductLimitOrThrow } from "@/modules/catalog/common/policies/product-limit.policy";
+import { assertMediaLimitOrThrow } from "@/modules/catalog/common/policies/product-media.policy";
 
 import {
   mapCategory,
@@ -215,6 +217,11 @@ export class CatalogAdminService {
   // ------------------------------------------------------------
 
   async createProduct(tenantId: string, dto: any) {
+    await assertProductLimitOrThrow({
+      prisma: this.prisma as any,
+      tenantId,
+      status: "draft",
+    });
     const handle = String(dto?.handle ?? "").trim();
     if (!handle) throw new BadRequestException("handle is required");
 
@@ -238,9 +245,28 @@ export class CatalogAdminService {
   }
 
   async updateProduct(tenantId: string, id: string, dto: any) {
+    // PR-4: status değişiyorsa hedef status için limit kontrolü
+
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
+    if (dto?.status !== undefined) {
+      const nextStatus = String(dto.status).toLowerCase();
+      const prevStatus = String((existing as any).status ?? "").toLowerCase();
 
+      if (
+        (nextStatus === "draft" ||
+          nextStatus === "published" ||
+          nextStatus === "archived") &&
+        nextStatus !== prevStatus
+      ) {
+        await assertProductLimitOrThrow({
+          prisma: this.prisma as any,
+          tenantId,
+          status: nextStatus as any,
+          excludeProductId: id, // mevcut ürünü sayımdan hariç tut
+        });
+      }
+    }
     if (dto?.handle !== undefined) {
       const handle = String(dto?.handle ?? "").trim();
       if (!handle) throw new BadRequestException("handle is required");
@@ -263,6 +289,13 @@ export class CatalogAdminService {
   }
 
   async publishProduct(tenantId: string, id: string) {
+    await assertProductLimitOrThrow({
+      prisma: this.prisma as any,
+      tenantId,
+      status: "published",
+      excludeProductId: id,
+    });
+
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
 
@@ -276,6 +309,13 @@ export class CatalogAdminService {
   }
 
   async unpublishProduct(tenantId: string, id: string) {
+    await assertProductLimitOrThrow({
+      prisma: this.prisma as any,
+      tenantId,
+      status: "draft",
+      excludeProductId: id,
+    });
+
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
     // unpublish -> draft limit
@@ -512,6 +552,8 @@ export class CatalogAdminService {
   }
 
   async attachProductMedia(tenantId: string, productId: string, dto: any) {
+    // PR-4: media limit enforcement (her ürün için 1 görsel)
+
     const fileId = String(dto?.fileId ?? "").trim();
     if (!fileId) throw new BadRequestException("fileId is required");
 
@@ -551,6 +593,11 @@ export class CatalogAdminService {
         productId,
         role,
       );
+      await assertMediaLimitOrThrow({
+        prisma: tx as any,
+        tenantId,
+        productId,
+      });
 
       // Rank resolve (deterministic)
       let rank: number;
