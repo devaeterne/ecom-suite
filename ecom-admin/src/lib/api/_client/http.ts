@@ -151,6 +151,9 @@ export async function apiFetch<T = unknown>(
       url,
       method,
       status: res.status,
+      code: (data as any)?.code,
+      message: (data as any)?.message,
+      details: (data as any)?.details,
       data,
     });
 

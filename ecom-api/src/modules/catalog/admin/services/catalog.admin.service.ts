@@ -21,6 +21,7 @@ import {
 
 import { AdminCategoryListQueryDto } from "../dto/admin-category.dto";
 import { AdminProductListQueryDto } from "../dto/admin-product.dto";
+import { limitExceeded } from "@/infrastructure/errors/domain.errors";
 
 type CategoryTreeNode = {
   id: string;
@@ -52,9 +53,13 @@ export class CatalogAdminService {
 
     const current = Number(usage?.productsByStatus?.[targetStatus] ?? 0);
     if (current + delta > limit) {
-      throw new ConflictException(
-        `Product limit exceeded for status=${targetStatus} (limit=${limit}, current=${current})`,
-      );
+      throw limitExceeded({
+        resource: "catalog_product",
+        limit,
+        current,
+        tenantId,
+        status: targetStatus,
+      });
     }
   }
 
@@ -74,9 +79,13 @@ export class CatalogAdminService {
 
     if (count + 1 > limit) {
       // singleton role’da replace çalışıyorsa count zaten düşmüş olmalı
-      throw new ConflictException(
-        `Media limit exceeded for product (limit=${limit}, current=${count})`,
-      );
+      throw limitExceeded({
+        resource: "product_media",
+        limit,
+        current: count,
+        tenantId,
+        productId,
+      });
     }
   }
   // ------------------------------------------------------------
