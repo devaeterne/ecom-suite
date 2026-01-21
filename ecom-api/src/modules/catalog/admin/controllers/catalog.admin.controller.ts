@@ -335,4 +335,14 @@ export class CatalogAdminController {
     const tenantId = tenantIdFrom(req);
     return this.service.updateProductMedia(tenantId, productId, mediaId, dto);
   }
+
+  @Get("products/exists")
+  async productHandleExists(
+    @Req() req: AppRequest,
+    @Query("handle") handle: string,
+    @Query("excludeId") excludeId?: string,
+  ) {
+    const tenantId = tenantIdFrom(req);
+    return this.service.productHandleExists(tenantId, handle, excludeId);
+  }
 }

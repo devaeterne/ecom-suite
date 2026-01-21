@@ -837,4 +837,22 @@ export class CatalogRepo {
       where: { tenantId, id },
     });
   }
+
+  async productHandleExists(
+    tenantId: string,
+    handle: string,
+    excludeId?: string,
+  ): Promise<boolean> {
+    const row = await this.prisma.catalogProduct.findFirst({
+      where: {
+        tenantId,
+        handle,
+        deletedAt: null, // soft-delete varsa dikkate al
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+
+    return !!row;
+  }
 }

@@ -16,13 +16,11 @@ import { RequirePermission } from "@/infrastructure/auth/decorators/permission.d
 
 import { TenantService } from "@/modules/admin/tenant/admin/services/tenant.service";
 import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
-import { presentTenant } from "@/modules/admin/tenant/common/mappers/tenant.presenter";
+import {
+  presentTenant,
+  presentTenantMeBundle,
+} from "@/modules/admin/tenant/common/mappers/tenant.presenter";
 
-/**
- * Admin tarafında tenantId kaynağı:
- * - AdminAuthGuard (ve/veya tenant middleware/guard) tenant context'i set eder.
- * - Controller'da header parse ederek yeni bir surface açmayalım.
- */
 export function requireAdminTenantId(req: any): string {
   const tenantId = req?.tenant?.id ?? req?.user?.tenantId ?? req?.tenantId;
   if (!tenantId) {
@@ -40,8 +38,8 @@ export class TenantAdminController {
   @RequirePermission("admin:tenant:read")
   async me(@Req() req: any) {
     const tenantId = requireAdminTenantId(req);
-    const t = await this.svc.getMe(tenantId);
-    return presentTenant(t);
+    const bundle = await this.svc.getMeBundle(tenantId);
+    return presentTenantMeBundle(bundle);
   }
 
   @Patch("me")
@@ -49,6 +47,9 @@ export class TenantAdminController {
   async patchMe(@Req() req: any, @Body() dto: TenantMePatchDto) {
     const tenantId = requireAdminTenantId(req);
     const t = await this.svc.patchMe(tenantId, dto);
+
+    // UI zaten genelde PATCH sonrası /me re-fetch eder.
+    // Burada stable olarak tenant döndürmek yeterli.
     return presentTenant(t);
   }
 }

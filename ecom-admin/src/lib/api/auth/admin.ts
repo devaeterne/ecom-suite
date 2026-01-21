@@ -1,3 +1,4 @@
+// ecom-admin/src/lib/api/auth/admin.ts
 import { apiFetch } from "@/src/lib/api/_client/http";
 
 export type AdminAuthResponse = { accessToken?: string };

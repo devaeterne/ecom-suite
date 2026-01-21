@@ -1,8 +1,7 @@
-// src/modules/admin/tenant/admin/services/tenant.service.ts
+// src/infrastructure/entitlements/tenant-entitlements.service.ts
 
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
-import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
 
 type JsonObj = Record<string, any>;
 
@@ -24,26 +23,26 @@ const DEFAULT_LIMITS = {
 };
 
 function mergeLimits(planLimits: any): Record<string, any> {
-  const pl = asObj(planLimits);
-  return { ...DEFAULT_LIMITS, ...pl };
+  return { ...DEFAULT_LIMITS, ...asObj(planLimits) };
 }
 
 @Injectable()
-export class TenantService {
+export class TenantEntitlementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMe(tenantId: string) {
-    const t = await this.prisma.tenant.findFirst({
-      where: { id: tenantId, deletedAt: null },
-    });
-
-    if (!t) throw new NotFoundException("Tenant not found");
-    return t;
+  private rankStatus(s: string) {
+    const x = String(s || "").toUpperCase();
+    if (x === "ACTIVE") return 100;
+    if (x === "TRIALING") return 90;
+    if (x === "PAST_DUE") return 70;
+    if (x === "SUSPENDED") return 50;
+    if (x === "CANCELED") return 30;
+    if (x === "EXPIRED") return 20;
+    return 0;
   }
 
-  async getMeBundle(tenantId: string) {
-    const tenant = await this.getMe(tenantId);
-
+  async resolve(tenantId: string) {
+    // subscription + plan
     const subs = await this.prisma.tenantSubscription.findMany({
       where: { tenantId, deletedAt: null },
       include: { plan: true },
@@ -51,20 +50,9 @@ export class TenantService {
       take: 20,
     });
 
-    const rankStatus = (s: string) => {
-      const x = String(s || "").toUpperCase();
-      if (x === "ACTIVE") return 100;
-      if (x === "TRIALING") return 90;
-      if (x === "PAST_DUE") return 70;
-      if (x === "SUSPENDED") return 50;
-      if (x === "CANCELED") return 30;
-      if (x === "EXPIRED") return 20;
-      return 0;
-    };
-
     const best = subs.slice().sort((a: any, b: any) => {
-      const ra = rankStatus(a.status);
-      const rb = rankStatus(b.status);
+      const ra = this.rankStatus(a.status);
+      const rb = this.rankStatus(b.status);
       if (ra !== rb) return rb - ra;
 
       const ea = a.currentPeriodEnd
@@ -105,6 +93,7 @@ export class TenantService {
 
     const limits = mergeLimits(plan?.limits);
 
+    // usage (products)
     const [draftCount, publishedCount, archivedCount] = await Promise.all([
       this.prisma.catalogProduct.count({
         where: { tenantId, deletedAt: null, status: "draft" as any },
@@ -141,66 +130,6 @@ export class TenantService {
       },
     };
 
-    return { tenant, plan, entitlements, usage };
-  }
-
-  async patchMe(tenantId: string, dto: TenantMePatchDto) {
-    const t = await this.getMe(tenantId);
-
-    const metadata = asObj(t.metadata);
-    const prevBranding = asObj(metadata.branding);
-    const prevI18n = asObj(metadata.i18n);
-    const prevDomains = asObj(metadata.domains);
-
-    const brandingPatch = {
-      ...(dto.branding ?? {}),
-      ...(dto.logoUrl !== undefined ? { logoUrl: dto.logoUrl } : {}),
-      ...(dto.name !== undefined ? { name: dto.name } : {}),
-    };
-
-    // ✅ i18n yalnızca locale
-    const i18nPatch = {
-      ...(dto.i18n ?? {}),
-      ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
-    };
-
-    const domainsPatch = {
-      ...(dto.domains ?? {}),
-    };
-
-    const nextMetadata: JsonObj = {
-      ...metadata,
-
-      // ✅ metadata top-level tenant settings
-      ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
-      ...(dto.currencyCode !== undefined
-        ? { currencyCode: dto.currencyCode }
-        : {}),
-
-      branding: {
-        ...prevBranding,
-        ...asObj(brandingPatch),
-      },
-      i18n: {
-        ...prevI18n,
-        ...asObj(i18nPatch),
-      },
-      domains: {
-        ...prevDomains,
-        ...asObj(domainsPatch),
-      },
-    };
-
-    const nextName = dto.name ?? dto.branding?.name ?? t.name ?? null;
-
-    const updated = await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        ...(nextName !== undefined ? { name: nextName } : {}),
-        metadata: nextMetadata as any,
-      },
-    });
-
-    return updated;
+    return { plan, entitlements, usage };
   }
 }

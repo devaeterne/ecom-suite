@@ -1263,6 +1263,7 @@ model CatalogProduct {
   translations               ProductTranslation[]
 
   @@unique([tenantId, id])
+  @@unique([tenantId, handle], map: "uq_catalog_product_tenant_handle")
   @@index([status], map: "idx_catalog_product_status")
   @@index([rank, updatedAt(sort: Desc)], map: "idx_catalog_product_rank_updated")
   @@index([publishedAt(sort: Desc)], map: "idx_catalog_product_published_at")

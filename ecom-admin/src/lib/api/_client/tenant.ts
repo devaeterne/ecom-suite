@@ -1,9 +1,39 @@
 // lib/api/_client/tenant.ts
+import { apiFetch } from "@/src/lib/api/_client/http";
+
 export const TENANT_ID_HEADER = "x-tenant-id";
 export const TENANT_CODE_HEADER = "x-tenant-code";
 
 const LS_TENANT_ID = "tenantId";
 const LS_TENANT_CODE = "tenantCode";
+
+export type AdminTenantMe = {
+  id: string;
+  code: string;
+  name?: string;
+};
+
+export type AdminTenantMeBundle = {
+  tenant: {
+    id: string;
+    code: string | null;
+    name: string | null;
+    timezone: string | null;
+    currencyCode: string | null;
+  };
+  plan: any | null;
+  entitlements: any;
+  usage: any;
+};
+
+export const AdminTenantApi = {
+  me: () =>
+    apiFetch<AdminTenantMeBundle>("/api/admin/tenants/me", {
+      method: "GET",
+      credentials: "include",
+      headers: withTenantHeaders(), // ✅ ekle
+    }),
+};
 
 export function setTenantContext(input: {
   tenantId: string;

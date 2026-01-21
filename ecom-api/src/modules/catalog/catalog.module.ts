@@ -29,6 +29,7 @@ import { ProductTranslationsAdminService } from "./admin/services/product.transl
 import { CategoryTranslationsAdminController } from "./admin/controllers/category.translations.admin.controller";
 import { CategoryTranslationsAdminService } from "./admin/services/category.translations.admin.service";
 import { CategoryTranslationRepository } from "./translations/common/prisma/category.translations.repo";
+import { TenantEntitlementsService } from "@/infrastructure/entitlements/tenant-entitlements.service";
 
 @Module({
   imports: [PrismaModule],
@@ -60,6 +61,7 @@ import { CategoryTranslationRepository } from "./translations/common/prisma/cate
     ProductTranslationRepository,
     CategoryTranslationsAdminService,
     CategoryTranslationRepository,
+    TenantEntitlementsService,
   ],
   exports: [CatalogRepo],
 })

@@ -1,25 +1,24 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter, useSearchParams, useParams } from "next/navigation"
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams, useParams } from "next/navigation";
 
-import PageHeader from "@/components/page-header/PageHeader"
+import PageHeader from "@/components/page-header/PageHeader";
 
-import { ProductsFilters } from "./_components/products-filters"
-import { ProductsTable } from "./_components/products-table"
+import { ProductsFilters } from "./_components/products-filters";
+import { ProductsTable } from "./_components/products-table";
 
-import { apiFetch } from "@/src/lib/api/_client/http"
-import { withQuery } from "@/src/lib/api/_client/query"
-import { useT } from "@/i18n/use-t"
-
+import { apiFetch } from "@/src/lib/api/_client/http";
+import { withQuery } from "@/src/lib/api/_client/query";
+import { useT } from "@/i18n/use-t";
 
 // types
-import type { AdminProductListItem } from "@/src/modules/products/types/products.types"
+import type { AdminProductListItem } from "@/src/modules/products/types/products.types";
 
 type AdminProductsResponse = {
-  items: any[]
-  pagination: { offset: number; limit: number; total: number }
-}
+  items: any[];
+  pagination: { offset: number; limit: number; total: number };
+};
 
 function mapApiToListItem(p: any): AdminProductListItem {
   const categoryNames = Array.isArray(p.categories)
@@ -39,29 +38,29 @@ function mapApiToListItem(p: any): AdminProductListItem {
     categoryNames: Array.isArray(p.categories)
       ? p.categories.map((c: any) => c.name)
       : [],
-  }
+  };
 }
 
 export default function ProductsPage() {
-  const t = useT()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const params = useParams<{ locale: string }>()
-  const locale = params?.locale ?? "en"
+  const t = useT();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const params = useParams<{ locale: string }>();
+  const locale = params?.locale ?? "en";
 
   // ✅ URL -> state
-  const offset = Number(searchParams.get("offset") ?? "0") || 0
-  const limit = Number(searchParams.get("limit") ?? "25") || 25
+  const offset = Number(searchParams.get("offset") ?? "0") || 0;
+  const limit = Number(searchParams.get("limit") ?? "25") || 25;
 
-  const q = searchParams.get("q") ?? ""
-  const status = searchParams.get("status") ?? ""
-  const categoryId = searchParams.get("categoryId") ?? ""
-  const collectionId = searchParams.get("collectionId") ?? ""
-  const inventory = searchParams.get("inventory") ?? "" // in_stock|low|out vs
+  const q = searchParams.get("q") ?? "";
+  const status = searchParams.get("status") ?? "";
+  const categoryId = searchParams.get("categoryId") ?? "";
+  const collectionId = searchParams.get("collectionId") ?? "";
+  const inventory = searchParams.get("inventory") ?? ""; // in_stock|low|out vs
 
-  const [items, setItems] = useState<AdminProductListItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [items, setItems] = useState<AdminProductListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const queryForApi = useMemo(() => {
     // 🔒 Contract kilidi:
@@ -74,63 +73,67 @@ export default function ProductsPage() {
       inventory: inventory || undefined,
       limit,
       offset,
-    }
-  }, [q, status, categoryId, collectionId, inventory, limit, offset])
+    };
+  }, [q, status, categoryId, collectionId, inventory, limit, offset]);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     async function run() {
-      setLoading(true)
+      setLoading(true);
       try {
-        const path = withQuery("/api/admin/products", queryForApi)
-        const res = await apiFetch<AdminProductsResponse>(path, { method: "GET" })
+        const path = withQuery("/api/admin/products", queryForApi);
+        const res = await apiFetch<AdminProductsResponse>(path, {
+          method: "GET",
+        });
 
-        if (cancelled) return
+        if (cancelled) return;
 
-        const mapped = (res.items ?? []).map(mapApiToListItem)
-        setItems(mapped)
-        setTotal(res.pagination?.total ?? mapped.length)
+        const mapped = (res.items ?? []).map(mapApiToListItem);
+        setItems(mapped);
+        setTotal(res.pagination?.total ?? mapped.length);
       } catch (err: any) {
-        if (cancelled) return
-        console.error("[ProductsPage] list failed", err)
+        if (cancelled) return;
+        console.error("[ProductsPage] list failed", err);
         // UI stabil kalsın:
-        setItems([])
-        setTotal(0)
+        setItems([]);
+        setTotal(0);
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoading(false);
       }
     }
-    run()
+    run();
     return () => {
-      cancelled = true
-    }
-  }, [queryForApi])
-
+      cancelled = true;
+    };
+  }, [queryForApi]);
 
   function setQuery(next: Record<string, string | number | null | undefined>) {
-    const sp = new URLSearchParams(searchParams.toString())
-    sp.delete("_rsc") // Next internal
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.delete("_rsc"); // Next internal
 
     for (const [k, v] of Object.entries(next)) {
-      if (v === null || v === undefined || v === "") sp.delete(k)
-      else sp.set(k, String(v))
+      if (v === null || v === undefined || v === "") sp.delete(k);
+      else sp.set(k, String(v));
     }
 
-    router.replace(`/${locale}/products?${sp.toString()}`)
+    router.replace(`/${locale}/products?${sp.toString()}`);
   }
 
   return (
     <div className="space-y-4">
-      <PageHeader titleKey="topbar.title.products" subtitleKey="pages.products.subtitle" />
+      <PageHeader
+        titleKey="topbar.title.products"
+        subtitleKey="pages.products.subtitle"
+      />
 
       <ProductsFilters
         value={{ q, status, categoryId, collectionId, inventory, limit }}
         onChange={(patch) => {
           // filtre değişince başa sar
-          setQuery({ ...patch, offset: 0 })
+          setQuery({ ...patch, offset: 0 });
         }}
         onClear={() => {
-          router.replace(`/${locale}/products?limit=${limit}&offset=0`)
+          router.replace(`/${locale}/products?limit=${limit}&offset=0`);
         }}
       />
 
@@ -145,10 +148,15 @@ export default function ProductsPage() {
           limit={limit}
           total={total}
           onOffsetChange={(nextOffset) => setQuery({ offset: nextOffset })}
-          onLimitChange={(nextLimit) => setQuery({ limit: nextLimit, offset: 0 })}
+          onLimitChange={(nextLimit) =>
+            setQuery({ limit: nextLimit, offset: 0 })
+          }
+          onDeleted={(id) => {
+            setItems((prev) => prev.filter((x) => x.id !== id));
+            setTotal((t) => Math.max(0, t - 1));
+          }}
         />
       )}
-
     </div>
-  )
+  );
 }

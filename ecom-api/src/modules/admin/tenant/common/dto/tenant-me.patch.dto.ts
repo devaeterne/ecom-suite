@@ -20,10 +20,6 @@ export class TenantI18nPatchDto {
   @IsOptional()
   @IsString()
   locale?: string;
-
-  @IsOptional()
-  @IsString()
-  currencyCode?: string;
 }
 
 export class TenantDomainsPatchDto {
@@ -42,11 +38,11 @@ export class TenantDomainsPatchDto {
 
 /**
  * Backward-compatible PATCH DTO:
- * - testlerin gönderdiği flat alanları kabul eder: { name, logoUrl, locale, currencyCode, domains }
- * - ileride UI için nested structure da kabul eder: { branding, i18n, domains }
+ * - flat: { name, logoUrl, timezone, currencyCode, locale, domains }
+ * - nested: { branding, i18n, domains }
  */
 export class TenantMePatchDto {
-  // ---- flat (minimal patch / legacy)
+  // ---- flat (legacy + minimal patch)
   @IsOptional()
   @IsString()
   name?: string;
@@ -55,13 +51,20 @@ export class TenantMePatchDto {
   @IsString()
   logoUrl?: string;
 
+  // ✅ metadata.top-level
   @IsOptional()
   @IsString()
-  locale?: string;
+  timezone?: string;
 
+  // ✅ metadata.top-level
   @IsOptional()
   @IsString()
   currencyCode?: string;
+
+  // locale’ı ister flat ister nested kabul ediyoruz
+  @IsOptional()
+  @IsString()
+  locale?: string;
 
   @IsOptional()
   @IsObject()

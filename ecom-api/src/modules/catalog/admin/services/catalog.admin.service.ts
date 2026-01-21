@@ -10,6 +10,7 @@ import {
 import { ProductMediaRole } from "@prisma/client";
 
 import { PrismaService } from "@/prisma";
+import { TenantEntitlementsService } from "@/infrastructure/entitlements/tenant-entitlements.service";
 import { CatalogRepo } from "@/modules/catalog/common/prisma/catalog.repo";
 import { ProductMediaRepository } from "@/modules/catalog/common/prisma/product.media.repo";
 
@@ -37,8 +38,47 @@ export class CatalogAdminService {
     private readonly repo: CatalogRepo,
     private readonly productMediaRepo: ProductMediaRepository,
     private readonly prisma: PrismaService,
+    private readonly entitlementsSvc: TenantEntitlementsService,
   ) {}
+  private async assertProductStatusLimit(
+    tenantId: string,
+    targetStatus: "draft" | "published" | "archived",
+    delta = 1,
+  ) {
+    const { entitlements, usage } =
+      await this.entitlementsSvc.resolve(tenantId);
+    const limit = Number(entitlements?.limits?.productsPerStatus ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) return; // limit yoksa enforce etme
 
+    const current = Number(usage?.productsByStatus?.[targetStatus] ?? 0);
+    if (current + delta > limit) {
+      throw new ConflictException(
+        `Product limit exceeded for status=${targetStatus} (limit=${limit}, current=${current})`,
+      );
+    }
+  }
+
+  private async assertMediaLimitAfterOptionalSingletonReplace(
+    tx: any,
+    tenantId: string,
+    productId: string,
+    role: ProductMediaRole,
+  ) {
+    const { entitlements } = await this.entitlementsSvc.resolve(tenantId);
+    const limit = Number(entitlements?.limits?.mediaPerProduct ?? 0);
+    if (!Number.isFinite(limit) || limit <= 0) return;
+
+    const count = await tx.productMedia.count({
+      where: { tenantId, productId },
+    });
+
+    if (count + 1 > limit) {
+      // singleton role’da replace çalışıyorsa count zaten düşmüş olmalı
+      throw new ConflictException(
+        `Media limit exceeded for product (limit=${limit}, current=${count})`,
+      );
+    }
+  }
   // ------------------------------------------------------------
   // Helpers (tenant-safe)
   // ------------------------------------------------------------
@@ -166,6 +206,24 @@ export class CatalogAdminService {
   // ------------------------------------------------------------
 
   async createProduct(tenantId: string, dto: any) {
+    const handle = String(dto?.handle ?? "").trim();
+    if (!handle) throw new BadRequestException("handle is required");
+
+    const exists = await this.repo.productHandleExists(tenantId, handle);
+    if (exists) throw new ConflictException("Product handle already exists");
+
+    const targetStatus = String(dto?.status ?? "draft") as
+      | "draft"
+      | "published"
+      | "archived";
+    if (
+      targetStatus === "draft" ||
+      targetStatus === "published" ||
+      targetStatus === "archived"
+    ) {
+      await this.assertProductStatusLimit(tenantId, targetStatus, 1);
+    }
+
     const row = await this.repo.adminCreateProduct(tenantId, dto);
     return { product: mapStoreProduct(row) };
   }
@@ -174,6 +232,23 @@ export class CatalogAdminService {
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
 
+    if (dto?.handle !== undefined) {
+      const handle = String(dto?.handle ?? "").trim();
+      if (!handle) throw new BadRequestException("handle is required");
+
+      const exists = await this.repo.productHandleExists(tenantId, handle, id);
+      if (exists) throw new ConflictException("Product handle already exists");
+    }
+    // status transition limit enforcement
+    if (dto?.status !== undefined) {
+      const prev = String((existing as any).status ?? "");
+      const next = String(dto.status ?? "");
+      const isKnown = (s: string) =>
+        s === "draft" || s === "published" || s === "archived";
+      if (isKnown(next) && next !== prev) {
+        await this.assertProductStatusLimit(tenantId, next as any, 1);
+      }
+    }
     const row = await this.repo.adminUpdateProduct(tenantId, id, dto);
     return { product: mapStoreProduct(row) };
   }
@@ -182,6 +257,11 @@ export class CatalogAdminService {
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
 
+    // only enforce if transition -> published
+    const prev = String((existing as any).status ?? "");
+    if (prev !== "published") {
+      await this.assertProductStatusLimit(tenantId, "published", 1);
+    }
     const row = await this.repo.adminPublishProduct(tenantId, id);
     return { product: mapStoreProduct(row) };
   }
@@ -189,7 +269,11 @@ export class CatalogAdminService {
   async unpublishProduct(tenantId: string, id: string) {
     const existing = await this.repo.getProductById(tenantId, id, false);
     if (!existing) throw new NotFoundException("Product not found");
-
+    // unpublish -> draft limit
+    const prev = String((existing as any).status ?? "");
+    if (prev !== "draft") {
+      await this.assertProductStatusLimit(tenantId, "draft", 1);
+    }
     const row = await this.repo.adminUnpublishProduct(tenantId, id);
     return { product: mapStoreProduct(row) };
   }
@@ -451,6 +535,13 @@ export class CatalogAdminService {
           role,
         );
       }
+      // ✅ PR-2: media limit enforcement (singleton replace sonrası kontrol)
+      await this.assertMediaLimitAfterOptionalSingletonReplace(
+        tx,
+        tenantId,
+        productId,
+        role,
+      );
 
       // Rank resolve (deterministic)
       let rank: number;
@@ -625,5 +716,21 @@ export class CatalogAdminService {
       if (e instanceof HttpException) throw e;
       throw new ConflictException("Reorder failed");
     }
+  }
+  async productHandleExists(
+    tenantId: string,
+    handle: string,
+    excludeId?: string,
+  ) {
+    const h = String(handle ?? "").trim();
+    if (!h || h.length < 2) return { exists: false };
+
+    const exists = await this.repo.productHandleExists(
+      tenantId,
+      h,
+      excludeId ? String(excludeId) : undefined,
+    );
+
+    return { exists };
   }
 }

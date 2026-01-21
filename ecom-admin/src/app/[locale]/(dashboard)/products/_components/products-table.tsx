@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
+import { useParams } from "next/navigation";
+
 import type { AdminProductListItem } from "@/src/modules/products/types/products.types";
 import { useT } from "@/i18n/use-t";
+
 import { ProductStatusBadge } from "./product-status-badge";
 import { InventoryBadge } from "./inventory-badge";
 import { RowActionsMenu } from "./row-actions-menu";
-import { useParams } from "next/navigation";
 
 type Props = {
   items: AdminProductListItem[];
@@ -17,6 +20,7 @@ type Props = {
 
   onOffsetChange: (nextOffset: number) => void;
   onLimitChange: (nextLimit: number) => void;
+  onDeleted?: (productId: string) => void; // ✅
 };
 
 export function ProductsTable({
@@ -26,40 +30,38 @@ export function ProductsTable({
   total,
   onOffsetChange,
   onLimitChange,
+  onDeleted,
 }: Props) {
   const t = useT();
   const params = useParams<{ locale: string }>();
+  const locale = params?.locale ?? "en";
+
   const page = Math.floor(offset / limit) + 1;
   const pageCount = Math.max(1, Math.ceil(total / limit));
-  const locale = params?.locale ?? "en";
 
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
 
-  function money(amount: number, currency: string) {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-    }).format(amount / 100);
-  }
+  const newHref = `/${locale}/products/new`;
 
   return (
     <div className="rounded-xl border">
+      {/* header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="text-sm font-medium">
           {t("products.ProductTableTitle")}
         </div>
 
-        <button
+        <Link
+          href={newHref}
           className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-          onClick={() => {
-            window.location.href = `/${document.documentElement.lang || "en"}/products/new`;
-          }}
         >
           <span className="text-base leading-none">+</span>
-          {t("common.new")}
-        </button>
+          {t("products.common.new")}
+        </Link>
       </div>
+
+      {/* columns */}
       <div className="grid grid-cols-12 gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
         <div className="col-span-5">{t("products.columns.product")}</div>
         <div className="col-span-2">{t("products.columns.category")}</div>
@@ -72,6 +74,7 @@ export function ProductsTable({
         </div>
       </div>
 
+      {/* rows */}
       <div className="divide-y">
         {items.length === 0 ? (
           <div className="px-4 py-10 text-center">
@@ -116,7 +119,10 @@ export function ProductsTable({
               </div>
 
               <div className="col-span-1 text-right">
-                <RowActionsMenu productId={p.id} />
+                <RowActionsMenu
+                  productId={p.id}
+                  onDeleted={() => onDeleted?.(p.id)}
+                />
               </div>
             </div>
           ))

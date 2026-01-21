@@ -41,6 +41,30 @@
     }
   },
 
+  "common": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "save": "Save",
+    "close": "Close",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "active": "Active",
+    "inactive": "Inactive",
+    "emptyDash": "—",
+    "clear": "Clear",
+    "search": "Search"
+  },
+
+  "notifications": {
+    "saved": "Changes saved.",
+    "saveFailed": "Save failed.",
+    "loadFailed": "Failed to load.",
+    "deleted": "Deleted.",
+    "deleteFailed": "Delete failed.",
+    "invalidAmount": "Invalid amount."
+  },
+
   "actions": {
     "openRowMenu": "Open actions menu",
     "view": "View",
@@ -64,6 +88,7 @@
     "catalog": {
       "subtitle": "Manage products, categories, collections and pricing from a single place."
     },
+
     "categories": {
       "title": "Categories",
       "subtitle": "Organize products using hierarchical categories."
@@ -72,81 +97,10 @@
       "title": "Collections",
       "subtitle": "Group products into curated collections."
     },
+
     "price_lists": {
       "title": "Price lists",
       "subtitle": "Manage conditional and campaign-based pricing."
-    },
-    "product_detail": {
-      "title": "Product",
-      "subtitle": "Manage details, variants, inventory, media, and translations.",
-      "variants_panel": {
-        "title": "Variants",
-        "subtitle": "Manage SKUs and pricing per variant.",
-        "columns": {
-          "variant": "Variant",
-          "sku": "SKU",
-          "price": "Price",
-          "inventory": "Inventory",
-          "actions": "Actions"
-        },
-        "actions": {
-          "save": "Save",
-          "saving": "Saving…"
-        },
-        "empty": {
-          "title": "No variants found"
-        }
-      },
-
-      "tabs": {
-        "overview": "Overview",
-        "variants": "Variants",
-        "inventory": "Inventory",
-        "media": "Media",
-        "translations": "Translations"
-      },
-
-      "mode": {
-        "view": "View",
-        "edit": "Edit"
-      },
-
-      "actions": {
-        "edit": "Edit",
-        "cancel": "Cancel",
-        "save": "Save",
-        "saving": "Saving…",
-        "view": "View"
-      },
-
-      "sections": {
-        "organize": "Organization",
-        "content": "Content",
-        "status": "Status"
-      },
-
-      "fields": {
-        "title": "Title",
-        "handle": "Handle",
-        "status": "Status",
-        "description": "Description",
-        "categories": "Categories",
-        "collections": "Collections"
-      },
-
-      "status": {
-        "draft": "Draft",
-        "published": "Published",
-        "archived": "Archived"
-      },
-
-      "hints": {
-        "multiSelect": "Hold Ctrl/Cmd to select multiple items."
-      },
-
-      "empty": {
-        "notFound": "Product not found."
-      }
     },
 
     "orders": {
@@ -181,51 +135,96 @@
         "title": "Reservations",
         "subtitle": "Track stock reserved by active and completed checkouts."
       }
+    },
+
+    "product_detail": {
+      "tabs": {
+        "details": "Details",
+        "overview": "Overview",
+        "organize": "Organization",
+        "variants": "Variants",
+        "inventory": "Inventory",
+        "media": "Media",
+        "translations": "Translations"
+      },
+      "hints": {
+        "handleHelp": "URL identifier (slug). Auto-generated from the title. You can edit it."
+      },
+      "status": {
+        "published": "Publishead",
+        "draft": "Draft",
+        "archived": "Archived"
+      },
+      "mode": {
+        "edit": "Edit"
+      },
+      "fields": {
+        "title": "Title",
+        "status": "Status",
+        "description": "Description",
+        "categories": "Categories",
+        "collections": "Collections",
+        "handle": "Handle"
+      },
+      "sections": {
+        "organize": "Organization"
+      },
+      "hints": {
+        "multiSelect": "Hold Ctrl/Cmd to select multiple items."
+      }
     }
   },
+
   "pricing": {
     "title": { "manage": "Manage prices" },
+
     "actions": {
       "managePrices": "Manage prices",
       "add": "Add price"
     },
+
     "confirm": {
       "deletePrice": "Are you sure you want to delete this price?"
     },
+
+    "validation": {
+      "compareAtGreater": "Compare-at price must be greater than the actual price."
+    },
+
     "labels": {
       "sku": "SKU",
       "regular": "Regular price",
       "best": "Best price",
       "amount": "Amount",
+      "compareAt": "Compare at",
       "currency": "Currency",
       "priceList": "Price list",
       "active": "Status"
     },
+
     "columns": {
       "label": "Label",
       "amount": "Amount",
       "compareAt": "Compare at",
       "rules": "Rules"
     },
-    "empty": "No prices yet.",
-    "priceList": {
-      "title": {
-        "quickCreate": "Price list"
-      },
-      "empty": "No prices yet.",
 
-      "placeholders": {
-        "title": "e.g. Black Friday"
-      },
+    "empty": "No prices yet.",
+
+    "priceList": {
+      "title": { "quickCreate": "Price list" },
+      "placeholders": { "title": "e.g. Black Friday" },
 
       "hints": {
         "visibleInDropdown": "After creating, it will appear in the Price list dropdown.",
-        "manageSeparately": "Manage Separately",
-        "ForTheActions": "For the actions select one!"
+        "manageSeparately": "Manage separately",
+        "ForTheActions": "For bulk actions, select at least one item."
       },
+
       "validation": {
         "titleMin": "Title must be at least 2 characters."
       },
+
       "notifications": {
         "created": "Price list created.",
         "createFailed": "Price list could not be created.",
@@ -233,20 +232,23 @@
         "deleted": "Deleted.",
         "deleteFailed": "Delete failed."
       },
+
       "columns": {
         "title": "Title",
         "type": "Type",
         "status": "Status",
         "active": "Active",
-        "date": "Date Range"
+        "date": "Date range"
       },
+
       "actions": {
         "activate": "Activate",
         "deactivate": "Deactivate",
         "delete": "Delete",
         "create": "Create",
-        "openManager": "Open Manager"
+        "openManager": "Open manager"
       },
+
       "confirm": {
         "activate": "Selected price lists will be activated. Continue?",
         "deactivate": "Selected price lists will be deactivated. Continue?",
@@ -256,38 +258,24 @@
   },
 
   "products": {
-    "search": "Search products...",
+    "ProductTableTitle": "Products",
+    "search": "Search products…",
     "filtersLabel": "Filters",
-    "ProductTableTitle": "Product Table",
+
+    "items": "items",
+    "page": "Page",
+
+    "common": {
+      "new": "New product",
+      "create": "Create",
+      "saving": "Saving…",
+      "save": "Save"
+    },
+
     "overview": {
       "organizeHint": "Category / Collection / Tags will be connected after API integration."
     },
-    "variants": {
-      "subtitle": "Manage SKUs, pricing and inventory.",
-      "add": "Add variant"
-    },
-    "media": {
-      "subtitle": "Upload and reorder product images.",
-      "upload": "Upload",
-      "phaseNote": "Reorder (drag & drop) will be enabled in Phase 2. For now, UI skeleton is locked."
-    },
-    "translations": {
-      "subtitle": "Manage product content per locale.",
-      "fields": {
-        "subtitle": "Subtitle"
-      },
-      "phaseNote": "Phase 1: UI shell locked. Phase 4: API adaptation layer will persist translations."
-    },
-    "todo": {
-      "variants": "This section will be enabled after API integration.",
-      "inventory": "This section will be enabled after API integration.",
-      "media": "This section will be enabled after API integration.",
-      "translations": "This section will be enabled after API integration."
-    },
-    "actions": {
-      "openViewTab": "Open view tab",
-      "goVariantsForInventory": "Go to Variants (for inventory)"
-    },
+
     "filters": {
       "statusAll": "Status (all)",
       "categoryAll": "Category (all)",
@@ -313,9 +301,6 @@
       "price": "Price"
     },
 
-    "items": "items",
-    "page": "Page",
-
     "empty": {
       "title": "No products found",
       "body": "Try adjusting your search or filters."
@@ -324,26 +309,165 @@
     "pagination": {
       "prev": "Previous",
       "next": "Next"
+    },
+
+    "actions": {
+      "openViewTab": "Open view tab",
+      "goVariantsForInventory": "Go to Variants (for inventory)"
+    },
+
+    "edit": {
+      "todo": {
+        "inventory": "This section will be enabled after API integration."
+      },
+      "goVariantsForInventory": "Go to Variants (for inventory)"
+    },
+
+    "todo": {
+      "variants": "This section will be enabled after API integration.",
+      "inventory": "This section will be enabled after API integration.",
+      "media": "This section will be enabled after API integration.",
+      "translations": "This section will be enabled after API integration."
+    },
+
+    "product_detail": {
+      "title": "Product",
+      "subtitle": "Manage details, variants, inventory, media, and translations.",
+
+      "mode": {
+        "view": "View",
+        "edit": "Edit",
+        "new": "New"
+      },
+
+      "tabs": {
+        "details": "Details",
+        "organize": "Organization",
+        "overview": "Overview",
+        "variants": "Variants",
+        "inventory": "Inventory",
+        "media": "Media",
+        "translations": "Translations"
+      },
+
+      "actions": {
+        "edit": "Edit",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…",
+        "view": "View",
+        "goToDetails": "Go to Details"
+      },
+
+      "sections": {
+        "organize": "Organization",
+        "content": "Content",
+        "status": "Status"
+      },
+
+      "fields": {
+        "title": "Title",
+        "handle": "Handle",
+        "status": "Status",
+        "description": "Description",
+        "categories": "Categories",
+        "collections": "Collections"
+      },
+
+      "status": {
+        "draft": "Draft",
+        "published": "Published",
+        "archived": "Archived"
+      },
+
+      "hints": {
+        "multiSelect": "Hold Ctrl/Cmd to select multiple items.",
+
+        "createFirstTitle": "Create a draft first",
+        "createFirst": "Create the product (draft) first to enable this tab.",
+        "titleHandleRequired": "Title and handle are required.",
+
+        "draftAutoCreate": "When you open other tabs, a draft product will be created automatically.",
+        "draftReady": "Draft created. You can now manage variants, media, inventory and translations.",
+
+        "organizeAfterCreate": "Organization can be updated after the draft is created.",
+        "variantsAfterCreate": "Variants and pricing can be managed after the draft is created.",
+        "mediaAfterCreate": "Media can be added after the draft is created.",
+        "inventoryAfterCreate": "Inventory is managed after the draft is created (via variants/stock).",
+        "translationsAfterCreate": "Translations can be added after the draft is created.",
+
+        "min2Chars": "Minimum 2 characters."
+      },
+
+      "empty": {
+        "notFound": "Product not found."
+      },
+
+      "pricing": {
+        "empty": "No variants found."
+      },
+
+      "variants_panel": {
+        "title": "Variants",
+        "subtitle": "Manage SKUs and pricing per variant.",
+        "columns": {
+          "variant": "Variant",
+          "sku": "SKU",
+          "price": "Price",
+          "inventory": "Inventory",
+          "actions": "Actions"
+        },
+        "actions": {
+          "save": "Save",
+          "saving": "Saving…"
+        },
+        "empty": {
+          "title": "No variants found"
+        }
+      }
+    },
+
+    "variants": {
+      "subtitle": "Manage SKUs, pricing and inventory.",
+      "add": "Add variant"
+    },
+
+    "media": {
+      "subtitle": "Upload and reorder product images.",
+      "upload": "Upload",
+      "phaseNote": "Reorder (drag & drop) will be enabled in Phase 2. For now, UI skeleton is locked."
+    },
+
+    "translations": {
+      "subtitle": "Manage product content per locale.",
+      "fields": {
+        "subtitle": "Subtitle"
+      },
+      "phaseNote": "Phase 1: UI shell locked. Phase 4: API adaptation layer will persist translations."
     }
   },
+
   "categories": {
-    "search": "Search categories...",
+    "search": "Search categories…",
     "empty": "No categories found.",
+
     "actions": {
       "new": "New category",
       "search": "Search",
       "clear": "Clear"
     },
+
     "delete": {
       "title": "Delete category",
       "subtitle": "This action cannot be undone. The category will be permanently removed. If the category is currently in use, deletion will not be allowed."
     },
+
     "columns": {
       "title": "Title",
       "handle": "Handle",
       "active": "Status",
       "actions": "Actions",
-      "count": "Product Count"
+      "count": "Product count"
     },
 
     "fields": {
@@ -351,41 +475,43 @@
       "handle": "Handle",
       "active": "Active"
     },
+
     "placeholders": {
       "title": "e.g. Electronics",
       "handle": "e.g. electronics"
     },
+
     "hints": {
       "title": "Displayed to admins and used for organization.",
       "handle": "URL-safe identifier (slug)."
     },
+
     "new": {
       "title": "New category",
       "subtitle": "Create a new category for organizing products."
     },
+
     "edit": {
       "title": "Edit category",
       "subtitle": "Update category details and status."
     },
+
     "filters": {
       "statusAll": "Status (all)"
     },
+
     "confirm": {
       "deleteTitle": "Delete category",
       "deleteBody": "This category will be permanently deleted. Continue?"
     },
+
     "notificationsCat": {
       "saveFailed": "Category could not be saved.",
       "deleteFailed": "Category could not be deleted.",
       "toggleFailed": "Status update failed."
     },
+
     "common": {
-      "sections": {
-        "catalog": "Catalog",
-        "sales": "Sales",
-        "operations": "Operations",
-        "system": "System"
-      },
       "loading": "Loading…",
       "save": "Save",
       "saving": "Saving…",
@@ -396,140 +522,141 @@
       "delete": "Delete",
       "active": "Active",
       "inactive": "Inactive",
-      "new": "New"
+      "new": "New",
+      "sections": {
+        "catalog": "Catalog",
+        "sales": "Sales",
+        "operations": "Operations",
+        "system": "System"
+      }
+    }
+  },
+
+  "orders": {
+    "title": "Orders",
+    "subtitle": "Track orders, payments, and fulfillment status.",
+    "search": "Search orders…",
+    "filters": "Filters",
+
+    "columns": {
+      "order": "Order",
+      "customer": "Customer",
+      "status": "Status",
+      "total": "Total",
+      "date": "Date",
+      "actions": "Actions"
     },
 
-    "orders": {
-      "title": "Orders",
-      "subtitle": "Track orders, payments, and fulfillment status.",
-      "search": "Search orders...",
-      "filters": "Filters",
+    "status": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "fulfilled": "Fulfilled",
+      "canceled": "Canceled",
+      "refunded": "Refunded"
+    },
 
-      "columns": {
-        "order": "Order",
+    "row": {
+      "view": "View",
+      "refund": "Refund",
+      "cancel": "Cancel"
+    },
+
+    "empty": {
+      "title": "No orders found",
+      "body": "Try adjusting your search or filters."
+    },
+
+    "pagination": {
+      "prev": "Previous",
+      "next": "Next"
+    },
+
+    "detail": {
+      "title": "Order details",
+      "subtitle": "Review items, payments, and fulfillment status.",
+
+      "sections": {
+        "summary": "Summary",
         "customer": "Customer",
+        "items": "Items",
+        "payment": "Payment",
+        "shipping": "Shipping",
+        "timeline": "Timeline"
+      },
+
+      "fields": {
+        "order_id": "Order ID",
         "status": "Status",
-        "total": "Total",
-        "date": "Date",
-        "actions": "Actions"
+        "created_at": "Created at",
+        "customer_name": "Customer",
+        "customer_email": "Email",
+        "total": "Total"
       },
 
-      "status": {
-        "pending": "Pending",
+      "badges": {
         "paid": "Paid",
+        "unpaid": "Unpaid",
         "fulfilled": "Fulfilled",
-        "canceled": "Canceled",
-        "refunded": "Refunded"
-      },
-
-      "row": {
-        "view": "View",
-        "refund": "Refund",
-        "cancel": "Cancel"
-      },
-
-      "empty": {
-        "title": "No orders found",
-        "body": "Try adjusting your search or filters."
-      },
-
-      "pagination": {
-        "prev": "Previous",
-        "next": "Next"
-      },
-
-      "detail": {
-        "title": "Order details",
-        "subtitle": "Review items, payments, and fulfillment status.",
-
-        "sections": {
-          "summary": "Summary",
-          "customer": "Customer",
-          "items": "Items",
-          "payment": "Payment",
-          "shipping": "Shipping",
-          "timeline": "Timeline"
-        },
-
-        "fields": {
-          "order_id": "Order ID",
-          "status": "Status",
-          "created_at": "Created at",
-          "customer_name": "Customer",
-          "customer_email": "Email",
-          "total": "Total"
-        },
-
-        "badges": {
-          "paid": "Paid",
-          "unpaid": "Unpaid",
-          "fulfilled": "Fulfilled",
-          "unfulfilled": "Unfulfilled"
-        }
+        "unfulfilled": "Unfulfilled"
       }
+    }
+  },
+
+  "settings": {
+    "tabs": {
+      "general": "General",
+      "localization": "Localization",
+      "tax": "Tax",
+      "notifications": "Notifications"
     },
 
-    "settings": {
-      "tabs": {
-        "general": "General",
-        "localization": "Localization",
-        "tax": "Tax",
-        "notifications": "Notifications"
-      },
-
-      "general": {
-        "title": "Store details",
-        "subtitle": "Basic information used across the admin panel.",
-        "name": "Store name",
-        "email": "Support email",
-        "phone": "Support phone"
-      },
-
-      "localization": {
-        "title": "Localization",
-        "subtitle": "Language, currency and formatting preferences.",
-        "default_language": "Default language",
-        "default_currency": "Default currency",
-        "timezone": "Timezone"
-      },
-
-      "tax": {
-        "title": "Tax settings",
-        "subtitle": "Configure tax behavior for your store.",
-        "inclusive": "Prices include tax",
-        "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
-      },
-
-      "notifications": {
-        "title": "Notifications",
-        "subtitle": "Control which events trigger notifications.",
-        "orders": "Order updates",
-        "low_stock": "Low stock alerts",
-        "saved": "Changes saved.",
-        "saveFailed": "Save failed.",
-        "loadFailed": "Failed to load data.",
-        "deleted": "Deleted.",
-        "deleteFailed": "Delete failed.",
-        "invalidAmount": "Invalid amount."
-      }
+    "general": {
+      "title": "Store details",
+      "subtitle": "Basic information used across the admin panel.",
+      "name": "Store name",
+      "email": "Support email",
+      "phone": "Support phone"
     },
 
-    "auth": {
-      "login": {
-        "title": "Sign in",
-        "subtitle": "Use your admin credentials to access the backoffice.",
-        "email": "Email",
-        "password": "Password",
-        "submit": "Sign in",
-        "loading": "Signing in...",
-        "error": "Invalid email or password."
-      },
-      "logout": "Logout"
+    "localization": {
+      "title": "Localization",
+      "subtitle": "Language, currency and formatting preferences.",
+      "default_language": "Default language",
+      "default_currency": "Default currency",
+      "timezone": "Timezone"
     },
+
+    "tax": {
+      "title": "Tax settings",
+      "subtitle": "Configure tax behavior for your store.",
+      "inclusive": "Prices include tax",
+      "inclusive_hint": "If enabled, displayed prices are tax-inclusive."
+    },
+
     "notifications": {
+      "title": "Notifications",
+      "subtitle": "Control which events trigger notifications.",
+      "orders": "Order updates",
+      "low_stock": "Low stock alerts",
       "saved": "Changes saved.",
       "saveFailed": "Save failed.",
-      "delete": "Deleted"
+      "loadFailed": "Failed to load data.",
+      "deleted": "Deleted.",
+      "deleteFailed": "Delete failed.",
+      "invalidAmount": "Invalid amount."
     }
+  },
+
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Use your admin credentials to access the backoffice.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "loading": "Signing in…",
+      "error": "Invalid email or password."
+    },
+    "logout": "Logout"
   }
 }
