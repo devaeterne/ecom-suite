@@ -1,3 +1,4 @@
+// src/providers/app-session-provider.tsx
 "use client";
 
 import React, {
@@ -8,8 +9,9 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { apiFetch } from "@/src/lib/api/_client/http";
 import {
+  AdminTenantApi,
+  type AdminTenantMeBundle,
   setTenantContext,
   clearTenantContext,
 } from "@/src/lib/api/_client/tenant";
@@ -18,61 +20,43 @@ export type TenantMe = {
   id: string;
   code: string;
   name?: string | null;
-
-  timezone?: string | null; // ✅
-  currencyCode?: string | null; // ✅
-
-  defaultCurrencyCode?: string; // UI convenience
-  supportedCurrencyCodes?: string[];
-};
-
-type TenantMeBundle = {
-  tenant: {
-    id: string;
-    code: string | null;
-    name: string | null;
-
-    timezone?: string | null; // ✅
-    currencyCode?: string | null; // ✅
-
-    // legacy (kalsın ama artık currency buradan okunmuyor)
-    i18n?: { locale?: string | null };
-  };
-  plan: any | null;
-  entitlements: any;
-  usage: any;
+  timezone?: string | null;
+  currencyCode?: string | null;
+  locale?: string | null;
 };
 
 type AppSessionState = {
   loading: boolean;
+
   tenant: TenantMe | null;
+
+  // PR-6: bundle’ı taşıyoruz (limits/remaining/usage/plan)
+  tenantBundle: AdminTenantMeBundle | null;
+
   defaultCurrencyCode: string;
   supportedCurrencyCodes: string[];
+
   refreshTenant: () => Promise<void>;
   clear: () => void;
 };
 
 const AppSessionContext = createContext<AppSessionState | null>(null);
 
-function pickTenant(raw: any): TenantMe | null {
-  if (!raw) return null;
+function pickTenant(bundle: AdminTenantMeBundle | any): TenantMe | null {
+  if (!bundle) return null;
 
-  const t = raw.tenant ?? raw;
+  const t = bundle?.tenant ?? bundle;
   if (!t?.id) return null;
 
   const code = t.code ?? t.tenantCode ?? t.slug ?? null;
-
-  // ✅ currencyCode root’tan
-  const currencyCode = t.currencyCode ?? t.currency ?? null;
 
   return {
     id: String(t.id),
     code: code ? String(code) : "",
     name: t.name ?? null,
     timezone: t.timezone ?? null,
-    currencyCode: currencyCode ? String(currencyCode) : null,
-    defaultCurrencyCode: currencyCode ? String(currencyCode) : undefined,
-    supportedCurrencyCodes: undefined,
+    currencyCode: t.currencyCode ?? null,
+    locale: t.i18n?.locale ?? null,
   };
 }
 
@@ -82,8 +66,13 @@ export function AppSessionProvider({
   children: React.ReactNode;
 }) {
   const [loading, setLoading] = useState(true);
+
+  const [tenantBundle, setTenantBundle] = useState<AdminTenantMeBundle | null>(
+    null,
+  );
   const [tenant, setTenant] = useState<TenantMe | null>(null);
 
+  // fallbacks
   const [defaultCurrencyCode, setDefaultCurrencyCode] = useState("EUR");
   const [supportedCurrencyCodes, setSupportedCurrencyCodes] = useState<
     string[]
@@ -92,31 +81,34 @@ export function AppSessionProvider({
   const clear = useCallback(() => {
     clearTenantContext();
     setTenant(null);
+    setTenantBundle(null);
     setDefaultCurrencyCode("EUR");
     setSupportedCurrencyCodes(["EUR"]);
   }, []);
 
   const refreshTenant = useCallback(async () => {
-    const raw = await apiFetch<TenantMeBundle>("/api/admin/tenants/me", {
-      method: "GET",
-      credentials: "include",
-    });
+    const bundle = await AdminTenantApi.me();
+    const t = pickTenant(bundle);
 
-    const t = pickTenant(raw);
     if (!t) {
       clear();
       return;
     }
 
+    // bundle state
+    setTenantBundle(bundle);
+    setTenant(t);
+
+    // tenant headers için localStorage
     if (t.id && t.code) {
       setTenantContext({ tenantId: t.id, tenantCode: t.code });
     }
 
-    setTenant(t);
+    // currencyCode (metadata root)
+    if (t.currencyCode) setDefaultCurrencyCode(t.currencyCode);
 
-    if (t.defaultCurrencyCode) setDefaultCurrencyCode(t.defaultCurrencyCode);
-    if (t.supportedCurrencyCodes?.length)
-      setSupportedCurrencyCodes(t.supportedCurrencyCodes);
+    // PR-6: supportedCurrencyCodes henüz backend’de yoksa fallback kalsın
+    // ileride plan/tenant config ile doldururuz.
   }, [clear]);
 
   useEffect(() => {
@@ -126,7 +118,7 @@ export function AppSessionProvider({
       try {
         await refreshTenant();
       } catch {
-        // ignore 401/403
+        // admin cookie yoksa 401/403 olabilir → sessiz geç
       } finally {
         if (alive) setLoading(false);
       }
@@ -140,6 +132,7 @@ export function AppSessionProvider({
     () => ({
       loading,
       tenant,
+      tenantBundle,
       defaultCurrencyCode,
       supportedCurrencyCodes,
       refreshTenant,
@@ -148,6 +141,7 @@ export function AppSessionProvider({
     [
       loading,
       tenant,
+      tenantBundle,
       defaultCurrencyCode,
       supportedCurrencyCodes,
       refreshTenant,

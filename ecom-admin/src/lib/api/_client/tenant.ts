@@ -1,4 +1,4 @@
-// lib/api/_client/tenant.ts
+// src/lib/api/_client/tenant.ts
 import { apiFetch } from "@/src/lib/api/_client/http";
 
 export const TENANT_ID_HEADER = "x-tenant-id";
@@ -7,12 +7,6 @@ export const TENANT_CODE_HEADER = "x-tenant-code";
 const LS_TENANT_ID = "tenantId";
 const LS_TENANT_CODE = "tenantCode";
 
-export type AdminTenantMe = {
-  id: string;
-  code: string;
-  name?: string;
-};
-
 export type AdminTenantMeBundle = {
   tenant: {
     id: string;
@@ -20,9 +14,14 @@ export type AdminTenantMeBundle = {
     name: string | null;
     timezone: string | null;
     currencyCode: string | null;
+    // NOTE: backend i18n locale dönebiliyor, currencyCode artık metadata root’ta.
+    i18n?: { locale?: string | null } | null;
   };
   plan: any | null;
-  entitlements: any;
+  entitlements: {
+    limits: Record<string, any>;
+    remaining?: Record<string, any>;
+  };
   usage: any;
 };
 
@@ -30,8 +29,10 @@ export const AdminTenantApi = {
   me: () =>
     apiFetch<AdminTenantMeBundle>("/api/admin/tenants/me", {
       method: "GET",
+      auth: "admin",
       credentials: "include",
-      headers: withTenantHeaders(), // ✅ ekle
+      // /tenants/me tenant header gerektirmez (zaten tenant context auth'tan geliyor)
+      tenant: false,
     }),
 };
 

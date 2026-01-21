@@ -5,10 +5,13 @@ import { useParams } from "next/navigation";
 
 import type { AdminProductListItem } from "@/src/modules/products/types/products.types";
 import { useT } from "@/i18n/use-t";
+import { toast } from "@medusajs/ui";
 
 import { ProductStatusBadge } from "./product-status-badge";
 import { InventoryBadge } from "./inventory-badge";
 import { RowActionsMenu } from "./row-actions-menu";
+
+import { useTenantEntitlements } from "@/src/lib/api/tenant/use-tenant-entitlements";
 
 type Props = {
   items: AdminProductListItem[];
@@ -20,7 +23,7 @@ type Props = {
 
   onOffsetChange: (nextOffset: number) => void;
   onLimitChange: (nextLimit: number) => void;
-  onDeleted?: (productId: string) => void; // ✅
+  onDeleted?: (productId: string) => void;
 };
 
 export function ProductsTable({
@@ -44,6 +47,20 @@ export function ProductsTable({
 
   const newHref = `/${locale}/products/new`;
 
+  // ---- PR-6: quota aware ----
+  const { limits, remaining } = useTenantEntitlements();
+  const productsPerStatus =
+    Number((limits as any)?.productsPerStatus ?? 0) || 0;
+  const remainingDraft = Number((remaining as any)?.draft ?? 0) || 0;
+
+  // limit<=0 => unlimited (disable yok)
+  const isProductLimitEnabled = productsPerStatus > 0;
+  const canCreate = !isProductLimitEnabled ? true : remainingDraft > 0;
+
+  const newDisabledReason = !canCreate
+    ? `Plan limitine ulaşıldı (draft). Limit: ${productsPerStatus}.`
+    : null;
+
   return (
     <div className="rounded-xl border">
       {/* header */}
@@ -53,8 +70,18 @@ export function ProductsTable({
         </div>
 
         <Link
-          href={newHref}
-          className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          href={canCreate ? newHref : "#"}
+          aria-disabled={!canCreate}
+          title={newDisabledReason ?? undefined}
+          onClick={(e) => {
+            if (canCreate) return;
+            e.preventDefault();
+            toast.error(newDisabledReason ?? "Ürün limiti dolu");
+          }}
+          className={[
+            "flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted",
+            !canCreate ? "pointer-events-auto opacity-50" : "",
+          ].join(" ")}
         >
           <span className="text-base leading-none">+</span>
           {t("products.common.new")}

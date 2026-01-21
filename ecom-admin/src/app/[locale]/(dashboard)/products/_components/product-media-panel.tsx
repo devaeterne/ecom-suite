@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t";
 import { toast } from "@medusajs/ui";
-import { apiFetch } from "@/src/lib/api/_client/http";
+import { apiFetch, HttpError } from "@/src/lib/api/_client/http";
+import { useTenantEntitlements } from "@/src/lib/api/tenant/use-tenant-entitlements";
 
 type ApiMediaItem = {
   id: string;
@@ -36,14 +37,36 @@ function ensureFileOk(file: File) {
   if (!Number.isFinite(size) || size <= 0)
     return { ok: false, message: "size invalid" };
 
-  // Backend contentType istiyor -> her zaman dolu gönderiyoruz
   const contentType = type || "application/octet-stream";
-
   return { ok: true, name, size, contentType };
 }
 
+function pickNiceErrorMessage(t: any, e: any) {
+  // apiFetch -> HttpError, data içinde { code, message, details } var
+  if (e instanceof HttpError) {
+    const data: any = e.data;
+
+    // PR-4/5 domain code: LIMIT_EXCEEDED
+    if (data?.code === "LIMIT_EXCEEDED") {
+      const d = data?.details ?? {};
+      const limit = d?.limit;
+      const current = d?.current;
+      // resource bazlı daha net mesaj
+      if (d?.resource === "product_media") {
+        return `Görsel limiti dolu. Limit: ${limit}, mevcut: ${current}.`;
+      }
+      return data?.message || "Limit exceeded";
+    }
+
+    // fallback
+    return data?.message || e.message || t("notifications.saveFailed");
+  }
+
+  return e?.message || t("notifications.saveFailed");
+}
+
 // ------------------------------------------------------------
-// API adapters (backend contract)
+// API adapters
 // ------------------------------------------------------------
 async function presignPut(file: File) {
   const g = ensureFileOk(file);
@@ -105,6 +128,23 @@ export function ProductMediaPanel({
   const [busy, setBusy] = useState(false);
   const [opId, setOpId] = useState<string | null>(null);
 
+  // ---- PR-6: quota aware ----
+  const { limits } = useTenantEntitlements();
+  const mediaLimit = Number((limits as any)?.mediaPerProduct ?? 0) || 0;
+
+  // limit <=0 => enforce yok (dev / unlimited)
+  const currentMediaCount = media.length;
+  const isMediaLimitEnabled = mediaLimit > 0;
+  const canUpload = !isMediaLimitEnabled
+    ? true
+    : currentMediaCount < mediaLimit;
+
+  const uploadDisabledReason = useMemo(() => {
+    if (!isMediaLimitEnabled) return null;
+    if (canUpload) return null;
+    return `Görsel limiti dolu. Limit: ${mediaLimit}.`;
+  }, [isMediaLimitEnabled, canUpload, mediaLimit]);
+
   async function uploadOne(file: File) {
     const { fileId, putUrl } = await presignPut(file);
 
@@ -118,9 +158,7 @@ export function ProductMediaPanel({
       headers: { "Content-Type": contentType },
     });
 
-    if (!putRes.ok) {
-      throw new Error(`PUT failed (${putRes.status})`);
-    }
+    if (!putRes.ok) throw new Error(`PUT failed (${putRes.status})`);
 
     await completeFile(fileId);
     await attachToProduct(productId, fileId);
@@ -130,13 +168,31 @@ export function ProductMediaPanel({
     if (!files || files.length === 0) return;
     if (busy) return;
 
+    // PR-6: UI pre-check
+    const picked = Array.from(files);
+    if (isMediaLimitEnabled) {
+      const remainingSlots = Math.max(0, mediaLimit - currentMediaCount);
+      if (remainingSlots <= 0) {
+        toast.error(uploadDisabledReason ?? "Görsel limiti dolu");
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+      // Çoklu seçildiyse ve limit aşacaksa: soft truncate + bilgi
+      if (picked.length > remainingSlots) {
+        toast.error(
+          `Görsel limiti nedeniyle ${picked.length - remainingSlots} dosya atlandı.`,
+        );
+      }
+    }
+
     setBusy(true);
     setOpId(null);
 
     try {
-      const arr = Array.from(files);
+      const arr = isMediaLimitEnabled
+        ? picked.slice(0, Math.max(0, mediaLimit - currentMediaCount))
+        : picked;
 
-      // küçük UX: çoklu upload’da fail olursa “hangi dosya” net olsun
       for (const file of arr) {
         await uploadOne(file);
       }
@@ -145,7 +201,7 @@ export function ProductMediaPanel({
       onChanged();
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || t("notifications.saveFailed"));
+      toast.error(pickNiceErrorMessage(t, e));
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -161,9 +217,9 @@ export function ProductMediaPanel({
       await setHero(productId, mediaId);
       toast.success(t("notifications.saved"));
       onChanged();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error(t("notifications.saveFailed"));
+      toast.error(pickNiceErrorMessage(t, e));
     } finally {
       setBusy(false);
       setOpId(null);
@@ -182,9 +238,9 @@ export function ProductMediaPanel({
       await removeMedia(productId, mediaId);
       toast.success(t("notifications.saved"));
       onChanged();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error(t("notifications.saveFailed"));
+      toast.error(pickNiceErrorMessage(t, e));
     } finally {
       setBusy(false);
       setOpId(null);
@@ -204,6 +260,13 @@ export function ProductMediaPanel({
           <p className="text-xs text-muted-foreground">
             {t("products.media.subtitle")}
           </p>
+
+          {/* PR-6: küçük quota hint */}
+          {isMediaLimitEnabled ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Limit: {currentMediaCount}/{mediaLimit}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -218,9 +281,17 @@ export function ProductMediaPanel({
 
           <button
             type="button"
+            title={uploadDisabledReason ?? undefined}
             className="h-9 rounded-md border px-3 text-sm hover:bg-muted disabled:opacity-50"
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
+            disabled={busy || !canUpload}
+            onClick={() => {
+              if (busy) return;
+              if (!canUpload) {
+                toast.error(uploadDisabledReason ?? "Görsel limiti dolu");
+                return;
+              }
+              inputRef.current?.click();
+            }}
           >
             {busy ? t("common.saving") : t("products.media.upload")}
           </button>
@@ -288,6 +359,7 @@ export function ProductMediaPanel({
           })}
         </div>
       )}
+
       <div className="rounded-xl border p-4 text-sm text-muted-foreground">
         {t("products.translations.phaseNote")}
       </div>
