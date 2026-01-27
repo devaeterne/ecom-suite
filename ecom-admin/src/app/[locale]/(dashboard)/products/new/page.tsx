@@ -10,6 +10,8 @@ import {
   useProductNewDraft,
 } from "./_state/product-new-draft.provider";
 
+import { useTenantEntitlements } from "@/src/lib/api/tenant/use-tenant-entitlements";
+
 type Category = { id: string; name: string };
 type Tag = { id: string; name: string };
 
@@ -32,8 +34,6 @@ function isFresh(meta: MetaState) {
   return Date.now() - meta.loadedAt < META_TTL_MS;
 }
 
-// Tenant / session değişkenleri burada temsil edilir (elinde varsa ekle).
-// En azından version key: ileride contract değişince cache’i kırar.
 function buildMetaKey() {
   return "meta:v1";
 }
@@ -54,8 +54,6 @@ function pickItems<T>(raw: any): T[] {
     raw?.data?.items,
     raw?.data?.categories,
     raw?.data?.tags,
-    raw?.items?.items,
-    raw?.pagination?.items,
   ];
 
   for (const c of candidates) {
@@ -64,25 +62,17 @@ function pickItems<T>(raw: any): T[] {
   return [];
 }
 
+function asInt(v: any, fallback = 0) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.floor(n);
+}
+
 async function readApiError(
   e: any,
-): Promise<{ status?: number; message: string; code?: string }> {
+): Promise<{ status?: number; message: string; code?: string; details?: any }> {
   const status = e?.status ?? e?.response?.status;
   const data = e?.data ?? e?.response?.data;
-
-  if (!data && e?.response instanceof Response) {
-    try {
-      const json = await e.response.json();
-      return {
-        status: e.response.status,
-        message:
-          json?.message || json?.detail || json?.error || "Request failed",
-        code: json?.code,
-      };
-    } catch {
-      // ignore
-    }
-  }
 
   if (data && typeof data === "object") {
     const msg =
@@ -92,7 +82,12 @@ async function readApiError(
       (Array.isArray(data.errors) ? data.errors[0]?.message : null) ||
       "Request failed";
 
-    return { status, message: String(msg), code: data.code };
+    return {
+      status,
+      message: String(msg),
+      code: data.code,
+      details: data.details,
+    };
   }
 
   return { status, message: e?.message ? String(e.message) : "Request failed" };
@@ -112,13 +107,10 @@ async function fetchMeta(force = false): Promise<MetaState> {
       apiFetch<any>("/api/admin/categories", {
         method: "GET",
         credentials: "include",
-        // apiFetch forward ediyorsa:
-        cache: "no-store",
       }),
       apiFetch<any>("/api/admin/tags", {
         method: "GET",
         credentials: "include",
-        cache: "no-store",
       }),
     ]);
 
@@ -185,6 +177,28 @@ export default function ProductNewDetailsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [metaError, setMetaError] = useState<string | null>(null);
 
+  // ---- PR-6 quota ----
+  const { limits, remaining, loading: entLoading } = useTenantEntitlements();
+  const productsPerStatus = asInt((limits as any)?.productsPerStatus, 0); // 0 => unlimited
+  const limitEnabled = productsPerStatus > 0;
+
+  const remainingForStatus = useMemo(() => {
+    const key = String(status ?? "draft");
+    return asInt((remaining as any)?.[key], 0);
+  }, [remaining, status]);
+
+  const canCreateForStatus = !limitEnabled ? true : remainingForStatus > 0;
+
+  const quotaLabel =
+    limitEnabled && !entLoading
+      ? `Limit: ${Math.max(0, productsPerStatus - remainingForStatus)}/${productsPerStatus}`
+      : null;
+
+  const quotaBlockReason =
+    limitEnabled && !canCreateForStatus
+      ? `Plan limitine ulaşıldı (${status}). Limit: ${productsPerStatus}.`
+      : null;
+
   // title -> handle auto-fill (handle’a dokunulmadıysa)
   useEffect(() => {
     if (handleTouched) return;
@@ -211,13 +225,11 @@ export default function ProductNewDetailsPage() {
     }
   }
 
-  // StrictMode-safe preload
   useEffect(() => {
     let alive = true;
     (async () => {
       if (!alive) return;
 
-      // önce cache’i bas (varsa)
       const key = buildMetaKey();
       if (META_CACHE && META_CACHE.key === key && isFresh(META_CACHE)) {
         setCategories(META_CACHE.categories);
@@ -232,14 +244,26 @@ export default function ProductNewDetailsPage() {
     return () => {
       alive = false;
     };
-    // t değişince toast mesajları farklılaşabilir; ama meta için şart değil
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const canSave = useMemo(() => canDraft && !saving, [canDraft, saving]);
+  const canSave = useMemo(() => {
+    if (saving) return false;
+    if (!canDraft) return false;
+    if (!canCreateForStatus) return false;
+    return true;
+  }, [saving, canDraft, canCreateForStatus]);
 
   async function onSaveDraft() {
-    if (!canSave) return;
+    if (!canDraft) {
+      toast.error(t("notifications.saveFailed"));
+      return;
+    }
+
+    if (!canCreateForStatus) {
+      toast.error(quotaBlockReason ?? "Plan limiti dolu");
+      return;
+    }
 
     // draft varsa şimdilik “saved”
     if (draftId) {
@@ -270,10 +294,23 @@ export default function ProductNewDetailsPage() {
       console.error(e);
       const err = await readApiError(e);
 
-      if (err.status === 409 || /unique|conflict|handle/i.test(err.message)) {
+      // Handle conflict
+      if (err.status === 409 && /handle/i.test(err.message)) {
         toast.error(
           `Handle already exists: "${handle}". Please choose a different one.`,
         );
+        return;
+      }
+
+      // Limit exceeded
+      if (
+        err.status === 409 &&
+        (err.code === "LIMIT_EXCEEDED" || /limit/i.test(err.message))
+      ) {
+        const s = err?.details?.status
+          ? String(err.details.status)
+          : String(status);
+        toast.error(`Plan limitine ulaşıldı (${s}).`);
         return;
       }
 
@@ -289,6 +326,8 @@ export default function ProductNewDetailsPage() {
   const textarea =
     "min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none";
 
+  const formDisabled = saving || (limitEnabled && !canCreateForStatus);
+
   return (
     <div className="space-y-4">
       {/* header */}
@@ -298,6 +337,12 @@ export default function ProductNewDetailsPage() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {quotaLabel ? (
+            <span className="rounded-md border bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
+              {quotaLabel}
+            </span>
+          ) : null}
+
           <button
             type="button"
             onClick={() => loadMeta(true)}
@@ -313,11 +358,19 @@ export default function ProductNewDetailsPage() {
             onClick={onSaveDraft}
             disabled={!canSave}
             className="h-9 rounded-md border px-3 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            title={quotaBlockReason ?? undefined}
           >
             {saving ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </div>
+
+      {/* quota banner */}
+      {quotaBlockReason ? (
+        <div className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">
+          {quotaBlockReason} Plan yükseltmeden yeni ürün oluşturamazsın.
+        </div>
+      ) : null}
 
       {/* fields */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -328,6 +381,7 @@ export default function ProductNewDetailsPage() {
           <input
             className={input}
             value={title}
+            disabled={formDisabled}
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
@@ -339,6 +393,7 @@ export default function ProductNewDetailsPage() {
           <input
             className={input}
             value={handle}
+            disabled={formDisabled}
             onChange={(e) => {
               setHandleTouched(true);
               setHandle(e.target.value);
@@ -357,6 +412,7 @@ export default function ProductNewDetailsPage() {
           <select
             className={input}
             value={status}
+            disabled={saving} // status seçimi açık kalsın; quota banner statüse göre değişir
             onChange={(e) => setStatus(e.target.value as any)}
           >
             <option value="draft">
@@ -378,6 +434,7 @@ export default function ProductNewDetailsPage() {
           <textarea
             className={textarea}
             value={description ?? ""}
+            disabled={formDisabled}
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
@@ -392,8 +449,8 @@ export default function ProductNewDetailsPage() {
 
           <select
             multiple
-            className="h-40 w-full rounded-md border bg-background px-3 py-2 text-sm"
-            disabled={loadingMeta}
+            className="h-40 w-full rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-50"
+            disabled={loadingMeta || formDisabled}
             value={categoryIds}
             onChange={(e) =>
               setCategoryIds(
@@ -429,8 +486,8 @@ export default function ProductNewDetailsPage() {
 
           <select
             multiple
-            className="h-40 w-full rounded-md border bg-background px-3 py-2 text-sm"
-            disabled={loadingMeta}
+            className="h-40 w-full rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-50"
+            disabled={loadingMeta || formDisabled}
             value={tagIds}
             onChange={(e) =>
               setTagIds(

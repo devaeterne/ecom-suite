@@ -7,7 +7,6 @@ import {
   HttpException,
   HttpStatus,
 } from "@nestjs/common";
-import type { Response } from "express";
 import { HttpErrorPayload, RequestWithMeta } from "./types";
 
 function asString(v: any): string | null {
@@ -30,11 +29,9 @@ function normalizeMessage(msg: any): string | null {
 }
 
 function pickCode(resp: any): string {
-  // Bizim domain.errors -> { code, message, details }
   const code = asString(resp?.code);
   if (code) return code;
 
-  // Nest default: error string
   const err = asString(resp?.error);
   if (err) return "http_error";
 
@@ -42,14 +39,10 @@ function pickCode(resp: any): string {
 }
 
 function pickDetails(resp: any): any | undefined {
-  // Bizim payload: details
   if (resp && typeof resp === "object" && resp.details !== undefined) {
     return resp.details;
   }
 
-  // class-validator typical shape:
-  // { message: [..], error: "Bad Request", statusCode: 400 }
-  // Burada message array’ini details’e koyuyoruz
   if (Array.isArray(resp?.message)) {
     return {
       validationErrors: resp.message,
@@ -59,14 +52,35 @@ function pickDetails(resp: any): any | undefined {
   return undefined;
 }
 
+function sendReply(res: any, status: number, payload: any) {
+  // FastifyReply: reply.code(status).send(payload)
+  if (res && typeof res.code === "function" && typeof res.send === "function") {
+    return res.code(status).send(payload);
+  }
+
+  // Bazı adaptörlerde status() + send() olabilir
+  if (
+    res &&
+    typeof res.status === "function" &&
+    typeof res.send === "function"
+  ) {
+    // Express'te json() varsa onu tercih edelim
+    if (typeof res.json === "function") return res.status(status).json(payload);
+    return res.status(status).send(payload);
+  }
+
+  // Worst-case: sessiz fallback
+  return payload;
+}
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const res = ctx.getResponse<Response>();
+    const res: any = ctx.getResponse();
     const req = ctx.getRequest<RequestWithMeta>();
 
-    const requestId = req.requestId;
+    const requestId = req?.requestId;
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let payload: HttpErrorPayload = {
@@ -79,7 +93,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       const response = exception.getResponse();
 
-      // response string ise direkt message
       if (typeof response === "string") {
         payload = {
           code: "http_error",
@@ -98,12 +111,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
           details: pickDetails(response),
           requestId,
         };
-
-        // Opsiyonel: ham response’u debug amaçlı sakla (PII içermiyorsa)
-        // payload.details = { ...(payload.details ?? {}), raw: response };
+      }
+    } else if (exception && typeof exception === "object") {
+      // Non-HttpException: en azından message taşıyalım
+      const msg = normalizeMessage((exception as any).message);
+      if (msg) {
+        payload = {
+          code: "internal_error",
+          message: msg,
+          requestId,
+        };
       }
     }
 
-    res.status(status).json(payload);
+    return sendReply(res, status, payload);
   }
 }

@@ -16,7 +16,6 @@ import { useTenantEntitlements } from "@/src/lib/api/tenant/use-tenant-entitleme
 type Props = {
   items: AdminProductListItem[];
 
-  // pagination
   offset: number;
   limit: number;
   total: number;
@@ -25,6 +24,12 @@ type Props = {
   onLimitChange: (nextLimit: number) => void;
   onDeleted?: (productId: string) => void;
 };
+
+function asInt(v: any, fallback = 0) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.floor(n);
+}
 
 export function ProductsTable({
   items,
@@ -48,48 +53,79 @@ export function ProductsTable({
   const newHref = `/${locale}/products/new`;
 
   // ---- PR-6: quota aware ----
-  const { limits, remaining } = useTenantEntitlements();
-  const productsPerStatus =
-    Number((limits as any)?.productsPerStatus ?? 0) || 0;
-  const remainingDraft = Number((remaining as any)?.draft ?? 0) || 0;
+  const { limits, remaining, loading } = useTenantEntitlements();
+  const productsPerStatus = asInt((limits as any)?.productsPerStatus, 0); // 0 => unlimited
+  const remainingDraft = asInt((remaining as any)?.draft, 0);
 
-  // limit<=0 => unlimited (disable yok)
-  const isProductLimitEnabled = productsPerStatus > 0;
-  const canCreate = !isProductLimitEnabled ? true : remainingDraft > 0;
+  const limitEnabled = productsPerStatus > 0;
+  const usedDraft = limitEnabled
+    ? Math.max(0, productsPerStatus - remainingDraft)
+    : 0;
 
-  const newDisabledReason = !canCreate
-    ? `Plan limitine ulaşıldı (draft). Limit: ${productsPerStatus}.`
-    : null;
+  const canCreate = !limitEnabled ? true : remainingDraft > 0;
+
+  const quotaLabel =
+    limitEnabled && !loading
+      ? `Limit: ${usedDraft}/${productsPerStatus}`
+      : null;
+
+  const disabledReason =
+    limitEnabled && !canCreate
+      ? `Plan limitine ulaşıldı (draft). Limit: ${productsPerStatus}.`
+      : null;
+
+  function onClickNewDisabled() {
+    toast.error(disabledReason ?? "Ürün limiti dolu");
+  }
+
+  // küçük helper: mobilde tarih formatı daha kısa olsun
+  const fmtDate = (d: string) => {
+    try {
+      return new Date(d).toLocaleDateString(locale);
+    } catch {
+      return "";
+    }
+  };
 
   return (
     <div className="rounded-xl border">
       {/* header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
         <div className="text-sm font-medium">
           {t("products.ProductTableTitle")}
         </div>
 
-        <Link
-          href={canCreate ? newHref : "#"}
-          aria-disabled={!canCreate}
-          title={newDisabledReason ?? undefined}
-          onClick={(e) => {
-            if (canCreate) return;
-            e.preventDefault();
-            toast.error(newDisabledReason ?? "Ürün limiti dolu");
-          }}
-          className={[
-            "flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted",
-            !canCreate ? "pointer-events-auto opacity-50" : "",
-          ].join(" ")}
-        >
-          <span className="text-base leading-none">+</span>
-          {t("products.common.new")}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {quotaLabel ? (
+            <span className="rounded-md border bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
+              {quotaLabel}
+            </span>
+          ) : null}
+
+          {canCreate ? (
+            <Link
+              href={newHref}
+              className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+            >
+              <span className="text-base leading-none">+</span>
+              {t("products.common.new")}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              title={disabledReason ?? undefined}
+              onClick={onClickNewDisabled}
+              className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium opacity-50"
+            >
+              <span className="text-base leading-none">+</span>
+              {t("products.common.new")}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* columns */}
-      <div className="grid grid-cols-12 gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
+      {/* DESKTOP columns */}
+      <div className="hidden md:grid md:grid-cols-12 md:gap-2 border-b px-4 py-3 text-xs font-medium text-muted-foreground">
         <div className="col-span-5">{t("products.columns.product")}</div>
         <div className="col-span-2">{t("products.columns.category")}</div>
         <div className="col-span-1">{t("products.columns.status")}</div>
@@ -114,42 +150,82 @@ export function ProductsTable({
           </div>
         ) : (
           items.map((p) => (
-            <div
-              key={p.id}
-              className="grid grid-cols-12 gap-2 px-4 py-3 text-sm hover:bg-muted/40"
-            >
-              <div className="col-span-5">
-                <div className="font-medium">{p.title}</div>
+            <div key={p.id} className="px-4 py-3">
+              {/* MOBILE row */}
+              <div className="grid gap-2 md:hidden">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{p.title}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {p.handle ? `@${p.handle}` : ""}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    <RowActionsMenu
+                      productId={p.id}
+                      onDeleted={() => onDeleted?.(p.id)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <ProductStatusBadge status={p.status} />
+                  <span className="text-muted-foreground">
+                    {t("products.columns.inventory")}:{" "}
+                    <InventoryBadge status={p.stockAvailable} />
+                  </span>
+                  <span className="text-muted-foreground">
+                    {t("products.columns.variants")}: {p.variantsCount}
+                  </span>
+                </div>
+
                 <div className="text-xs text-muted-foreground">
-                  {p.handle ? `@${p.handle}` : ""}
+                  {t("products.columns.category")}:{" "}
+                  {p.categoryNames.length
+                    ? p.categoryNames.join(", ")
+                    : t("common.emptyDash")}
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  {t("products.columns.updated")}: {fmtDate(p.updatedAt)}
                 </div>
               </div>
 
-              <div className="col-span-2 text-xs text-muted-foreground">
-                {p.categoryNames.length
-                  ? p.categoryNames.join(", ")
-                  : t("common.emptyDash")}
-              </div>
+              {/* DESKTOP row */}
+              <div className="hidden md:grid md:grid-cols-12 md:gap-2 text-sm hover:bg-muted/40 rounded-md">
+                <div className="col-span-5 py-1">
+                  <div className="font-medium">{p.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {p.handle ? `@${p.handle}` : ""}
+                  </div>
+                </div>
 
-              <div className="col-span-1">
-                <ProductStatusBadge status={p.status} />
-              </div>
+                <div className="col-span-2 py-1 text-xs text-muted-foreground">
+                  {p.categoryNames.length
+                    ? p.categoryNames.join(", ")
+                    : t("common.emptyDash")}
+                </div>
 
-              <div className="col-span-1">{p.variantsCount}</div>
+                <div className="col-span-1 py-1">
+                  <ProductStatusBadge status={p.status} />
+                </div>
 
-              <div className="col-span-1">
-                <InventoryBadge status={p.stockAvailable} />
-              </div>
+                <div className="col-span-1 py-1">{p.variantsCount}</div>
 
-              <div className="col-span-1 text-xs text-muted-foreground">
-                {new Date(p.updatedAt).toLocaleDateString(locale)}
-              </div>
+                <div className="col-span-1 py-1">
+                  <InventoryBadge status={p.stockAvailable} />
+                </div>
 
-              <div className="col-span-1 text-right">
-                <RowActionsMenu
-                  productId={p.id}
-                  onDeleted={() => onDeleted?.(p.id)}
-                />
+                <div className="col-span-1 py-1 text-xs text-muted-foreground">
+                  {fmtDate(p.updatedAt)}
+                </div>
+
+                <div className="col-span-1 py-1 text-right">
+                  <RowActionsMenu
+                    productId={p.id}
+                    onDeleted={() => onDeleted?.(p.id)}
+                  />
+                </div>
               </div>
             </div>
           ))

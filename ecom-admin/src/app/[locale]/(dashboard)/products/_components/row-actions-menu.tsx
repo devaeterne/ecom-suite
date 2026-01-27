@@ -3,9 +3,28 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiFetch } from "@/src/lib/api/_client/http";
+import { apiFetch, HttpError } from "@/src/lib/api/_client/http";
 import { useT } from "@/i18n/use-t";
 import { Eye, Pencil, Trash2 } from "lucide-react";
+
+// varsa: delete sonrası quota UI anında güncellensin
+import { useTenantEntitlements } from "@/src/lib/api/tenant/use-tenant-entitlements";
+
+function readErr(e: any): { status?: number; code?: string; message: string } {
+  if (e instanceof HttpError) {
+    const data: any = (e as any).data;
+    return {
+      status: e.status,
+      code: data?.code,
+      message:
+        data?.message ||
+        data?.detail ||
+        data?.error ||
+        `Request failed (${e.status})`,
+    };
+  }
+  return { message: e?.message ? String(e.message) : "Request failed" };
+}
 
 export function RowActionsMenu({
   productId,
@@ -20,6 +39,9 @@ export function RowActionsMenu({
   const locale = params?.locale ?? "en";
   const [busy, setBusy] = useState(false);
 
+  // hook’un içinde refresh yoksa bile sorun değil (try/catch no-op)
+  const ent = useTenantEntitlements?.();
+
   async function onDelete() {
     if (busy) return;
 
@@ -30,17 +52,33 @@ export function RowActionsMenu({
     try {
       await apiFetch(`/api/admin/products/${productId}`, {
         method: "DELETE",
+        auth: "admin",
         credentials: "include",
       });
 
       // ✅ anında listeden düşür
       onDeleted?.();
 
+      // ✅ quota/usage UI’ı anında toparla (hook destekliyorsa)
+      try {
+        await (ent as any)?.refresh?.();
+      } catch {
+        // ignore
+      }
+
       // opsiyonel: server state ile sync
       router.refresh();
-    } catch (e) {
-      alert(t("errors.productDeleteFailed"));
+    } catch (e: any) {
       console.error(e);
+      const err = readErr(e);
+
+      // daha net mesaj
+      if (err.status === 404) {
+        alert(t("errors.notFound"));
+        return;
+      }
+
+      alert(err.message || t("errors.productDeleteFailed"));
     } finally {
       setBusy(false);
     }

@@ -113,7 +113,6 @@ export default function CategoryTable() {
         setLimit(p.limit);
         setTotal(p.total);
       } else {
-        // fallback (backend pagination yoksa)
         setOffset(nextOffset);
         setLimit(nextLimit);
         setTotal(r.items?.length ?? 0);
@@ -122,6 +121,12 @@ export default function CategoryTable() {
       setLoading(false);
     }
   }
+
+  // initial load
+  useEffect(() => {
+    load({ offset: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // filter/sort değişince sayfa 1’e dön
   useEffect(() => {
@@ -164,52 +169,102 @@ export default function CategoryTable() {
     return <span>{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
 
+  function RowMenu({ row }: { row: Row }) {
+    const editHref = `/${locale}/categories/${row.id}`;
+
+    return (
+      <DropdownMenu
+        open={menuOpenFor === row.id}
+        onOpenChange={(open) => setMenuOpenFor(open ? row.id : null)}
+      >
+        <DropdownMenu.Trigger asChild>
+          <Button
+            variant="transparent"
+            size="small"
+            aria-label={t("actions.openRowMenu")}
+          >
+            <EllipsisHorizontal />
+          </Button>
+        </DropdownMenu.Trigger>
+
+        <DropdownMenu.Content>
+          <DropdownMenu.Item asChild>
+            <Link href={editHref}>{t("categories.common.edit")}</Link>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Separator />
+
+          <DropdownMenu.Item
+            className="text-ui-fg-error"
+            onClick={() => {
+              setMenuOpenFor(null);
+              queueMicrotask(() => setDeleteId(row.id));
+            }}
+          >
+            {t("categories.common.delete")}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* filters */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("categories.search")}
-          />
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setOffset(0);
-              load({ offset: 0 });
-            }}
-          >
-            {t("categories.actions.search")}
-          </Button>
-          <Button
-            variant="transparent"
-            onClick={() => {
-              setQ("");
-              setActiveFilter("all");
-              setOffset(0);
-              queueMicrotask(() => load({ offset: 0 }));
-            }}
-          >
-            {t("categories.actions.clear")}
-          </Button>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <div className="w-full md:w-[320px]">
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t("categories.search")}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setOffset(0);
+                load({ offset: 0 });
+              }}
+              disabled={loading}
+            >
+              {t("categories.actions.search")}
+            </Button>
+
+            <Button
+              variant="transparent"
+              onClick={() => {
+                setQ("");
+                setActiveFilter("all");
+                setOffset(0);
+                queueMicrotask(() => load({ offset: 0 }));
+              }}
+              disabled={loading}
+            >
+              {t("categories.actions.clear")}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
+            size="small"
             variant={activeFilter === "all" ? "secondary" : "transparent"}
             onClick={() => setActiveFilter("all")}
           >
             {t("categories.filters.statusAll")}
           </Button>
           <Button
+            size="small"
             variant={activeFilter === "active" ? "secondary" : "transparent"}
             onClick={() => setActiveFilter("active")}
           >
             {t("categories.common.active")}
           </Button>
           <Button
+            size="small"
             variant={activeFilter === "inactive" ? "secondary" : "transparent"}
             onClick={() => setActiveFilter("inactive")}
           >
@@ -218,152 +273,181 @@ export default function CategoryTable() {
         </div>
       </div>
 
-      {/* table */}
-      <Table>
-        <Table.Header>
-          <Table.Row>
-            <Table.HeaderCell>
-              <button
-                className="inline-flex items-center gap-2"
-                onClick={() => toggleSort("name")}
-                type="button"
-              >
-                {t("categories.columns.title")} <SortIndicator col="name" />
-              </button>
-            </Table.HeaderCell>
-
-            <Table.HeaderCell>
-              <button
-                className="inline-flex items-center gap-2"
-                onClick={() => toggleSort("handle")}
-                type="button"
-              >
-                {t("categories.columns.handle")} <SortIndicator col="handle" />
-              </button>
-            </Table.HeaderCell>
-
-            <Table.HeaderCell>
-              {t("categories.columns.active")}
-            </Table.HeaderCell>
-
-            <Table.HeaderCell>
-              <button
-                className="inline-flex items-center gap-2"
-                onClick={() => toggleSort("productCount")}
-                type="button"
-              >
-                {t("categories.columns.count")}{" "}
-                <SortIndicator col="productCount" />
-              </button>
-            </Table.HeaderCell>
-
-            <Table.HeaderCell className="text-right">
-              {t("categories.columns.actions")}
-            </Table.HeaderCell>
-          </Table.Row>
-        </Table.Header>
-
-        <Table.Body>
-          {loading ? (
-            <Table.Row>
-              <Table.Cell colSpan={5}>
-                <Text size="small" className="text-ui-fg-subtle">
-                  {t("categories.common.loading")}
-                </Text>
-              </Table.Cell>
-            </Table.Row>
-          ) : filtered.length === 0 ? (
-            <Table.Row>
-              <Table.Cell colSpan={5}>
-                <Text size="small" className="text-ui-fg-subtle">
-                  {t("categories.empty")}
-                </Text>
-              </Table.Cell>
-            </Table.Row>
-          ) : (
-            filtered.map((row) => {
-              const editHref = `/${locale}/categories/${row.id}`;
-
-              return (
-                <Table.Row key={row.id}>
-                  <Table.Cell className="font-medium">{row.title}</Table.Cell>
-
-                  <Table.Cell className="text-ui-fg-subtle">
+      {/* MOBILE list */}
+      <div className="grid gap-3 md:hidden">
+        {loading ? (
+          <div className="rounded-xl border p-4">
+            <Text size="small" className="text-ui-fg-subtle">
+              {t("categories.common.loading")}
+            </Text>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border p-4">
+            <Text size="small" className="text-ui-fg-subtle">
+              {t("categories.empty")}
+            </Text>
+          </div>
+        ) : (
+          filtered.map((row) => (
+            <div key={row.id} className="rounded-xl border overflow-hidden">
+              <div className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{row.title}</div>
+                  <div className="truncate text-xs text-ui-fg-subtle">
                     {row.handle ?? t("categories.common.emptyDash")}
-                  </Table.Cell>
+                  </div>
+                </div>
 
-                  <Table.Cell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={!!row.isActive}
-                        onCheckedChange={(v) => toggleActive(row, !!v)}
-                      />
-                      <Badge className={clx(row.isActive ? "" : "opacity-70")}>
-                        {row.isActive
-                          ? t("categories.common.active")
-                          : t("categories.common.inactive")}
-                      </Badge>
-                    </div>
-                  </Table.Cell>
+                <div className="shrink-0">
+                  <RowMenu row={row} />
+                </div>
+              </div>
 
-                  <Table.Cell className="text-ui-fg-subtle">
-                    {row.productCount ?? 0}
-                  </Table.Cell>
+              <div className="border-t px-4 py-3 grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Text size="small" className="text-ui-fg-subtle">
+                    {t("categories.columns.active")}
+                  </Text>
 
-                  <Table.Cell className="text-right">
-                    <DropdownMenu
-                      open={menuOpenFor === row.id}
-                      onOpenChange={(open) =>
-                        setMenuOpenFor(open ? row.id : null)
-                      }
-                    >
-                      <DropdownMenu.Trigger asChild>
-                        <Button
-                          variant="transparent"
-                          size="small"
-                          aria-label={t("actions.openRowMenu")}
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!row.isActive}
+                      onCheckedChange={(v) => toggleActive(row, !!v)}
+                    />
+                    <Badge className={clx(row.isActive ? "" : "opacity-70")}>
+                      {row.isActive
+                        ? t("categories.common.active")
+                        : t("categories.common.inactive")}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Text size="small" className="text-ui-fg-subtle">
+                    {t("categories.columns.count")}
+                  </Text>
+                  <Text size="small">{row.productCount ?? 0}</Text>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* DESKTOP table */}
+      <div className="hidden md:block">
+        <Table>
+          <Table.Header>
+            <Table.Row>
+              <Table.HeaderCell>
+                <button
+                  className="inline-flex items-center gap-2"
+                  onClick={() => toggleSort("name")}
+                  type="button"
+                >
+                  {t("categories.columns.title")} <SortIndicator col="name" />
+                </button>
+              </Table.HeaderCell>
+
+              <Table.HeaderCell>
+                <button
+                  className="inline-flex items-center gap-2"
+                  onClick={() => toggleSort("handle")}
+                  type="button"
+                >
+                  {t("categories.columns.handle")}{" "}
+                  <SortIndicator col="handle" />
+                </button>
+              </Table.HeaderCell>
+
+              <Table.HeaderCell>
+                {t("categories.columns.active")}
+              </Table.HeaderCell>
+
+              <Table.HeaderCell>
+                <button
+                  className="inline-flex items-center gap-2"
+                  onClick={() => toggleSort("productCount")}
+                  type="button"
+                >
+                  {t("categories.columns.count")}{" "}
+                  <SortIndicator col="productCount" />
+                </button>
+              </Table.HeaderCell>
+
+              <Table.HeaderCell className="text-right">
+                {t("categories.columns.actions")}
+              </Table.HeaderCell>
+            </Table.Row>
+          </Table.Header>
+
+          <Table.Body>
+            {loading ? (
+              <Table.Row>
+                <Table.Cell colSpan={5}>
+                  <Text size="small" className="text-ui-fg-subtle">
+                    {t("categories.common.loading")}
+                  </Text>
+                </Table.Cell>
+              </Table.Row>
+            ) : filtered.length === 0 ? (
+              <Table.Row>
+                <Table.Cell colSpan={5}>
+                  <Text size="small" className="text-ui-fg-subtle">
+                    {t("categories.empty")}
+                  </Text>
+                </Table.Cell>
+              </Table.Row>
+            ) : (
+              filtered.map((row) => {
+                return (
+                  <Table.Row key={row.id}>
+                    <Table.Cell className="font-medium">{row.title}</Table.Cell>
+
+                    <Table.Cell className="text-ui-fg-subtle">
+                      {row.handle ?? t("categories.common.emptyDash")}
+                    </Table.Cell>
+
+                    <Table.Cell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={!!row.isActive}
+                          onCheckedChange={(v) => toggleActive(row, !!v)}
+                        />
+                        <Badge
+                          className={clx(row.isActive ? "" : "opacity-70")}
                         >
-                          <EllipsisHorizontal />
-                        </Button>
-                      </DropdownMenu.Trigger>
+                          {row.isActive
+                            ? t("categories.common.active")
+                            : t("categories.common.inactive")}
+                        </Badge>
+                      </div>
+                    </Table.Cell>
 
-                      <DropdownMenu.Content>
-                        <DropdownMenu.Item asChild>
-                          <Link href={editHref}>
-                            {t("categories.common.edit")}
-                          </Link>
-                        </DropdownMenu.Item>
+                    <Table.Cell className="text-ui-fg-subtle">
+                      {row.productCount ?? 0}
+                    </Table.Cell>
 
-                        <DropdownMenu.Separator />
-
-                        <DropdownMenu.Item
-                          className="text-ui-fg-error"
-                          onClick={() => {
-                            setMenuOpenFor(null);
-                            queueMicrotask(() => setDeleteId(row.id));
-                          }}
-                        >
-                          {t("categories.common.delete")}
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu>
-                  </Table.Cell>
-                </Table.Row>
-              );
-            })
-          )}
-        </Table.Body>
-      </Table>
+                    <Table.Cell className="text-right">
+                      <RowMenu row={row} />
+                    </Table.Cell>
+                  </Table.Row>
+                );
+              })
+            )}
+          </Table.Body>
+        </Table>
+      </div>
 
       {/* pagination footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <Text size="small" className="text-ui-fg-subtle">
           {total > 0
             ? `Showing ${offset + 1}-${Math.min(offset + limit, total)} of ${total}`
             : "—"}
         </Text>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="secondary"
             disabled={!canPrev || loading}
@@ -371,9 +455,11 @@ export default function CategoryTable() {
           >
             Prev
           </Button>
+
           <Text size="small" className="text-ui-fg-subtle">
             Page {page} / {pageCount}
           </Text>
+
           <Button
             variant="secondary"
             disabled={!canNext || loading}
@@ -392,7 +478,7 @@ export default function CategoryTable() {
         </div>
       </div>
 
-      {/* delete dialog mount/unmount */}
+      {/* delete dialog */}
       {deleteId ? (
         <CategoryDeleteDialog
           key={deleteId}
@@ -400,7 +486,7 @@ export default function CategoryTable() {
           onClose={() => setDeleteId(null)}
           onDeleted={() => {
             setDeleteId(null);
-            queueMicrotask(() => load({ offset })); // aynı sayfada kal
+            queueMicrotask(() => load({ offset }));
           }}
         />
       ) : null}

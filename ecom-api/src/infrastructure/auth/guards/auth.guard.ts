@@ -1,3 +1,4 @@
+// ecom-api/src/infrastructure/auth/guards/auth.guard.ts
 import {
   CanActivate,
   ExecutionContext,
@@ -7,10 +8,12 @@ import {
 import { TokenService } from "@/infrastructure/security/token.service";
 import { PrismaService } from "@/prisma/prisma.service";
 import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
+import { RoleScope } from "@prisma/client";
 
 export { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 
 type Panel = "admin" | "store";
+type TokenSource = "header" | "cookie";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -45,32 +48,9 @@ export class AuthGuard implements CanActivate {
     if (!panel) {
       throw new UnauthorizedException("Unknown auth panel for this route");
     }
-    const auth = req.headers?.authorization as string | undefined;
 
-    let token: string | undefined;
-    let source: "header" | "cookie" | undefined;
-
-    if (auth?.startsWith("Bearer ")) {
-      token = auth.slice("Bearer ".length).trim();
-      source = "header";
-    }
-
-    if (!token) {
-      const cookies = (req.cookies as any) ?? {};
-      token =
-        panel === "admin"
-          ? cookies[COOKIE_NAMES.adminAccess]
-          : cookies[COOKIE_NAMES.storeAccess];
-      if (token) source = "cookie";
-    }
-
-    if (!token) throw new UnauthorizedException("Missing access token");
-
-    const payload = this.tokenService.verifyAccessToken(token, panel);
-
-    if (panel && payload?.typ && payload.typ !== panel) {
-      throw new UnauthorizedException("Invalid token type");
-    }
+    const { token, source } = this.extractAccessToken(req, panel);
+    const payload = this.verifyToken(token, panel);
 
     if (panel === "admin") {
       await this.hydrateAdminContext(req, payload, source);
@@ -81,10 +61,51 @@ export class AuthGuard implements CanActivate {
     return true;
   }
 
+  // ----------------------------
+  // token helpers
+  // ----------------------------
+
+  private extractAccessToken(
+    req: any,
+    panel: Panel,
+  ): { token: string; source: TokenSource } {
+    const auth = req.headers?.authorization as string | undefined;
+
+    if (auth?.startsWith("Bearer ")) {
+      const token = auth.slice("Bearer ".length).trim();
+      if (token) return { token, source: "header" };
+    }
+
+    const cookies = (req.cookies as any) ?? {};
+    const token =
+      panel === "admin"
+        ? cookies[COOKIE_NAMES.adminAccess]
+        : cookies[COOKIE_NAMES.storeAccess];
+
+    if (token) return { token, source: "cookie" };
+
+    throw new UnauthorizedException("Missing access token");
+  }
+
+  private verifyToken(token: string, panel: Panel): any {
+    const payload = this.tokenService.verifyAccessToken(token, panel);
+
+    // belt & suspenders: token typ must match panel
+    if (payload?.typ && payload.typ !== panel) {
+      throw new UnauthorizedException("Invalid token type");
+    }
+
+    return payload;
+  }
+
+  // ----------------------------
+  // admin hydration
+  // ----------------------------
+
   private async hydrateAdminContext(
     req: any,
     payload: any,
-    source?: "header" | "cookie",
+    source?: TokenSource,
   ) {
     const identityId = payload?.sub as string | undefined;
     const rawTenant = payload?.tenantId as string | undefined;
@@ -93,15 +114,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException("Invalid token payload");
     }
 
-    let tenantId = rawTenant;
-    if (!isUuid(tenantId)) {
-      const t = await this.prisma.tenant.findFirst({
-        where: { code: tenantId },
-        select: { id: true },
-      });
-      if (!t?.id) throw new UnauthorizedException("Unknown tenant");
-      tenantId = t.id;
-    }
+    const tenantId = await this.resolveTenantId(rawTenant);
 
     const ident = await this.prisma.authIdentity.findFirst({
       where: { id: identityId, tenantId },
@@ -112,6 +125,25 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException("Identity has no user");
     }
 
+    const isSuperAdmin = await this.prisma.userRoleLink.findFirst({
+      where: {
+        tenantId,
+        userId: ident.userId,
+        deletedAt: null,
+        role: {
+          tenantId,
+          scope: RoleScope.SUPER_ADMIN,
+          deletedAt: null,
+          isActive: true,
+        },
+      },
+      select: { id: true },
+    });
+
+    const role: "super_admin" | "admin" = isSuperAdmin
+      ? "super_admin"
+      : "admin";
+
     req.user = {
       ...payload,
       typ: "admin",
@@ -119,17 +151,30 @@ export class AuthGuard implements CanActivate {
       id: ident.userId,
       userId: ident.userId,
       identityId: ident.id,
+      role,
     };
 
     req.tenant = { id: tenantId };
     req.auth = { source, panel: "admin" };
   }
 
-  private hydrateStoreContext(
-    req: any,
-    payload: any,
-    source?: "header" | "cookie",
-  ) {
+  private async resolveTenantId(rawTenant: string): Promise<string> {
+    if (isUuid(rawTenant)) return rawTenant;
+
+    const t = await this.prisma.tenant.findFirst({
+      where: { code: rawTenant },
+      select: { id: true },
+    });
+
+    if (!t?.id) throw new UnauthorizedException("Unknown tenant");
+    return t.id;
+  }
+
+  // ----------------------------
+  // store hydration
+  // ----------------------------
+
+  private hydrateStoreContext(req: any, payload: any, source?: TokenSource) {
     const sub = payload?.sub as string | undefined;
 
     req.user = {

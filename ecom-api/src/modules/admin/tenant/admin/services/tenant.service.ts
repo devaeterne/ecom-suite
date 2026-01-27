@@ -32,6 +32,31 @@ function mergeLimits(planLimits: any): Record<string, any> {
 export class TenantService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ---------------------------------------------------------------------------
+  // SUPER ADMIN
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Super admin için tüm tenant listesi
+   * Minimal shape (UI switcher için yeterli)
+   */
+  async listTenantsForSuperAdmin() {
+    return this.prisma.tenant.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // TENANT ME
+  // ---------------------------------------------------------------------------
+
   async getMe(tenantId: string) {
     const t = await this.prisma.tenant.findFirst({
       where: { id: tenantId, deletedAt: null },
@@ -144,6 +169,10 @@ export class TenantService {
     return { tenant, plan, entitlements, usage };
   }
 
+  // ---------------------------------------------------------------------------
+  // TENANT PATCH
+  // ---------------------------------------------------------------------------
+
   async patchMe(tenantId: string, dto: TenantMePatchDto) {
     const t = await this.getMe(tenantId);
 
@@ -158,7 +187,6 @@ export class TenantService {
       ...(dto.name !== undefined ? { name: dto.name } : {}),
     };
 
-    // ✅ i18n yalnızca locale
     const i18nPatch = {
       ...(dto.i18n ?? {}),
       ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
@@ -171,7 +199,6 @@ export class TenantService {
     const nextMetadata: JsonObj = {
       ...metadata,
 
-      // ✅ metadata top-level tenant settings
       ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
       ...(dto.currencyCode !== undefined
         ? { currencyCode: dto.currencyCode }
@@ -193,14 +220,12 @@ export class TenantService {
 
     const nextName = dto.name ?? dto.branding?.name ?? t.name ?? null;
 
-    const updated = await this.prisma.tenant.update({
+    return this.prisma.tenant.update({
       where: { id: tenantId },
       data: {
         ...(nextName !== undefined ? { name: nextName } : {}),
         metadata: nextMetadata as any,
       },
     });
-
-    return updated;
   }
 }

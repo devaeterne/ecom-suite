@@ -22,37 +22,91 @@ function detectPanel(req: any): Panel | undefined {
   if (url.startsWith("/api/store")) return "store";
   return undefined;
 }
-/**
- * TenantHeaderGuard:
- * - x-tenant-id header'ını okur
- * - Header UUID ise: tenantId = header
- * - Header UUID değilse: bunu tenant "code" kabul eder ve DB'den tenant.id (uuid) resolve eder
- *
- * Bu guard:
- * - req.tenantId (uuid) set eder
- * - req.tenant = { id, code? } set eder
- *
- * Not:
- * - AdminAuthGuard bazı akışlarda req.tenant.id set etmiş olabilir.
- *   Eğer ikisi çakışırsa Forbidden döner.
- */
+
 @Injectable()
 export class TenantGuard implements CanActivate {
+  constructor(private readonly prisma: PrismaService) {}
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<any>();
+    const panel = detectPanel(req);
 
-    const tenantId =
+    const headerTenant = getTenantHeaderValue(req); // uuid OR code OR undefined
+
+    // ------------------------------------------------------------
+    // 1) Admin tenant scope enforcement (beton)
+    // ------------------------------------------------------------
+    if (panel === "admin" && req?.user) {
+      const typ = req.user?.typ; // "admin" bekliyoruz
+      const role = req.user?.role; // "super_admin" | "admin"
+      const userTenantId = req.user?.tenantId;
+
+      // Yanlış context’e fail-closed
+      if (typ && typ !== "admin") {
+        throw new ForbiddenException("Admin tenant scope required");
+      }
+
+      // Normal admin: header override yok, tenantId sabit
+      if (role !== "super_admin") {
+        if (!userTenantId) throw new ForbiddenException("Tenant scope missing");
+
+        // Header ile başka tenant'a geçme girişimi -> 403
+        if (headerTenant) {
+          // uuid header farklıysa
+          if (
+            isUuidLike(headerTenant) &&
+            String(headerTenant) !== String(userTenantId)
+          ) {
+            throw new ForbiddenException("Cross-tenant access denied");
+          }
+          // code header (uuid değil) her durumda deny (override denemesi)
+          if (!isUuidLike(headerTenant)) {
+            throw new ForbiddenException("Cross-tenant access denied");
+          }
+        }
+
+        // Sabitle
+        req.tenantId = userTenantId;
+        req.tenant = { id: userTenantId };
+        return true;
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 2) Super admin / store / anonymous: tenant resolve
+    // ------------------------------------------------------------
+    const existingTenantId =
       req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId ?? null;
 
-    if (!tenantId) {
+    let resolvedTenantId: string | null = existingTenantId;
+
+    if (headerTenant) {
+      if (isUuidLike(headerTenant)) {
+        resolvedTenantId = headerTenant;
+        req.tenant = { id: headerTenant };
+      } else {
+        const t = await this.prisma.tenant.findFirst({
+          where: { code: headerTenant, deletedAt: null },
+          select: { id: true, code: true },
+        });
+
+        if (!t?.id) throw new BadRequestException("Tenant not found");
+
+        resolvedTenantId = t.id;
+        req.tenant = { id: t.id, code: t.code };
+      }
+    }
+
+    if (!resolvedTenantId) {
       throw new BadRequestException("Tenant context missing");
     }
 
     // normalize
-    req.tenantId = tenantId;
-    req.tenant = req.tenant ?? { id: tenantId };
+    req.tenantId = resolvedTenantId;
+    req.tenant = req.tenant ?? { id: resolvedTenantId };
 
     return true;
   }
 }
+
 export const TenantHeaderGuard = TenantGuard;

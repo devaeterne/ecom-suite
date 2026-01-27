@@ -97,6 +97,7 @@ enum RoleScope {
   ADMIN
   STAFF
   CUSTOMER
+  SUPER_ADMIN
 }
 
 enum AuditAction {

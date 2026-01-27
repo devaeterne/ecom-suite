@@ -14,6 +14,9 @@ import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { PermissionGuard } from "@/infrastructure/auth/guards/permission.guard";
 import { RequirePermission } from "@/infrastructure/auth/decorators/permission.decorator";
 
+import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { SuperAdminGuard } from "@/infrastructure/auth/guards/super-admin.guard"; // ✅ path sende farklıysa düzelt
+
 import { TenantService } from "@/modules/admin/tenant/admin/services/tenant.service";
 import { TenantMePatchDto } from "@/modules/admin/tenant/common/dto/tenant-me.patch.dto";
 import {
@@ -30,9 +33,24 @@ export function requireAdminTenantId(req: any): string {
 }
 
 @Controller("admin/tenants")
-@UseGuards(AdminAuthGuard, PermissionGuard)
+@UseGuards(AdminAuthGuard, TenantHeaderGuard, PermissionGuard) // ✅ sıralama önemli
 export class TenantAdminController {
   constructor(private readonly svc: TenantService) {}
+
+  /**
+   * Super admin: all tenants list
+   * GET /api/admin/tenants
+   *
+   * Not: Method-level UseGuards, class-level guard setini override eder.
+   * Burada PermissionGuard istemiyoruz; SuperAdminGuard ile kilitli.
+   */
+  @Get()
+  @UseGuards(AdminAuthGuard, TenantHeaderGuard, SuperAdminGuard)
+  async listTenants() {
+    const items = await this.svc.listTenantsForSuperAdmin();
+    // response shape: { items: [{ id, code, name, isActive }] }
+    return { items: items.map(presentTenant) };
+  }
 
   @Get("me")
   @RequirePermission("admin:tenant:read")
@@ -47,9 +65,6 @@ export class TenantAdminController {
   async patchMe(@Req() req: any, @Body() dto: TenantMePatchDto) {
     const tenantId = requireAdminTenantId(req);
     const t = await this.svc.patchMe(tenantId, dto);
-
-    // UI zaten genelde PATCH sonrası /me re-fetch eder.
-    // Burada stable olarak tenant döndürmek yeterli.
     return presentTenant(t);
   }
 }

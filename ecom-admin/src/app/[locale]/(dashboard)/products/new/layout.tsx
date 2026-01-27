@@ -29,7 +29,6 @@ function isTabActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-// response picker (senin pattern)
 function pickCreatedId(res: any): string | null {
   if (!res) return null;
   if (res.product?.id) return String(res.product.id);
@@ -37,20 +36,19 @@ function pickCreatedId(res: any): string | null {
   return null;
 }
 
-// new->edit route mapping (gerekirse suffixleri projene göre değiştir)
 function buildEditHref(locale: string, productId: string, tab: TabKey) {
   const base = `/${locale}/products/${productId}`;
   switch (tab) {
     case "details":
       return base;
     case "organize":
-      return `${base}/organize`; // eğer edit'te organize route'un yoksa `${base}` yap
+      return `${base}/organize`;
     case "variants":
       return `${base}/variants`;
     case "media":
       return `${base}/media`;
     case "inventory":
-      return `${base}/inventory`; // edit örneğin varsa doğru
+      return `${base}/inventory`;
     case "translations":
       return `${base}/translations`;
     default:
@@ -81,7 +79,7 @@ function ProductNewLayoutInner({ children }: { children: React.ReactNode }) {
         key: "organize",
         label: t("products.product_detail.tabs.organize"),
         requiresDraft: false,
-      }, // organize ID istemiyorsa free
+      },
       {
         key: "variants",
         label: t("products.product_detail.tabs.variants"),
@@ -112,19 +110,16 @@ function ProductNewLayoutInner({ children }: { children: React.ReactNode }) {
   }
 
   async function ensureDraftAndGo(tab: TabKey) {
-    // details/organize: new içinde kalabilir
     if (tab === "details" || tab === "organize") {
       router.push(newHrefFor(tab));
       return;
     }
 
-    // zaten draft var: direkt edit'e
     if (draftId) {
       router.push(buildEditHref(locale, draftId, tab));
       return;
     }
 
-    // draft yok: validation
     if (!canDraft) {
       toast.error(t("products.product_detail.hints.titleHandleRequired"));
       router.push(baseNew);
@@ -162,59 +157,113 @@ function ProductNewLayoutInner({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // ---- UI helpers ----
+  const activeTabKey: TabKey = (() => {
+    // pathname üzerinden new route için aktif tab’ı çıkar
+    // /{locale}/products/new -> details
+    // /{locale}/products/new/media -> media
+    const parts = pathname.split("/").filter(Boolean);
+    const idx = parts.findIndex((p) => p === "new");
+    const suffix = idx >= 0 ? parts[idx + 1] : undefined;
+    const key = (suffix as TabKey) ?? "details";
+    return (tabs.some((x) => x.key === key) ? key : "details") as TabKey;
+  })();
+
+  const tabBtnBase = "h-9 rounded-md border px-3 text-sm transition-colors";
+  const tabBtnActive = "bg-muted";
+  const tabBtnIdle = "hover:bg-muted/60";
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border">
-        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-          <div className="text-sm font-medium">
-            {t("products.product_detail.mode.new")}
+    <div className="space-y-4 min-w-0">
+      <div className="rounded-xl border min-w-0">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-sm font-medium">
+              {t("products.product_detail.mode.new")}
+            </div>
+
+            {/* ===== Mobile: dropdown (temiz, taşmaz) ===== */}
+            <div className="ml-auto flex items-center gap-2 md:hidden">
+              <select
+                className="h-9 max-w-[70vw] rounded-md border bg-background px-2 text-sm"
+                value={activeTabKey}
+                onChange={(e) => ensureDraftAndGo(e.target.value as TabKey)}
+              >
+                {tabs.map((tab) => {
+                  const disabled = tab.requiresDraft && !draftId && !canDraft;
+                  const label =
+                    tab.requiresDraft && !draftId
+                      ? `${tab.label} • ${t("common.save")}`
+                      : tab.label;
+
+                  return (
+                    <option key={tab.key} value={tab.key} disabled={disabled}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {tabs.map((tab) => {
-              const href = newHrefFor(tab.key);
-              const active = isTabActive(pathname, href);
+          {/* ===== Desktop: scrollable tab strip (wrap yok) ===== */}
+          <div className="mt-3 hidden md:block">
+            <div className="overflow-x-auto">
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                {tabs.map((tab) => {
+                  const href = newHrefFor(tab.key);
+                  const active = isTabActive(pathname, href);
 
-              const disabled = tab.requiresDraft && !draftId;
-              const busy = tab.requiresDraft && creatingDraft;
+                  const needsDraft = tab.requiresDraft;
+                  const busy = needsDraft && creatingDraft;
+                  const disabled = needsDraft && !draftId; // draft yoksa “button” davranışı var, ama görünüm disabled
 
-              const className = [
-                "h-9 rounded-md border px-3 text-sm",
-                active ? "bg-muted" : "hover:bg-muted/60",
-                disabled ? "opacity-50" : "",
-                busy ? "cursor-wait" : "",
-              ].join(" ");
+                  const className = [
+                    tabBtnBase,
+                    active ? tabBtnActive : tabBtnIdle,
+                    disabled ? "opacity-50" : "",
+                    busy ? "cursor-wait" : "",
+                    "shrink-0",
+                  ].join(" ");
 
-              // details/organize: normal link
-              if (!tab.requiresDraft) {
-                return (
-                  <Link key={tab.key} href={href} className={className}>
-                    {tab.label}
-                  </Link>
-                );
-              }
-
-              // requiresDraft: button -> ensure draft -> go
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  className={className}
-                  onClick={() => ensureDraftAndGo(tab.key)}
-                  title={
-                    !draftId
-                      ? t("products.product_detail.hints.createFirst")
-                      : ""
+                  if (!needsDraft) {
+                    return (
+                      <Link key={tab.key} href={href} className={className}>
+                        {tab.label}
+                      </Link>
+                    );
                   }
-                >
-                  {busy ? t("common.saving") : tab.label}
-                </button>
-              );
-            })}
+
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      className={className}
+                      onClick={() => ensureDraftAndGo(tab.key)}
+                      title={
+                        !draftId
+                          ? t("products.product_detail.hints.createFirst")
+                          : ""
+                      }
+                      disabled={busy}
+                    >
+                      {busy ? t("common.saving") : tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* mini helper text */}
+            {!draftId ? (
+              <div className="mt-2 text-xs text-muted-foreground">
+                {t("products.product_detail.hints.createFirst")}
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="p-4">{children}</div>
+        <div className="p-4 min-w-0">{children}</div>
       </div>
     </div>
   );
