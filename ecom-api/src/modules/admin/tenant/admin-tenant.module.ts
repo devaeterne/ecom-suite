@@ -6,9 +6,10 @@ import { TenantContextMiddleware } from "@/infrastructure/tenant/tenant-context.
 import { AdminAuthModule } from "@/modules/auth/admin/admin-auth.module";
 import { SecurityModule } from "@/infrastructure/security/security.module";
 import { AdminTenantContextGuard } from "@/infrastructure/tenant/guards/admin-tenant-context.guard";
+import { AuditModule } from "@/infrastructure/audit/audit.module";
 
 @Module({
-  imports: [AdminAuthModule, SecurityModule],
+  imports: [AdminAuthModule, SecurityModule, AuditModule],
   controllers: [TenantAdminController],
   providers: [TenantService, PrismaService, AdminTenantContextGuard],
 })

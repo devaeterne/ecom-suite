@@ -1,69 +1,96 @@
-import type { AdminTranslationItem } from "@/src/modules/products/types/products.types";
-import { useT } from "@/i18n/use-t";
+"use client";
 
-export function ProductTranslationsPanel({
-  items,
-}: {
-  items: AdminTranslationItem[];
-}) {
-  const t = useT();
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { toast } from "@medusajs/ui";
+import { apiFetch } from "@/src/lib/api/_client/http";
+
+type TranslationItem = {
+  locale: string;
+  title?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  searchKeywords?: string | null;
+};
+
+export function ProductTranslationsPanel() {
+  const params = useParams<{ locale: string; id: string }>();
+  const productId = params?.id ?? "";
+
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<TranslationItem[]>([]); // ✅ default empty array
+  const [activeLocale, setActiveLocale] = useState("en");
+
+  useEffect(() => {
+    if (!productId) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        // ✅ burayı kendi endpoint'inle eşleştir
+        const res: any = await apiFetch(`/api/admin/products/${productId}/translations`, {
+          method: "GET",
+        });
+
+        // ✅ normalize: res.items yoksa boş dizi
+        const list: TranslationItem[] =
+          (res?.items as TranslationItem[]) ??
+          (res?.data?.items as TranslationItem[]) ??
+          [];
+
+        if (!mounted) return;
+
+        setItems(list);
+
+        // locale default
+        const preferred = list.find((x) => x.locale === "en")?.locale ?? list[0]?.locale ?? "en";
+        setActiveLocale(preferred);
+      } catch (e: any) {
+        toast.error(e?.message ?? "Translations load failed");
+        if (mounted) setItems([]); // ✅ fail-safe
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [productId]);
+
+  if (!productId) return null;
+
   return (
-    <div className="grid gap-4">
-      <div className="rounded-xl border p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">
-              {t("pages.product_detail.tabs.translations")}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {t("pages.product_detail.tabs.translations")}
-            </p>
-          </div>
+    <div className="rounded-xl border p-4">
+      <div className="text-sm font-medium">Translations</div>
 
-          <select className="h-9 rounded-md border bg-background px-2 text-sm">
-            {items.map((i) => (
-              <option key={i.locale} value={i.locale}>
-                {i.locale.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mt-4 grid gap-3">
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">
-              {t("pages.product_detail.fields.title")}
-            </span>
-            <input
-              className="h-9 rounded-md border bg-background px-3"
-              defaultValue={items[0]?.title ?? ""}
-              disabled
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">
-              {t("products.translations.fields.subtitle")}
-            </span>
-            <input
-              className="h-9 rounded-md border bg-background px-3"
-              defaultValue={items[0]?.subtitle ?? ""}
-              disabled
-            />
-          </label>
-
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">
-              {t("pages.product_detail.fields.description")}
-            </span>
-            <textarea
-              className="min-h-[120px] rounded-md border bg-background px-3 py-2"
-              defaultValue={items[0]?.description ?? ""}
-              disabled
-            />
-          </label>
-        </div>
+      <div className="mt-3">
+        <select
+          className="h-9 rounded-md border bg-background px-2 text-sm"
+          value={activeLocale}
+          onChange={(e) => setActiveLocale(e.target.value)}
+          disabled={loading}
+        >
+          {(items ?? []).map((i) => (
+            <option key={i.locale} value={i.locale}>
+              {i.locale.toUpperCase()}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {loading ? (
+        <div className="mt-3 text-sm text-muted-foreground">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="mt-3 text-sm text-muted-foreground">
+          No translations found.
+        </div>
+      ) : null}
     </div>
   );
 }

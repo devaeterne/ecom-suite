@@ -228,4 +228,46 @@ export class TenantService {
       },
     });
   }
+
+  async listTenantsForSwitcher() {
+    const rows = await this.prisma.tenant.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+
+    return rows.map((t) => ({
+      id: t.id,
+      code: t.code,
+      name: t.name,
+      isActive: t.isActive,
+    }));
+  }
+
+  async resolveTenantTarget(dto: {
+    targetTenantId?: string;
+    targetTenantCode?: string;
+  }) {
+    const targetTenantId = dto?.targetTenantId?.trim();
+    const targetTenantCode = dto?.targetTenantCode?.trim();
+
+    const t = await this.prisma.tenant.findFirst({
+      where: {
+        deletedAt: null,
+        ...(targetTenantId ? { id: targetTenantId } : {}),
+        ...(targetTenantCode ? { code: targetTenantCode } : {}),
+      },
+      select: { id: true, code: true, name: true },
+    });
+
+    if (!t) throw new NotFoundException("Tenant not found");
+    return t;
+  }
 }

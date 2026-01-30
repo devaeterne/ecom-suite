@@ -113,6 +113,8 @@ enum AuditAction {
   PAYMENT_REFUND
   SHIPMENT_CREATE
   SHIPMENT_UPDATE
+  TENANT_LIST
+  TENANT_SWITCH
 }
 
 enum FulfillmentProvider {

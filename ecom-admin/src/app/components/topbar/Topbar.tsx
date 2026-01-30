@@ -9,6 +9,8 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { useT } from "@/i18n/use-t";
 import { getPageMetaFromPath } from "@/components/nav/nav.config";
 import { clearUser } from "@/components/auth/auth.store";
+import { AdminMeApi } from "@/src/lib/api/auth/admin";
+
 
 import TenantSwitcher from "@/components/tenant/TenantSwitcher";
 
@@ -30,6 +32,7 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
 
   function logout() {
     clearUser();
+    AdminMeApi.invalidate();
     router.replace(`/${locale}/login`);
   }
 

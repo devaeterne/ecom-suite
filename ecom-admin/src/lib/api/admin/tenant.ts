@@ -15,4 +15,12 @@ export const AdminTenantsApi = {
       tenant: true, // super admin için header seçimini de taşır
     });
   },
+  async switchTenant(input: { targetTenantId: string }) {
+    return apiFetch("/api/admin/tenants/switch", {
+      method: "POST",
+      auth: "admin",
+      body: input,
+      tenant: true,
+    });
+  },
 };

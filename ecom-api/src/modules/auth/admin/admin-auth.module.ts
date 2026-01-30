@@ -12,6 +12,8 @@ import { SecurityModule } from "@/infrastructure/security/security.module";
 
 import { AdminAccessGuard } from "@/modules/auth/admin/admin/guards/admin-access.guard";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
+import { AdminMeController } from "./admin/controllers/me.admin.controller";
+import { AdminMeService } from "./admin/services/admin-me.service";
 
 @Module({
   imports: [
@@ -22,8 +24,13 @@ import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
     TenantBootstrapModule,
     SecurityModule,
   ],
-  controllers: [AdminAuthController],
-  providers: [AdminAuthService, AdminAccessGuard, AdminAuthGuard],
+  controllers: [AdminAuthController, AdminMeController],
+  providers: [
+    AdminAuthService,
+    AdminAccessGuard,
+    AdminAuthGuard,
+    AdminMeService,
+  ],
   exports: [AdminAuthService, AdminAuthGuard],
 })
 export class AdminAuthModule {}
