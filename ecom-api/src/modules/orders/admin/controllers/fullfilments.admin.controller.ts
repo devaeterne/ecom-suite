@@ -16,12 +16,12 @@ import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 
 import { FullfillmentsAdminService } from "../services/fullfillments.admin.service";
 import { CreateFullfilmentDto } from "../dto/create-fullfilment.dto";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { AdminAuthGuard } from "@/infrastructure";
 
 @ApiTags("FullfilmentsAdmin")
 @ApiCookieAuth("adminAccessCookie")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 @Controller("/admin")
 export class FullfilmentsAdminController {
   constructor(private readonly service: FullfillmentsAdminService) {}
@@ -43,7 +43,7 @@ export class FullfilmentsAdminController {
   create(
     @Req() req: AdminAuthContext,
     @Param("orderId") orderId: string,
-    @Body() dto: CreateFullfilmentDto
+    @Body() dto: CreateFullfilmentDto,
   ) {
     return this.service.create({
       tenantId: this.tenantId(req),
@@ -60,7 +60,7 @@ export class FullfilmentsAdminController {
   patch(
     @Req() req: AdminAuthContext,
     @Param("id") id: string,
-    @Body() dto: any
+    @Body() dto: any,
   ) {
     return this.service.patch({
       tenantId: this.tenantId(req),

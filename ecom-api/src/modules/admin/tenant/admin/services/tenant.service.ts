@@ -40,18 +40,6 @@ export class TenantService {
    * Super admin için tüm tenant listesi
    * Minimal shape (UI switcher için yeterli)
    */
-  async listTenantsForSuperAdmin() {
-    return this.prisma.tenant.findMany({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        isActive: true,
-      },
-    });
-  }
 
   // ---------------------------------------------------------------------------
   // TENANT ME

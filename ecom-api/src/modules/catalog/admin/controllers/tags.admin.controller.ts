@@ -13,7 +13,7 @@ import {
 import { Request } from "express";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 
 import {
@@ -29,7 +29,7 @@ function tenant(req: Request) {
 }
 
 @Controller("/admin/tags")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 export class TagsAdminController {
   constructor(private readonly service: TagsAdminService) {}
 

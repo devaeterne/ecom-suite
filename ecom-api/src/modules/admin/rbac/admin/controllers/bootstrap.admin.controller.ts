@@ -9,6 +9,7 @@ import {
 import { PrismaService } from "@/prisma/prisma.service";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
 import { RoleScope } from "@prisma/client";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 function requireTenantId(req: any): string {
   const tenantId = req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId;
@@ -17,7 +18,7 @@ function requireTenantId(req: any): string {
 }
 
 @Controller("admin/rbac")
-@UseGuards(AdminAuthGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 export class RbacBootstrapAdminController {
   constructor(private readonly prisma: PrismaService) {}
 

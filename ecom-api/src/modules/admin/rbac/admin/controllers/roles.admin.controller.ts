@@ -15,12 +15,13 @@ import { RolesService } from "@/modules/admin/rbac/admin/services/roles.service"
 import { RolePermissionsDto } from "@/modules/admin/rbac/common/dto/role-permissions.dto";
 import { RoleCreateDto } from "@/modules/admin/rbac/common/dto/role-create.dto";
 import { RolePatchDto } from "@/modules/admin/rbac/common/dto/role-patch.dto";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 function tenantId(req: any) {
   return req.tenant?.id ?? req.tenantId ?? req.user?.tenantId;
 }
 @Controller("/admin/roles")
-@UseGuards(AdminAuthGuard, PermissionGuard)
+@UseGuards(AdminAuthGuard, TenantGuard, PermissionGuard)
 export class RolesAdminController {
   constructor(private readonly rolesService: RolesService) {}
 

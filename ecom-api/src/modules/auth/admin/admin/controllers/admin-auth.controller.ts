@@ -38,6 +38,7 @@ import { AuthRateLimitService } from "@/modules/auth/rate-limit/auth-rate-limit.
 import { AuthAuditLogService } from "@/modules/auth/audit/auth-audit-log-service";
 import { AUDIT } from "@/modules/auth/audit/audit.actions";
 import { ActiveTenantService } from "@/infrastructure/tenant-bootstrap/active-tenant.service";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 function getReqMeta(req: FastifyRequest) {
   const xf = (req.headers["x-forwarded-for"] as string | undefined) ?? "";
@@ -213,7 +214,7 @@ export class AdminAuthController {
 
   @Post("logout-all")
   @HttpCode(200)
-  @UseGuards(AdminAccessGuard)
+  @UseGuards(AdminAccessGuard, TenantGuard)
   @ApiCookieAuth("adminAccessCookie")
   async logoutAll(
     @Req() req: FastifyRequest & { user: any },
@@ -236,7 +237,7 @@ export class AdminAuthController {
   }
 
   @Get("me")
-  @UseGuards(AdminAccessGuard)
+  @UseGuards(AdminAccessGuard, TenantGuard)
   @ApiCookieAuth("adminAccessCookie")
   me(@Req() req: FastifyRequest & { user: any }) {
     return { user: (req as any).user };

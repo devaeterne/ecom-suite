@@ -99,6 +99,9 @@ export default function OrderDetailPage() {
         subtitleKey="orders.detail.subtitle"
         actions={
           <div className="flex items-center gap-2">
+            <Button onClick={() => window.location.href = `/${locale}/orders/${id}/shipment`} variant="secondary" size="small">
+              {t("shipment.actions.create")}
+            </Button>
             <Button variant="secondary" size="small">
               {t("orders.detail.actions.resend_invoice")}
             </Button>

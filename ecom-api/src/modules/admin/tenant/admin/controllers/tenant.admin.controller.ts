@@ -24,6 +24,7 @@ import {
 } from "@/modules/admin/tenant/common/mappers/tenant.presenter";
 
 import { AuditAction } from "@prisma/client";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 export function requireAdminTenantId(req: any): string {
   const tenantId = req?.tenant?.id ?? req?.user?.tenantId ?? req?.tenantId;
@@ -37,7 +38,7 @@ type SwitchTenantDto = {
 };
 
 @Controller("admin/tenants")
-@UseGuards(AdminAuthGuard, PermissionGuard)
+@UseGuards(AdminAuthGuard, TenantGuard, PermissionGuard)
 export class TenantAdminController {
   constructor(
     private readonly svc: TenantService,
@@ -71,7 +72,7 @@ export class TenantAdminController {
    * Super admin check'i method-level'da erken çalıştırıyoruz.
    */
   @Get()
-  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @UseGuards(SuperAdminGuard)
   async list(@Req() req: any) {
     const tenantId = requireAdminTenantId(req);
 
@@ -94,7 +95,7 @@ export class TenantAdminController {
    * POST /api/admin/tenants/switch
    */
   @Post("switch")
-  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @UseGuards(SuperAdminGuard)
   async switchTenant(@Req() req: any, @Body() dto: SwitchTenantDto) {
     const currentTenantId = requireAdminTenantId(req);
 

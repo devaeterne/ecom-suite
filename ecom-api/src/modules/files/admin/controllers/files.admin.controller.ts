@@ -9,14 +9,14 @@ import { CreateFileLinkDto } from "@/modules/files/admin/dto/files.link.dto";
 
 import { TenantId } from "@/modules/files/common/policies/tenant-id.decorator";
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 const UUID4 = new ParseUUIDPipe({ version: "4" });
 
 @ApiTags("Admin Files")
 @ApiCookieAuth("adminAccessCookie")
 @Controller("admin/files")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 export class FilesAdminController {
   constructor(private readonly service: FilesAdminService) {}
 

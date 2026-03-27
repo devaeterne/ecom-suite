@@ -108,5 +108,3 @@ export class TenantGuard implements CanActivate {
     return true;
   }
 }
-
-export const TenantHeaderGuard = TenantGuard;

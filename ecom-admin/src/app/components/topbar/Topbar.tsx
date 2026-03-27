@@ -8,10 +8,9 @@ import { Menu } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useT } from "@/i18n/use-t";
 import { getPageMetaFromPath } from "@/components/nav/nav.config";
-import { clearUser } from "@/components/auth/auth.store";
-import { AdminMeApi } from "@/src/lib/api/auth/admin";
 
-
+import { AdminAuthApi, AdminMeApi } from "@/src/lib/api/auth/admin";
+import { clearTenantContext } from "@/src/lib/api/_client/tenant";
 import TenantSwitcher from "@/components/tenant/TenantSwitcher";
 
 type TopbarProps = {
@@ -30,10 +29,14 @@ export default function Topbar({ onToggleSidebar }: TopbarProps) {
   const normalized = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "");
   const { titleKey } = getPageMetaFromPath(normalized);
 
-  function logout() {
-    clearUser();
-    AdminMeApi.invalidate();
-    router.replace(`/${locale}/login`);
+  async function logout() {
+    try {
+      await AdminAuthApi.logout();
+    } finally {
+      AdminMeApi.invalidate();
+      clearTenantContext();
+      router.replace(`/${locale}/login`);
+    }
   }
 
   return (

@@ -17,6 +17,7 @@ import { IdentitiesService } from "@/modules/admin/identities/admin/services/ide
 import { IdentityCreateDto } from "@/modules/admin/identities/common/dto/identity-create.dto";
 import { IdentityPatchDto } from "@/modules/admin/identities/common/dto/identity-patch.dto";
 import { presentIdentity } from "@/modules/admin/identities/common/mappers/identity.presenter";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 function requireTenantId(req: any): string {
   const tenantId = req?.tenant?.id ?? req?.tenantId ?? req?.user?.tenantId;
@@ -25,7 +26,7 @@ function requireTenantId(req: any): string {
 }
 
 @Controller("admin/identities")
-@UseGuards(AdminAuthGuard, PermissionGuard)
+@UseGuards(AdminAuthGuard, TenantGuard, PermissionGuard)
 export class IdentitiesAdminController {
   constructor(private readonly svc: IdentitiesService) {}
 

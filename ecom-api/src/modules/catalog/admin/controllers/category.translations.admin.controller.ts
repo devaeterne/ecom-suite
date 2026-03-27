@@ -12,7 +12,10 @@ import {
 import { Request } from "express";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import {
+  TenantGuard,
+  TenantHeaderGuard,
+} from "@/modules/catalog/common/tenant/tenant.guard";
 import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 
 import { CategoryTranslationsAdminService } from "@/modules/catalog/admin/services/category.translations.admin.service";
@@ -26,7 +29,7 @@ function tenant(req: Request) {
 }
 
 @Controller("/admin/categories")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard, TenantHeaderGuard)
 export class CategoryTranslationsAdminController {
   constructor(private readonly service: CategoryTranslationsAdminService) {}
 

@@ -12,7 +12,7 @@ export const AdminTenantsApi = {
     return apiFetch("/api/admin/tenants", {
       method: "GET",
       auth: "admin",
-      tenant: true, // super admin için header seçimini de taşır
+      tenant: false, // super admin için header seçimini de taşır
     });
   },
   async switchTenant(input: { targetTenantId: string }) {

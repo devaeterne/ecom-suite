@@ -18,14 +18,14 @@ import { CreateInventoryLocationDto } from "../dto/create.location.dto";
 import { UpdateInventoryLocationDto } from "../dto/update.location.dto";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import {} from "@/modules/catalog/common/tenant/tenant.guard";
 
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 @Controller("/admin/inventory/locations")
 export class AdminInventoryLocationsController {
   constructor(
     private readonly tenancy: InventoryTenancyPolicy,
-    private readonly service: AdminInventoryService
+    private readonly service: AdminInventoryService,
   ) {}
 
   @Get()
@@ -46,7 +46,7 @@ export class AdminInventoryLocationsController {
   async update(
     @Req() req: Request,
     @Param("id") id: string,
-    @Body() dto: UpdateInventoryLocationDto
+    @Body() dto: UpdateInventoryLocationDto,
   ) {
     const { tenantId } = this.tenancy.getScope(req);
     const location = await this.service.updateLocation(tenantId, id, dto);

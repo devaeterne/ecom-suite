@@ -63,6 +63,7 @@ export const AdminTenantApi = {
   me: () =>
     apiFetch<AdminTenantMeBundle>("/api/admin/tenants/me", {
       method: "GET",
+      auth: "admin",
       credentials: "include",
     }),
 };

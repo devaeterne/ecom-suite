@@ -16,7 +16,7 @@ import type { FastifyRequest } from "fastify";
 import { ApiCookieAuth, ApiTags } from "@nestjs/swagger";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 import { CatalogAdminService } from "@/modules/catalog/admin/services/catalog.admin.service";
 
@@ -64,7 +64,7 @@ function parseOptionalBool(v: unknown): boolean | undefined {
 @ApiTags("Catalog (Admin)")
 @ApiCookieAuth("adminAccessCookie")
 @Controller("admin")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 export class CatalogAdminController {
   constructor(private readonly service: CatalogAdminService) {}
 

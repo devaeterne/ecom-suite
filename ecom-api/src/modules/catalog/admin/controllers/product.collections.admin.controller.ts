@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { Request } from "express";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { requireTenantId } from "@/modules/catalog/common/tenant/tenant.util";
 
 import { AdminReplaceProductCollectionsDto } from "@/modules/catalog/admin/dto/admin.product.collections.dto";
@@ -13,7 +13,7 @@ function tenant(req: Request) {
 }
 
 @Controller("/admin/products")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 export class ProductCollectionsAdminController {
   constructor(private readonly service: ProductCollectionsAdminService) {}
 

@@ -8,10 +8,7 @@ WORKDIR /app
 
 RUN corepack enable
 
-# pnpm manifest'ler
 COPY package.json pnpm-lock.yaml ./
-
-# Prod build için devDeps gerekir (next build)
 RUN pnpm install --frozen-lockfile
 
 ############
@@ -26,6 +23,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NODE_ENV=production
+
 RUN pnpm build
 
 ############
@@ -38,17 +36,24 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Güvenlik: non-root kullanıcı
+# Runtime'ta pnpm komutu garanti olsun
+RUN corepack enable
+
+# Non-root kullanıcı
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
-# Sadece runtime için gerekenleri taşı
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.mjs ./next.config.mjs
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
+# Runtime için gerekli dosyaları doğru ownership ile kopyala
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Next runtime cache için dizini önceden oluştur
+RUN mkdir -p /app/.next/cache && chown -R nextjs:nodejs /app
 
 USER nextjs
 
 EXPOSE 3000
+
 CMD ["pnpm", "start", "-p", "3000"]

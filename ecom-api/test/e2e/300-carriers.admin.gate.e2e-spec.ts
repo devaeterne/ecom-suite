@@ -8,7 +8,7 @@ import { withTenantHeaders } from "../utils/tenant";
 /**
  * Gate hedefi:
  * - /api/admin/carriers route'u var mı?
- * - AdminAuthGuard + TenantHeaderGuard davranışı doğru mu?
+ * - AdminAuthGuard + TenantGuard davranışı doğru mu?
  * - Seed yoksa 404 kabul; validation yoksa 400 kabul.
  */
 

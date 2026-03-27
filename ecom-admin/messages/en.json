@@ -598,7 +598,98 @@
         "unpaid": "Unpaid",
         "fulfilled": "Fulfilled",
         "unfulfilled": "Unfulfilled"
+      },
+      "actions": {
+        "resend_invoice": "Resend invoice",
+        "refund": "Refund",
+        "cancel": "Cancel",
+        "back": "Back"
+      },
+      "kpi": {
+        "total": "Total",
+        "payment": "Payment",
+        "fulfillment": "Fulfillment",
+        "items": "Items"
+      },
+      "items": {
+        "title": "Items",
+        "columns": {
+          "item": "Item",
+          "sku": "SKU",
+          "qty": "Qty",
+          "unit_price": "Unit price",
+          "total": "Total"
+        }
+      },
+      "payment": {
+        "title": "Payment",
+        "method": "Method",
+        "status": "Status",
+        "transaction": "Transaction",
+        "paid_at": "Paid at"
+      },
+
+      "shipping": {
+        "title": "Shipping",
+        "method": "Method",
+        "status": "Status",
+        "address": "Address",
+        "tracking": "Tracking"
+      },
+
+      "timeline": {
+        "title": "Timeline"
       }
+    }
+  },
+  "shipment": {
+    "title": "Shipment",
+    "subtitle": "Create a shipment and mark items as fulfilled.",
+
+    "actions": {
+      "create": "Create shipment",
+      "backToOrder": "Back to order"
+    },
+
+    "sections": {
+      "tracking": "Tracking",
+      "items": "Items"
+    },
+
+    "fields": {
+      "carrier": "Carrier",
+      "trackingNumber": "Tracking number",
+      "trackingUrl": "Tracking URL",
+      "shippedAt": "Shipped at",
+      "note": "Note"
+    },
+
+    "placeholders": {
+      "carrier": "e.g. DHL",
+      "trackingNumber": "e.g. 00340434161094000000",
+      "trackingUrl": "e.g. https://…",
+      "note": "Internal note for operations..."
+    },
+
+    "columns": {
+      "item": "Item",
+      "sku": "SKU",
+      "ordered": "Ordered",
+      "fulfill": "Fulfill qty"
+    },
+
+    "hints": {
+      "qty": "Set how many units you want to ship for each item."
+    },
+
+    "validation": {
+      "qtyInvalid": "Quantity must be 0 or greater.",
+      "qtyTooHigh": "Quantity cannot exceed ordered quantity."
+    },
+
+    "notifications": {
+      "created": "Shipment created.",
+      "createFailed": "Shipment could not be created."
     }
   },
 

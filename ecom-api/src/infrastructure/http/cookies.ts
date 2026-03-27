@@ -115,27 +115,31 @@ export function baseCookieOptions(
  * - UPPERCASE alias’lar legacy / backwards-compat için bırakıldı
  */
 export const COOKIE_NAMES = {
-  adminAccess: "admin_access_token",
-  adminRefresh: "admin_refresh_token",
-  storeAccess: "store_access_token",
-  storeRefresh: "store_refresh_token",
+  adminAccess: "adminAccessCookie",
+  adminRefresh: "adminRefreshCookie",
+  storeAccess: "storeAccessCookie",
+  storeRefresh: "storeRefreshCookie",
 
-  ADMIN_ACCESS: "admin_access_token",
-  ADMIN_REFRESH: "admin_refresh_token",
-  STORE_ACCESS: "store_access_token",
-  STORE_REFRESH: "store_refresh_token",
+  ADMIN_ACCESS: "adminAccessCookie",
+  ADMIN_REFRESH: "adminRefreshCookie",
+  STORE_ACCESS: "storeAccessCookie",
+  STORE_REFRESH: "storeRefreshCookie",
 } as const;
 
 /**
  * Factories
  * Not: Eğer access/refresh için farklı maxAge istiyorsan overrides ile ver.
  */
-export function adminAccessCookieOptions(): CookieOptions {
-  return baseCookieOptions() as CookieOptions;
+export function adminAccessCookieOptions(): CookieOptionsWithExtras {
+  return baseCookieOptions({
+    maxAge: env.ACCESS_TOKEN_TTL_SECONDS,
+  });
 }
 
-export function adminRefreshCookieOptions(): CookieOptions {
-  return baseCookieOptions() as CookieOptions;
+export function adminRefreshCookieOptions(): CookieOptionsWithExtras {
+  return baseCookieOptions({
+    maxAge: env.REFRESH_TTL_DAYS * 24 * 60 * 60,
+  });
 }
 
 export function storeAccessCookieOptions(): CookieOptions {

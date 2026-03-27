@@ -1,13 +1,13 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from "@nestjs/common";
 import { Request } from "express";
 
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { CatalogStoreService } from "@/modules/catalog/store/services/catalog.store.service";
 import { PaginationQueryDto } from "@/modules/catalog/common/dto/pagination.dto";
 import { StoreAuthGuard } from "@/infrastructure/auth/guards/store-auth.guard";
 
 @Controller("/store")
-@UseGuards(TenantHeaderGuard, StoreAuthGuard)
+@UseGuards(TenantGuard, StoreAuthGuard)
 export class CatalogStoreController {
   constructor(private readonly service: CatalogStoreService) {}
 

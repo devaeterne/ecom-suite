@@ -1,6 +1,5 @@
 "use client";
 
-import AuthGuard from "@/components/auth/AuthGuard";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Topbar from "@/components/topbar/Topbar";
 import { AppSessionProvider } from "@/src/providers/app-session-provider";
@@ -12,11 +11,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AuthGuard>
-      <AppSessionProvider>
-        <DashboardLayoutInner>{children}</DashboardLayoutInner>
-      </AppSessionProvider>
-    </AuthGuard>
+
+    <AppSessionProvider>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </AppSessionProvider>
+
   );
 }
 

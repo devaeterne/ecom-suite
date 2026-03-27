@@ -9,7 +9,7 @@ import { CatalogStoreService } from "@/modules/catalog/store/services/catalog.st
 import { CatalogAdminController } from "@/modules/catalog/admin/controllers/catalog.admin.controller";
 import { CatalogAdminService } from "@/modules/catalog/admin/services/catalog.admin.service";
 
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { ProductMediaRepository } from "./common/prisma/product.media.repo";
 import { CollectionsAdminController } from "./admin/controllers/collections.admin.controller";
 import { ProductCollectionsAdminController } from "./admin/controllers/product.collections.admin.controller";
@@ -48,7 +48,7 @@ import { TenantEntitlementsService } from "@/infrastructure/entitlements/tenant-
     CatalogRepo,
     CatalogStoreService,
     CatalogAdminService,
-    TenantHeaderGuard,
+    TenantGuard,
     ProductMediaRepository,
     CollectionRepository,
     CollectionsAdminService,

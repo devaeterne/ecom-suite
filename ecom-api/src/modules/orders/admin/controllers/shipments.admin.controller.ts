@@ -18,11 +18,11 @@ import { CreateShipmentDto } from "../dto/create-shipment.dto";
 import { CreateShipmentEventDto } from "../dto/create-shipment-event.dto";
 import { MarkShipmentDeliveredDto } from "../dto/mark-shipment-delivered.dto";
 import { AdminAuthGuard } from "@/infrastructure";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 @ApiTags("FullfilmentsAdmin")
 @ApiCookieAuth("adminAccessCookie")
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 @Controller("/admin")
 export class ShipmentsAdminController {
   constructor(private readonly service: ShipmentsAdminService) {}
@@ -37,7 +37,7 @@ export class ShipmentsAdminController {
   @Get("/fulfillments/:fulfillmentId/shipments")
   list(
     @Req() req: AdminAuthContext,
-    @Param("fulfillmentId") fulfillmentId: string
+    @Param("fulfillmentId") fulfillmentId: string,
   ) {
     return this.service.list({ tenantId: this.tenantId(req), fulfillmentId });
   }
@@ -47,7 +47,7 @@ export class ShipmentsAdminController {
   create(
     @Req() req: AdminAuthContext,
     @Param("fulfillmentId") fulfillmentId: string,
-    @Body() dto: CreateShipmentDto
+    @Body() dto: CreateShipmentDto,
   ) {
     return this.service.create({
       tenantId: this.tenantId(req),
@@ -66,7 +66,7 @@ export class ShipmentsAdminController {
   addEvent(
     @Req() req: AdminAuthContext,
     @Param("shipmentId") shipmentId: string,
-    @Body() dto: CreateShipmentEventDto
+    @Body() dto: CreateShipmentEventDto,
   ) {
     return this.service.addEvent({
       tenantId: this.tenantId(req),
@@ -85,7 +85,7 @@ export class ShipmentsAdminController {
   markDelivered(
     @Req() req: AdminAuthContext,
     @Param("shipmentId") shipmentId: string,
-    @Body() _dto: MarkShipmentDeliveredDto
+    @Body() _dto: MarkShipmentDeliveredDto,
   ) {
     return this.service.markDelivered({
       tenantId: this.tenantId(req),

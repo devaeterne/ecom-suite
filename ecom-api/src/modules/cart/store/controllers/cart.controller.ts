@@ -31,7 +31,7 @@ import {
 } from "@/modules/cart/common/policies/pricing-context";
 import { PricingStoreService } from "@/modules/pricing/store/services/pricing.store.service";
 import { UseGuards } from "@nestjs/common";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 
 function setCartCookie(res: Response, cartId: string) {
   res.cookie(
@@ -53,7 +53,7 @@ function getCartId(req: Request): string | null {
 type SetCartPriceListDto = { priceListId: string | null };
 
 @Controller("/store/cart")
-@UseGuards(TenantHeaderGuard)
+@UseGuards(TenantGuard)
 export class StoreCartController {
   constructor(
     private readonly carts: StoreCartService,

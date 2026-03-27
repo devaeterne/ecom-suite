@@ -1,7 +1,10 @@
 // src/lib/api/_client/http.ts
 import { getApiBaseUrl } from "@/src/lib/api-base";
-import { AdminAuthApi } from "@/src/lib/api/auth/admin";
-import { getTenantHeaders } from "@/src/lib/api/_client/tenant";
+import { AdminAuthApi, AdminMeApi } from "@/src/lib/api/auth/admin";
+import {
+  getTenantHeaders,
+  clearTenantContext,
+} from "@/src/lib/api/_client/tenant";
 
 export type HttpMethod =
   | "GET"
@@ -111,8 +114,7 @@ export async function apiFetch<T = unknown>(
       signal: options.signal,
 
       // admin/store cookie default include (senin mevcut davranışınla uyumlu)
-      credentials:
-        options.credentials ?? (auth !== "none" ? "include" : "include"),
+      credentials: options.credentials ?? "include",
     });
 
     const contentType = res.headers.get("content-type") ?? "";
@@ -142,7 +144,8 @@ export async function apiFetch<T = unknown>(
       await AdminAuthApi.refresh();
       ({ res, data } = await doRequest());
     } catch {
-      // refresh patlarsa alttaki error’a düşer
+      AdminMeApi.invalidate();
+      clearTenantContext();
     }
   }
 

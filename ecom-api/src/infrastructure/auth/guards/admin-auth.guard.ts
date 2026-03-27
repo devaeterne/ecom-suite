@@ -1,3 +1,4 @@
+// ecom-api/src/infrastructure/auth/guards/admin-auth.guard.ts
 import {
   CanActivate,
   ExecutionContext,
@@ -9,7 +10,7 @@ import { TokenService } from "@/infrastructure/security/token.service";
 import { COOKIE_NAMES } from "@/infrastructure/http/cookies";
 import { RoleScope } from "@prisma/client";
 
-type TokenSource = "header" | "cookie";
+type TokenSource = "cookie";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -88,16 +89,9 @@ export class AdminAuthGuard implements CanActivate {
     token: string;
     source: TokenSource;
   } {
-    // 1) Authorization header
-    const auth = req.headers?.authorization as string | undefined;
-    if (auth?.startsWith("Bearer ")) {
-      const token = auth.slice("Bearer ".length).trim();
-      if (token) return { token, source: "header" };
-    }
-
-    // 2) Cookie fallback
     const cookies = (req.cookies as any) ?? {};
     const token = cookies[COOKIE_NAMES.adminAccess];
+
     if (token) return { token, source: "cookie" };
 
     throw new UnauthorizedException("Missing admin access token");

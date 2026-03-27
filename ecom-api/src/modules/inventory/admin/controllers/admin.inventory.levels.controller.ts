@@ -16,13 +16,13 @@ import { UpsertInventoryLevelsDto } from "../dto/upsert.levels.dto";
 import { AdminInventoryLevelsQueryDto } from "../dto/admin.inventory.levels.query.dto";
 
 import { AdminAuthGuard } from "@/infrastructure/auth/guards/admin-auth.guard";
-import { TenantHeaderGuard } from "@/modules/catalog/common/tenant/tenant.guard";
+import { TenantGuard } from "@/modules/catalog/common/tenant/tenant.guard";
 import { ApiTenantHeader } from "@/infrastructure/swagger/tenant.swagger";
 
 @ApiTags("AdminInventoryLevels")
 @ApiCookieAuth("adminAccessCookie")
 @ApiTenantHeader()
-@UseGuards(AdminAuthGuard, TenantHeaderGuard)
+@UseGuards(AdminAuthGuard, TenantGuard)
 @Controller("/admin/inventory/levels")
 export class AdminInventoryLevelsController {
   constructor(
